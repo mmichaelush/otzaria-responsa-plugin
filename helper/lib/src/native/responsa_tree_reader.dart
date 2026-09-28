@@ -32,7 +32,10 @@ class ResponsaTreeNode {
 class ResponsaTreeReadException implements Exception {
   final String message;
 
-  const ResponsaTreeReadException(this.message);
+  /// `OpenProcess` נכשל: כמעט תמיד בר אילן שרץ כמנהל מערכת.
+  final bool accessDenied;
+
+  const ResponsaTreeReadException(this.message, {this.accessDenied = false});
 
   @override
   String toString() => message;
@@ -72,8 +75,9 @@ class ResponsaTreeReader {
     final session = _TreeSession.open(pid, treeHandle);
     if (session == null) {
       throw const ResponsaTreeReadException(
-        'אין גישה לחלון של בר אילן. ייתכן שהוא פועל כמנהל מערכת ואוצריא לא '
-        '— יש לפתוח את שניהם באותה הרשאה.',
+        'אין גישה לבר אילן, כנראה כי הוא פועל כמנהל מערכת. '
+        'יש לסגור אותו ולפתוח אותו שוב כרגיל, לא דרך "הפעל כמנהל".',
+        accessDenied: true,
       );
     }
     final walk = _Walk(
@@ -197,7 +201,7 @@ class _TreeSession {
       // מלמעלה "אין גישה" נראה כמו "העץ ריק" - זה הסימן היחיד.
       logLine(
         'ResponsaTreeReader: OpenProcess($pid) נכשל — '
-        'ייתכן שבר אילן רץ בהרשאה גבוהה יותר מאוצריא',
+        'ייתכן שבר אילן רץ בהרשאה גבוהה יותר מהשירות',
       );
       return null;
     }

@@ -331,16 +331,37 @@ class ResponsaWin32 {
   static const int _swRestore = 9;
   static const int _swShow = 5;
 
-  /// שלושת הצעדים נחוצים ואינם חופפים. Windows מתיר החלפת חזית רק לתהליך
-  /// שבחזית, ולכן חייב לרוץ מיד בתום הפתיחה כשאוצריא עוד פעילה.
-  static void bringToFront(int hwnd) {
+  /// Windows מתיר החלפת חזית רק לתהליך שקיבל את הקלט האחרון, והשירות לעולם
+  /// אינו כזה: המשתמש לחץ באוצריא. לכן, כש-`SetForegroundWindow` נדחה,
+  /// מצטרפים זמנית לתור הקלט של חלון החזית ומנסים שוב.
+  static bool bringToFront(int hwnd) {
     final handle = HWND(Pointer.fromAddress(hwnd));
     if (IsIconic(handle)) {
       ShowWindow(handle, SHOW_WINDOW_CMD(_swRestore));
     } else {
       ShowWindow(handle, SHOW_WINDOW_CMD(_swShow));
     }
-    SetForegroundWindow(handle);
-    BringWindowToTop(handle);
+    if (SetForegroundWindow(handle)) {
+      BringWindowToTop(handle);
+      return true;
+    }
+    final ownThread = GetCurrentThreadId();
+    final foregroundThread = GetWindowThreadProcessId(
+      GetForegroundWindow(),
+      null,
+    );
+    final attached =
+        foregroundThread != 0 &&
+        foregroundThread != ownThread &&
+        AttachThreadInput(ownThread, foregroundThread, true);
+    try {
+      BringWindowToTop(handle);
+      return SetForegroundWindow(handle);
+    } finally {
+      if (attached) AttachThreadInput(ownThread, foregroundThread, false);
+    }
   }
+
+  /// לאבחון: האם [hwnd] הוא עכשיו חלון החזית.
+  static bool isForeground(int hwnd) => GetForegroundWindow().address == hwnd;
 }

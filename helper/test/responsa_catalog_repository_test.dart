@@ -77,7 +77,8 @@ void main() {
       final yevamot = books.firstWhere((b) => b.title == 'יבמות');
 
       expect(yevamot.key, '1524');
-      expect(yevamot.otzariaCategory, 'מפרשים ופוסקים על הבבלי');
+      // קטגוריה שאין לה שיוך בעץ של אוצריא נשארת ריקה, ולא מנוחשת.
+      expect(yevamot.otzariaCategory, isNull);
       // ההקשר הוא הנתיב בלי שם הספר — בלעדיו "יבמות" חסר משמעות.
       expect(yevamot.contextPath, 'מפרשים ופוסקים על הבבלי/רא"ש');
     });
@@ -101,6 +102,17 @@ void main() {
         expect(book.pubDate, isNull);
         expect(book.pubPlace, isNull);
       }
+    });
+
+    test('קטגוריית בר אילן ממופה לקטגוריה של אוצריא', () {
+      final book = ResponsaCatalogRepository.bookOf({
+        'external_key': '3232',
+        'title': 'מהרש"א חידושי אגדות',
+        'ref_path': 'מפרשים > מהרש"א > חידושי אגדות',
+        'category_path':
+            'מפרשים ופוסקים על הבבלי והירושלמי > אחרונים על הבבלי > מהרש"א',
+      });
+      expect(book.otzariaCategory, 'תלמוד בבלי/אחרונים');
     });
 
     test('מחבר, מקום ושנת הדפסה עוברים מהקטלוג לספר', () {

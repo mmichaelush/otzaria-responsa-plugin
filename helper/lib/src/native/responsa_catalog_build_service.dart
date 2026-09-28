@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
+import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_author_table_reader.dart';
 import 'package:responsa_helper/src/native/responsa_automation.dart';
@@ -17,6 +18,19 @@ import 'package:responsa_helper/src/native/responsa_tree_reader.dart';
 
 /// שלב בבניית הקטלוג, לתצוגה למשתמש.
 enum ResponsaBuildStage { starting, scanning, classifying, done, failed }
+
+/// למה בנייה נכשלה. ההחלטות נשענות עליו ולא על טקסט ההודעה.
+enum ResponsaBuildFailure {
+  busy,
+  notSupported,
+  notInstalled,
+  notRunning,
+  elevated,
+  treeNotFound,
+  notResponding,
+  cancelled,
+  internal,
+}
 
 class ResponsaBuildProgress {
   final ResponsaBuildStage stage;
@@ -34,14 +48,26 @@ class ResponsaBuildProgress {
 
   final String? error;
 
+  /// קיים רק בשלב [ResponsaBuildStage.failed].
+  final ResponsaBuildFailure? failure;
+
   const ResponsaBuildProgress({
     required this.stage,
     this.scannedNodes = 0,
     this.sectionsDone = 0,
     this.sectionsTotal = 0,
     this.books = 0,
-    this.error,
-  });
+  }) : error = null,
+       failure = null;
+
+  const ResponsaBuildProgress.failed(
+    ResponsaBuildFailure this.failure,
+    String this.error,
+  ) : stage = ResponsaBuildStage.failed,
+      scannedNodes = 0,
+      sectionsDone = 0,
+      sectionsTotal = 0,
+      books = 0;
 }
 
 /// בניית קטלוג פרויקט השו"ת באיזולט רקע, בהליכה חיה על כ-1.25 מיליון צמתים
@@ -66,9 +92,9 @@ class ResponsaCatalogBuildService {
     if (_active) {
       controller
         ..add(
-          const ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error: 'בניית קטלוג כבר מתבצעת. יש להמתין לסיומה.',
+          const ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.busy,
+            'בניית קטלוג כבר מתבצעת. יש להמתין לסיומה.',
           ),
         )
         ..close();
@@ -88,9 +114,9 @@ class ResponsaCatalogBuildService {
     if (!Platform.isWindows) {
       controller
         ..add(
-          const ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error: 'פרויקט השו"ת נתמך ב-Windows בלבד.',
+          const ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.notSupported,
+            'פרויקט השו"ת נתמך ב-Windows בלבד.',
           ),
         )
         ..close();
@@ -114,9 +140,11 @@ class ResponsaCatalogBuildService {
     if (!launch.running) {
       controller
         ..add(
-          ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error: launch.message ?? 'לא ניתן להפעיל את בר אילן.',
+          ResponsaBuildProgress.failed(
+            launch.installPath == null
+                ? ResponsaBuildFailure.notInstalled
+                : ResponsaBuildFailure.notRunning,
+            launch.message ?? 'לא ניתן להפעיל את בר אילן.',
           ),
         )
         ..close();
@@ -138,9 +166,9 @@ class ResponsaCatalogBuildService {
     } catch (spawnError) {
       controller
         ..add(
-          ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error: 'לא ניתן להתחיל את בניית הקטלוג: $spawnError',
+          ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.internal,
+            'לא ניתן להתחיל את בניית הקטלוג: $spawnError',
           ),
         )
         ..close();
@@ -173,17 +201,17 @@ class ResponsaCatalogBuildService {
     error.listen((message) {
       logLine('ResponsaCatalogBuildService: isolate error: $message');
       finish(
-        const ResponsaBuildProgress(
-          stage: ResponsaBuildStage.failed,
-          error: 'בניית הקטלוג נכשלה באופן בלתי צפוי.',
+        const ResponsaBuildProgress.failed(
+          ResponsaBuildFailure.internal,
+          'בניית הקטלוג נכשלה באופן בלתי צפוי.',
         ),
       );
     });
     exit.listen((_) {
       finish(
-        const ResponsaBuildProgress(
-          stage: ResponsaBuildStage.failed,
-          error: 'בניית הקטלוג הסתיימה ללא תוצאה.',
+        const ResponsaBuildProgress.failed(
+          ResponsaBuildFailure.internal,
+          'בניית הקטלוג הסתיימה ללא תוצאה.',
         ),
       );
     });
@@ -216,9 +244,9 @@ class ResponsaCatalogBuildService {
       final selection = ResponsaInstallationDiscovery.selectInstallation();
       if (selection == null) {
         send.send(
-          const ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error: 'לא נמצאה התקנה של בר אילן (פרויקט השו"ת) במחשב.',
+          const ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.notInstalled,
+            'לא נמצאה התקנה של בר אילן (פרויקט השו"ת) במחשב.',
           ),
         );
         return;
@@ -229,11 +257,10 @@ class ResponsaCatalogBuildService {
       final instance = ResponsaInstance.pick(selection.instances);
       if (instance == null) {
         send.send(
-          ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error:
-                'בר אילן (${installation.displayName}) אינו פעיל. '
-                'יש לפתוח אותו ולנסות שוב.',
+          ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.notRunning,
+            'בר אילן (${installation.displayName}) אינו פעיל. '
+            'יש לפתוח אותו ולנסות שוב.',
           ),
         );
         return;
@@ -257,9 +284,9 @@ class ResponsaCatalogBuildService {
           ResponsaTreeReader.findCatalogTree(dialog.container);
       if (tree == null) {
         send.send(
-          const ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error: 'לא נמצא עץ הקטלוג בחלון העיון של פרויקט השו"ת.',
+          const ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.treeNotFound,
+            'לא נמצא עץ הקטלוג בחלון העיון של פרויקט השו"ת.',
           ),
         );
         return;
@@ -295,9 +322,9 @@ class ResponsaCatalogBuildService {
 
       if (cancelled()) {
         send.send(
-          const ResponsaBuildProgress(
-            stage: ResponsaBuildStage.failed,
-            error: 'בניית הקטלוג בוטלה.',
+          const ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.cancelled,
+            'בניית הקטלוג בוטלה.',
           ),
         );
         return;
@@ -324,12 +351,32 @@ class ResponsaCatalogBuildService {
           books: result.books,
         ),
       );
+    } on ResponsaTreeReadException catch (error) {
+      logLine('ResponsaCatalogBuildService: $error');
+      send.send(
+        ResponsaBuildProgress.failed(
+          error.accessDenied
+              ? ResponsaBuildFailure.elevated
+              : ResponsaBuildFailure.notResponding,
+          error.message,
+        ),
+      );
+    } on ResponsaAutomationException catch (error) {
+      logLine('ResponsaCatalogBuildService: $error');
+      send.send(
+        ResponsaBuildProgress.failed(
+          error.failure == ResponsaFailure.cancelled
+              ? ResponsaBuildFailure.cancelled
+              : ResponsaBuildFailure.notResponding,
+          error.message,
+        ),
+      );
     } catch (error, stackTrace) {
       logLine('ResponsaCatalogBuildService: $error\n$stackTrace');
       send.send(
-        ResponsaBuildProgress(
-          stage: ResponsaBuildStage.failed,
-          error: 'בניית הקטלוג נכשלה: $error',
+        ResponsaBuildProgress.failed(
+          ResponsaBuildFailure.internal,
+          'בניית הקטלוג נכשלה: $error',
         ),
       );
     }

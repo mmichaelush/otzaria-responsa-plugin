@@ -56,6 +56,8 @@ class ResponsaOpenReport {
   /// כותרות החלונות שאוצריא פתחה במופע, כולל מפתיחות קודמות.
   final List<String> openedWindows;
 
+  final bool broughtToFront;
+
   const ResponsaOpenReport({
     required this.ok,
     this.failure,
@@ -64,6 +66,7 @@ class ResponsaOpenReport {
     this.usedRef,
     this.triedRefs = const [],
     this.openedWindows = const [],
+    this.broughtToFront = false,
   });
 }
 
@@ -249,6 +252,7 @@ class ResponsaController {
         usedRef: outcome.usedRef,
         triedRefs: outcome.triedRefs,
         openedWindows: automation.openedWindows,
+        broughtToFront: outcome.broughtToFront,
       );
     } on ResponsaAutomationException catch (error) {
       return ResponsaOpenReport(

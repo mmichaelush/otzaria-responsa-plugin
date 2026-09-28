@@ -26,6 +26,10 @@ class ResponsaOpenOutcome {
   /// לא על תקלה בתוכנה.
   final List<String> triedRefs;
 
+  /// האם החלון הגיע לחזית. `false` לא מכשיל את הפתיחה, אבל מסביר משתמש
+  /// שרואה רק הבהוב בשורת המשימות.
+  final bool broughtToFront;
+
   const ResponsaOpenOutcome({
     required this.window,
     required this.usedRef,
@@ -34,6 +38,7 @@ class ResponsaOpenOutcome {
     required this.isNew,
     required this.releasedWindows,
     this.triedRefs = const [],
+    this.broughtToFront = true,
   });
 }
 
@@ -464,7 +469,7 @@ class ResponsaAutomation {
     }
 
     // מופע ממוזער או מוסתר מאחורי אוצריא נראה למשתמש כמו פתיחה שנכשלה.
-    ResponsaWin32.bringToFront(main);
+    final broughtToFront = ResponsaWin32.bringToFront(main);
 
     final isNew = !before.contains(title);
     return ResponsaOpenOutcome(
@@ -475,6 +480,7 @@ class ResponsaAutomation {
       isNew: isNew,
       releasedWindows: released,
       triedRefs: tried,
+      broughtToFront: broughtToFront,
     );
   }
 

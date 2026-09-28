@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>פרויקט השו"ת (בר אילן)</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-titles">
+          <h1 class="topbar-title">פרויקט השו"ת (בר אילן)</h1>
+          <span class="topbar-subtitle" aria-live="polite"></span>
+        </div>
+        <button
+          type="button"
+          class="icon-button info-toggle"
+          aria-label="מידע וניהול"
+          aria-pressed="false"
+          aria-controls="info-panel"
+          title="מידע וניהול"
+        ></button>
+      </header>
+      <main class="app-content">
+        <div class="content-column"></div>
+      </main>
+    </div>
+
+    <div class="overlay-scrim"></div>
+    <aside
+      class="overlay-panel"
+      id="info-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="info-title"
+      aria-hidden="true"
+    ></aside>
+
+    <!-- סדר הטעינה: לוגיקה טהורה → שכבות עזר → בקר → כניסה. -->
+    <script src="js/responsa-domain.js"></script>
+    <script src="js/responsa-icons.js"></script>
+    <script src="js/responsa-theme.js"></script>
+    <script src="js/responsa-service.js"></script>
+    <script src="js/responsa-ui.js"></script>
+    <script src="js/responsa-app.js"></script>
+    <script src="js/responsa-main.js"></script>
+  </body>
+</html>

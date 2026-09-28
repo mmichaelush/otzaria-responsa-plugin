@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:responsa_helper/src/catalog/responsa_catalog_schema.dart';
+import 'package:responsa_helper/src/catalog/responsa_category_map.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/text/responsa_names.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -77,7 +78,7 @@ class ResponsaCatalogBook {
   /// הנתיב בעץ של בר אילן בלי שם הספר, מופרד ב-`/`.
   final String contextPath;
 
-  /// הקטגוריה המקבילה באוצריא, כשנמצאה.
+  /// הקטגוריה המקבילה בעץ של אוצריא (`תלמוד בבלי/אחרונים`), כשיש שיוך.
   final String? otzariaCategory;
 
   const ResponsaCatalogBook({
@@ -239,6 +240,7 @@ class ResponsaCatalogRepository {
     // ורק הרמה השנייה מכריעה. בסכמה 2 אין את העמודה ונשאר רק השורש.
     final category =
         row['category_path']?.toString() ?? row['category']?.toString();
+    final otzaria = ResponsaCategoryMap.otzariaPathFor(category);
     return ResponsaCatalogBook(
       key: row['external_key']?.toString() ?? '',
       title: row['title']?.toString() ?? '',
@@ -247,7 +249,9 @@ class ResponsaCatalogRepository {
       pubDate: _text(row['pub_date']),
       topics: row['topics']?.toString() ?? '',
       contextPath: contextPathOf(refPath),
-      otzariaCategory: (category == null || category.isEmpty) ? null : category,
+      otzariaCategory: otzaria == null || otzaria.isEmpty
+          ? null
+          : otzaria.join('/'),
     );
   }
 
