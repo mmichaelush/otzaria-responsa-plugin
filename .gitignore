@@ -1,6 +1,8 @@
-.dart_tool/
-build/
 *.log
-installer/staging/
+*.otzplugin
+.dart_tool/
+.sentry-native/
+build/
 installer/output/
+installer/staging/
 tools/preview/out/

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:win32/win32.dart';
+
 /// יומן לכל האיזולטים. השירות רץ מוסתר בלי קונסול, ולכן בקובץ ההרצה המהודר
 /// היומן נכתב גם לקובץ; ב-`dart test` וב-`dart run` רק ל-stderr.
 ///
@@ -7,11 +9,9 @@ import 'dart:io';
 /// `OTZARIA_RESPONSA_LOG` או מתיקיית הנתונים של המשתמש.
 void logLine(String message) {
   final line = '${DateTime.now().toIso8601String()} $message';
-  try {
-    stderr.writeln(line);
-  } catch (_) {
-    // בלי קונסול אין stderr, והקובץ הוא היומן היחיד.
-  }
+  // בתוכנת GUI (כך השירות רץ) אין stderr, והכתיבה אליו נכשלת באיחור,
+  // כשגיאה שלא נתפסה. לכן בודקים לפני, ולא תופסים אחרי.
+  if (_hasStderr) stderr.writeln(line);
   final file = _logFile;
   if (file == null) return;
   try {
@@ -40,6 +40,14 @@ void rotateLog({int maxBytes = 2 * 1024 * 1024}) {
 String? get logFilePath => _logFile?.path;
 
 final File? _logFile = _resolveLogFile();
+
+final bool _hasStderr = _detectStderr();
+
+bool _detectStderr() {
+  if (!Platform.isWindows) return true;
+  final handle = GetStdHandle(STD_ERROR_HANDLE).value;
+  return handle.address != 0 && handle.address != INVALID_HANDLE_VALUE.address;
+}
 
 File? _resolveLogFile() {
   final explicit = Platform.environment['OTZARIA_RESPONSA_LOG'];

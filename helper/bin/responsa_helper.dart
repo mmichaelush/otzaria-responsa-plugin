@@ -33,7 +33,13 @@ responsa_helper — שירות מקומי שמחבר את אוצריא לפרו�
 
 היומן: %LOCALAPPDATA%\\OtzariaResponsa\\helper.log, או OTZARIA_RESPONSA_LOG.''';
 
-Future<void> main(List<String> arguments) async {
+/// שירות רקע אסור שימות בשקט: כל שגיאה שלא נתפסה נרשמת ביומן.
+Future<void> main(List<String> arguments) => runZonedGuarded(
+  () => _run(arguments),
+  (error, stackTrace) => logLine('uncaught: $error\n$stackTrace'),
+)!;
+
+Future<void> _run(List<String> arguments) async {
   final options = _parse(arguments);
   if (options == null) {
     stderr.writeln(_usage);
