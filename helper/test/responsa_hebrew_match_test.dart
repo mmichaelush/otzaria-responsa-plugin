@@ -1,0 +1,194 @@
+import 'package:test/test.dart';
+import 'package:responsa_helper/src/text/responsa_hebrew.dart';
+
+/// ההשוואה הזו מונעת פתיחת ספר שגוי, ולכן כל הרפיה בה מסוכנת; המקרים כאן
+/// לקוחים מפתיחות אמיתיות מול ההתקנה.
+void main() {
+  ResponsaMatchLevel level(String want, String got) =>
+      ResponsaHebrew.matchLevel(want, got);
+
+  group('התוכנה מרחיבה את ההפניה', () {
+    test('כותרת שהתוכנה הוסיפה לה מיקום', () {
+      expect(
+        level('הון עשיר אבות', 'הון עשיר מסכת אבות הקדמה'),
+        isNot(ResponsaMatchLevel.none),
+      );
+      expect(
+        level('רש"י זכריה', 'רש"י זכריה פרק א'),
+        isNot(ResponsaMatchLevel.none),
+      );
+    });
+
+    test('ספר אחר לגמרי נדחה', () {
+      expect(
+        level('ספר אחר לגמרי', 'הון עשיר מסכת אבות'),
+        ResponsaMatchLevel.none,
+      );
+      expect(level('שאגת אריה', 'אוצר מדרשים היכלות'), ResponsaMatchLevel.none);
+    });
+  });
+
+  group('ראשי תיבות', () {
+    test("`ר'` מתאים ל-`רבי`", () {
+      // `ר` ו-`רב` הם אסימונים שונים אחרי קיפול הכתיב, ובלי ההרפיה הספר
+      // הנכון נפסל.
+      expect(
+        level(
+          "ר' אברהם מן ההר יבמות",
+          "רבי אברהם מן ההר (מהד' בלוי) מסכת יבמות הקדמה",
+        ),
+        isNot(ResponsaMatchLevel.none),
+      );
+      expect(
+        level(
+          "ר' אברהם מן ההר הוספות",
+          "רבי אברהם מן ההר (מהד' בלוי) הוספות קטעים לשאר מסכתות",
+        ),
+        isNot(ResponsaMatchLevel.none),
+      );
+    });
+
+    test('ההרפיה חלה רק על מילה שסומנה בגרש', () {
+      // בלי הגרש `ר` נשאר אסימון שלם, ואינו מתאים ל-`רבי`.
+      expect(
+        level('ר אברהם מן ההר יבמות', 'רבי אברהם מן ההר מסכת יבמות'),
+        ResponsaMatchLevel.none,
+      );
+    });
+
+    test('גרש בסוף מילה אינו מרשה התאמה לכל דבר', () {
+      expect(level("ר' אברהם", 'הון עשיר מסכת אבות'), ResponsaMatchLevel.none);
+    });
+  });
+
+  group('קיפול כתיב', () {
+    test('כתיב מלא וחסר מתאימים', () {
+      expect(
+        level('חדושי אגדות תמורה', 'מהרש"א חידושי אגדות מסכת תמורה'),
+        isNot(ResponsaMatchLevel.none),
+      );
+    });
+
+    test('גרשיים בתוך מילה אינם שוברים את ההשוואה', () {
+      expect(
+        level('רשב"א', 'חידושי הרשב"א מסכת מנחות'),
+        isNot(ResponsaMatchLevel.none),
+      );
+    });
+  });
+
+  group('מקף בתוך מילה', () {
+    test('כותרת זהה תו-בתו מתקבלת', () {
+      // `spellingKey` הופך את `כו-כז` לאסימון שיש בו רווח; בלי פיצול שני
+      // הוא אינו שווה לשום אסימון, וכל שם עם מקף נפסל.
+      const title = 'חיי אדם חלק ב-ג (הלכות שבת ומועדים) כלל כו-כז';
+      expect(ResponsaHebrew.coversTitle(title, title), isTrue);
+    });
+
+    test('המקף אינו מבטל את ההבחנה', () {
+      expect(
+        ResponsaHebrew.coversTitle(
+          'חיי אדם חלק ב-ג כלל כו-כז',
+          'חיי אדם חלק א כלל א',
+        ),
+        isFalse,
+      );
+    });
+
+    test('אסימוני המקף מופיעים בנפרד', () {
+      expect(ResponsaHebrew.markedTokens('כו-כז').map((t) => t.key).toList(), [
+        'כ',
+        'כז',
+      ]);
+    });
+  });
+
+  group('מדף שנדבק לשם', () {
+    test('ראש השם חסר בכותרת — אסימון אחד מותר', () {
+      // `מדרש רבה (תורה) > שמות רבה (וילנא)` הוא מדף וחיבור, והתוכנה
+      // מכנה את החלון בשם החיבור בלבד.
+      expect(
+        ResponsaHebrew.coversTitle(
+          'מדרש רבה שמות רבה',
+          'שמות רבה (וילנא) פרשת שמות פרשה א',
+        ),
+        isTrue,
+      );
+    });
+
+    test('ויתור על שני אסימונים אינו מותר', () {
+      // שתי הכותרות חולקות את `על הש"ס ברכות`; רק הדרישה ל-`בית` או
+      // `הבחירה` פוסלת את הספר השגוי.
+      expect(
+        ResponsaHebrew.coversTitle(
+          'בית הבחירה למאירי על הש"ס ברכות',
+          'שרידי אש על הש"ס ברכות',
+        ),
+        isFalse,
+      );
+    });
+
+    test('סוף השם נדרש תמיד', () {
+      expect(
+        ResponsaHebrew.coversTitle('מהרש"א בבא בתרא', 'מהרש"א פסחים'),
+        isFalse,
+      );
+    });
+  });
+
+  group('מהדורות סותרות', () {
+    test('שתי הסתייגויות שונות הן סתירה', () {
+      expect(
+        ResponsaHebrew.editionsConflict(
+          'שמות רבה (שנאן)',
+          'שמות רבה (וילנא) פרשת שמות פרשה א',
+        ),
+        isTrue,
+      );
+    });
+
+    test('אותה הסתייגות אינה סתירה', () {
+      expect(
+        ResponsaHebrew.editionsConflict(
+          'שמות רבה (וילנא)',
+          'שמות רבה (וילנא) פרשת שמות פרשה א',
+        ),
+        isFalse,
+      );
+    });
+
+    test('צד אחד בלי הסתייגות אינו סתירה', () {
+      // סתירה נקבעת רק כששני הצדדים נושאים הסתייגות.
+      expect(
+        ResponsaHebrew.editionsConflict('היכלות', 'היכלות פרק א'),
+        isFalse,
+      );
+      expect(
+        ResponsaHebrew.editionsConflict('שמות רבה', 'שמות רבה (וילנא)'),
+        isFalse,
+      );
+    });
+
+    test('הסתייגות עם ספרה היא מיקום ולא מהדורה', () {
+      // `(עמ' 108-126)` הוא טווח עמודים, ואינו סותר את המהדורה
+      // `(אייזנשטיין)`.
+      expect(
+        ResponsaHebrew.editionsConflict(
+          "היכלות (עמ' 108-126)",
+          'אוצר מדרשים (אייזנשטיין) היכלות',
+        ),
+        isFalse,
+      );
+    });
+
+    test('שתי הסתייגויות שאחת מהן משותפת אינה סתירה', () {
+      expect(
+        ResponsaHebrew.editionsConflict(
+          'בראשית רבה (תיאודור-אלבק) (כי"ו)',
+          'בראשית רבה (תיאודור-אלבק)',
+        ),
+        isFalse,
+      );
+    });
+  });
+}
