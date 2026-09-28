@@ -19,7 +19,7 @@ class ApiError implements Exception {
     : this(
         'catalogMissing',
         404,
-        'קטלוג ספרי בר אילן עדיין לא נבנה. יש ללחוץ על "בניית קטלוג".',
+        'רשימת הספרים של בר אילן עוד לא נקראה. יש ללחוץ על "התחלה".',
       );
 
   const ApiError.unknownBook()
@@ -76,6 +76,7 @@ class ApiError implements Exception {
         details,
       ),
       ResponsaFailure.cancelled => ApiError('cancelled', 409, message, details),
+      ResponsaFailure.unexpected => ApiError('internal', 500, message, details),
     };
   }
 

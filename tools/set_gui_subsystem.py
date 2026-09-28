@@ -21,7 +21,7 @@ def main(path: str) -> None:
         exe.seek(pe_offset)
         if exe.read(4) != b'PE\0\0':
             sys.exit(f'{path}: חתימת PE חסרה')
-        # שדה Subsystem: ‏0x5C בתוך ה-optional header, זהה ב-PE32 וב-PE32+.
+        # שדה Subsystem: היסט 0x44 בתוך ה-optional header (0x5C מחתימת ה-PE), זהה ב-PE32 וב-PE32+.
         subsystem_at = pe_offset + 4 + 20 + 0x44
         exe.seek(subsystem_at)
         current = struct.unpack('<H', exe.read(2))[0]

@@ -24,7 +24,10 @@ void main() {
   late HttpServer server;
   late HttpClient client;
 
-  Future<void> start({bool withCatalog = true}) async {
+  Future<void> start({
+    bool withCatalog = true,
+    int? Function(int clientPort)? clientSession,
+  }) async {
     if (withCatalog) writeCatalog(dir);
     service = HelperService(backend: backend, paths: HelperPaths(dir.path));
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -32,6 +35,8 @@ void main() {
       service,
       port: server.port,
       heartbeat: const Duration(milliseconds: 50),
+      clientSession: clientSession,
+      ownSession: clientSession == null ? null : 1,
     );
     server.listen(api.handle);
   }
@@ -482,5 +487,120 @@ void main() {
     });
     backend.iconBytes = null;
     expect((await call('GET', '/icon')).status, 404);
+  });
+
+  group('פתיחה ובנייה אינן רצות יחד', () {
+    setUp(() => start());
+
+    Future<void> startBuild() async {
+      final request = await client.post(
+        '127.0.0.1',
+        server.port,
+        '/catalog/build',
+      );
+      request.headers.contentType = ContentType.json;
+      request.write('{"mode":"start"}');
+      // הזרם נסגר בסוף הבדיקה עם הלקוח; השגיאה הזו צפויה.
+      unawaited(
+        request.close().then((r) => r.drain<void>()).catchError((Object _) {}),
+      );
+      for (var i = 0; i < 100 && backend.buildEvents == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    }
+
+    test('פתיחה בזמן בנייה: busy, בלי לגעת בבר אילן', () async {
+      await startBuild();
+      final result = await call('POST', '/book/open', body: {'key': '7'});
+      expect(errorCode(result.json), 'busy');
+      expect(backend.openCalls, isEmpty);
+      await backend.buildEvents!.close();
+    });
+
+    test('בנייה בזמן פתיחה: busy', () async {
+      final gate = Completer<ResponsaOpenReport>();
+      backend.onOpen = (_) => gate.future;
+      final opening = call('POST', '/book/open', body: {'key': '7'});
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final build = await call(
+        'POST',
+        '/catalog/build',
+        body: {'mode': 'start'},
+      );
+      expect(errorCode(build.json), 'busy');
+      expect(backend.buildCalls, 0);
+      gate.complete(const ResponsaOpenReport(ok: true, usedRef: 'x'));
+      await opening;
+    });
+  });
+
+  test('ביטול לפני שהמנוע התחיל עוצר את הבנייה', () async {
+    await start(withCatalog: false);
+    backend.statusDelay = const Duration(milliseconds: 300);
+    final request = await client.post(
+      '127.0.0.1',
+      server.port,
+      '/catalog/build',
+    );
+    request.headers.contentType = ContentType.json;
+    request.write('{}');
+    final lines = (await request.close())
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .toList();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final cancel = await call('POST', '/catalog/cancel', body: {});
+    expect(cancel.json, containsPair('wasRunning', true));
+    final events = [for (final line in await lines) jsonDecode(line) as Map];
+    expect(events.last, containsPair('code', 'cancelled'));
+    expect(backend.buildCalls, 0);
+  });
+
+  group('קטלוג שקיים ואינו נקרא', () {
+    test('catalogUnreadable ולא catalogMissing, והכשל לא נשמר', () async {
+      await start(withCatalog: false);
+      final file = File(service.paths.catalog)
+        ..writeAsStringSync('not a database');
+      final stamp = file.lastModifiedSync();
+      final broken = await call('POST', '/catalog/search', body: {'q': 'x'});
+      expect(errorCode(broken.json), 'catalogUnreadable');
+
+      // קטלוג תקין באותו זמן שינוי: בלי הטעינה מחדש, החיפוש היה נשאר מת.
+      final fresh = Directory(p.join(dir.path, 'fresh'))..createSync();
+      File(writeCatalog(fresh)).copySync(file.path);
+      file.setLastModifiedSync(stamp);
+      final fixed = await call('POST', '/catalog/search', body: {'q': 'יבמות'});
+      expect(fixed.status, 200);
+    });
+  });
+
+  group('משתמש Windows אחר', () {
+    test('בקשה מ-session אחר נדחית', () async {
+      await start(clientSession: (_) => 2);
+      final result = await call('GET', '/health');
+      expect(result.status, 403);
+      expect(errorCode(result.json), 'otherSession');
+    });
+
+    test('בקשה מאותו session מתקבלת', () async {
+      await start(clientSession: (_) => 1);
+      expect((await call('GET', '/health')).status, 200);
+    });
+
+    test('session שלא ניתן לזהות אינו חוסם', () async {
+      await start(clientSession: (_) => null);
+      expect((await call('GET', '/health')).status, 200);
+    });
+  });
+
+  test('כותרת Origin כפולה: 403 ולא 500', () async {
+    await start();
+    final request = await client.get('127.0.0.1', server.port, '/health');
+    request.headers
+      ..add('origin', 'https://a.example')
+      ..add('origin', 'https://b.example');
+    final response = await request.close();
+    await response.drain<void>();
+    expect(response.statusCode, 403);
   });
 }

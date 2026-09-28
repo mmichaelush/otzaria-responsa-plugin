@@ -71,7 +71,7 @@ class ResponsaBuildProgress {
 }
 
 /// בניית קטלוג פרויקט השו"ת באיזולט רקע, בהליכה חיה על כ-1.25 מיליון צמתים
-/// (כ-6 דקות) - ולכן עם דיווח התקדמות וביטול אמיתי. רצה רק לבקשת המשתמש.
+/// (חמש עד שש דקות) - ולכן עם דיווח התקדמות וביטול אמיתי. רצה רק לבקשת המשתמש.
 class ResponsaCatalogBuildService {
   ResponsaCatalogBuildService();
 
@@ -94,7 +94,7 @@ class ResponsaCatalogBuildService {
         ..add(
           const ResponsaBuildProgress.failed(
             ResponsaBuildFailure.busy,
-            'בניית קטלוג כבר מתבצעת. יש להמתין לסיומה.',
+            'רשימת הספרים כבר נקראת כרגע. יש להמתין לסיום.',
           ),
         )
         ..close();
@@ -168,7 +168,7 @@ class ResponsaCatalogBuildService {
         ..add(
           ResponsaBuildProgress.failed(
             ResponsaBuildFailure.internal,
-            'לא ניתן להתחיל את בניית הקטלוג: $spawnError',
+            'לא ניתן להתחיל לקרוא את רשימת הספרים: $spawnError',
           ),
         )
         ..close();
@@ -203,7 +203,7 @@ class ResponsaCatalogBuildService {
       finish(
         const ResponsaBuildProgress.failed(
           ResponsaBuildFailure.internal,
-          'בניית הקטלוג נכשלה באופן בלתי צפוי.',
+          'קריאת רשימת הספרים נכשלה באופן בלתי צפוי.',
         ),
       );
     });
@@ -211,7 +211,7 @@ class ResponsaCatalogBuildService {
       finish(
         const ResponsaBuildProgress.failed(
           ResponsaBuildFailure.internal,
-          'בניית הקטלוג הסתיימה ללא תוצאה.',
+          'קריאת רשימת הספרים הסתיימה בלי תוצאה.',
         ),
       );
     });
@@ -286,7 +286,7 @@ class ResponsaCatalogBuildService {
         send.send(
           const ResponsaBuildProgress.failed(
             ResponsaBuildFailure.treeNotFound,
-            'לא נמצא עץ הקטלוג בחלון העיון של פרויקט השו"ת.',
+            'רשימת הספרים לא נמצאה בחלון "עיון" של בר אילן.',
           ),
         );
         return;
@@ -324,7 +324,7 @@ class ResponsaCatalogBuildService {
         send.send(
           const ResponsaBuildProgress.failed(
             ResponsaBuildFailure.cancelled,
-            'בניית הקטלוג בוטלה.',
+            'קריאת רשימת הספרים בוטלה.',
           ),
         );
         return;
@@ -364,19 +364,20 @@ class ResponsaCatalogBuildService {
     } on ResponsaAutomationException catch (error) {
       logLine('ResponsaCatalogBuildService: $error');
       send.send(
-        ResponsaBuildProgress.failed(
-          error.failure == ResponsaFailure.cancelled
-              ? ResponsaBuildFailure.cancelled
-              : ResponsaBuildFailure.notResponding,
-          error.message,
-        ),
+        ResponsaBuildProgress.failed(switch (error.failure) {
+          ResponsaFailure.cancelled => ResponsaBuildFailure.cancelled,
+          ResponsaFailure.citationDialogNotFound ||
+          ResponsaFailure.resultsNotCleared =>
+            ResponsaBuildFailure.treeNotFound,
+          _ => ResponsaBuildFailure.notResponding,
+        }, error.message),
       );
     } catch (error, stackTrace) {
       logLine('ResponsaCatalogBuildService: $error\n$stackTrace');
       send.send(
         ResponsaBuildProgress.failed(
           ResponsaBuildFailure.internal,
-          'בניית הקטלוג נכשלה: $error',
+          'קריאת רשימת הספרים נכשלה: $error',
         ),
       );
     }

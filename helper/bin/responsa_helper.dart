@@ -13,20 +13,24 @@ abstract final class ExitCodes {
   static const int ok = 0;
   static const int usage = 2;
 
-  /// מופע אחר של השירות כבר מאזין לפורט. אין מה לעשות.
+  /// מופע של השירות, של אותו משתמש, כבר רץ. אין מה לעשות.
   static const int alreadyRunning = 3;
 
-  /// תוכנה אחרת תופסת את הפורט.
+  /// כל הפורטים בטווח תפוסים בידי תוכנות אחרות או משתמשים אחרים.
   static const int portTaken = 4;
 }
 
-const int defaultPort = 39700;
+/// הפורט הראשון בטווח. התוסף סורק את אותו טווח (responsa-domain.js).
+const int firstPort = 39700;
 
-const String _usage =
-    '''
+/// משתמש Windows נוסף שמחובר למחשב מקבל את הפורט הפנוי הבא: 127.0.0.1
+/// משותף לכל המשתמשים, והשירות של כל אחד מסרב לבקשות של האחרים.
+const int portCount = 10;
+
+const String _usage = '''
 responsa_helper — שירות מקומי שמחבר את אוצריא לפרויקט השו"ת (בר אילן).
 
-  --port=<n>        פורט (ברירת מחדל $defaultPort). לפיתוח בלבד.
+  --port=<n>        פורט קבוע, בלי חיפוש בטווח. לפיתוח בלבד.
   --data-dir=<dir>  תיקיית נתונים (ברירת מחדל %LOCALAPPDATA%\\OtzariaResponsa).
   --version         מדפיס גרסה ויוצא.
   --help            העזרה הזו.
@@ -41,43 +45,36 @@ Future<void> main(List<String> arguments) => runZonedGuarded(
 
 Future<void> _run(List<String> arguments) async {
   final options = _parse(arguments);
-  if (options == null) {
-    stderr.writeln(_usage);
-    exit(ExitCodes.usage);
-  }
-  if (options.containsKey('help')) {
-    stdout.writeln(_usage);
-    return;
+  // השירות הוא תוכנת GUI בלי קונסול, ולכן גם העזרה והגרסה נכתבות ליומן.
+  if (options == null || options.containsKey('help')) {
+    _say(_usage);
+    exit(options == null ? ExitCodes.usage : ExitCodes.ok);
   }
   if (options.containsKey('version')) {
-    stdout.writeln(HelperService.serverVersion);
+    _say(HelperService.serverVersion);
     return;
   }
 
-  final port = int.tryParse(options['port'] ?? '$defaultPort');
-  if (port == null || port < 1 || port > 65535) {
-    stderr.writeln('פורט לא תקין: ${options['port']}');
-    exit(ExitCodes.usage);
+  final List<int> ports;
+  if (options['port'] case final value?) {
+    final port = int.tryParse(value);
+    if (port == null || port < 1 || port > 65535) {
+      _say('פורט לא תקין: $value');
+      exit(ExitCodes.usage);
+    }
+    ports = [port];
+  } else {
+    ports = [for (var i = 0; i < portCount; i++) firstPort + i];
   }
 
-  rotateLog();
   final paths = HelperPaths.resolve(override: options['data-dir'])
     ..ensureExists();
 
-  final HttpServer server;
-  try {
-    // ההאזנה לפורט היא גם נעילת המופע היחיד.
-    server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
-  } on SocketException catch (error) {
-    final ours = await _isOurService(port);
-    logLine(
-      ours
-          ? 'already running on port $port'
-          : 'port $port is taken by another program: $error',
-    );
-    exit(ours ? ExitCodes.alreadyRunning : ExitCodes.portTaken);
-  }
+  final server = await _bindFirstFree(ports);
+  // אחרי ה-bind ולא לפניו: מופע שני שיוצא מיד לא יסובב את היומן של הפעיל.
+  rotateLog();
 
+  final port = server.port;
   final service = HelperService(backend: NativeResponsaBackend(), paths: paths);
   final api = HttpApi(service, port: port);
   logLine(
@@ -98,6 +95,60 @@ Future<void> _run(List<String> arguments) async {
   }
 }
 
+/// ההאזנה לפורט היא גם נעילת המופע היחיד. פורט תפוס בידי השירות של אותו
+/// משתמש = כבר רצים; בידי משתמש אחר או תוכנה אחרת = מנסים את הבא.
+Future<HttpServer> _bindFirstFree(List<int> ports) async {
+  for (final port in ports) {
+    try {
+      return await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+    } on SocketException catch (error) {
+      switch (await _probe(port)) {
+        case _Occupant.ourSession:
+          logLine('already running on port $port');
+          exit(ExitCodes.alreadyRunning);
+        case _Occupant.otherSession:
+          logLine('port $port belongs to another Windows user; trying next');
+        case _Occupant.foreign:
+          logLine(
+            'port $port is taken by another program '
+            '(${error.osError?.errorCode} ${error.osError?.message}); '
+            'trying next',
+          );
+      }
+    }
+  }
+  logLine('no free port in ${ports.first}-${ports.last}');
+  exit(ExitCodes.portTaken);
+}
+
+enum _Occupant { ourSession, otherSession, foreign }
+
+Future<_Occupant> _probe(int port) async {
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
+  try {
+    final request = await client.get('127.0.0.1', port, '/health');
+    final response = await request.close().timeout(const Duration(seconds: 3));
+    final json = jsonDecode(await response.transform(utf8.decoder).join());
+    if (json is! Map) return _Occupant.foreign;
+    final error = json['error'];
+    if (error is Map && error['code'] == 'otherSession') {
+      return _Occupant.otherSession;
+    }
+    return json['service'] == HelperService.serviceId
+        ? _Occupant.ourSession
+        : _Occupant.foreign;
+  } catch (_) {
+    return _Occupant.foreign;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+void _say(String text) {
+  logLine(text);
+  if (hasStdout) stdout.writeln(text);
+}
+
 /// `null` = ארגומנטים לא תקינים.
 Map<String, String?>? _parse(List<String> arguments) {
   final options = <String, String?>{};
@@ -112,19 +163,4 @@ Map<String, String?>? _parse(List<String> arguments) {
     options[name] = equals < 0 ? null : body.substring(equals + 1);
   }
   return options;
-}
-
-Future<bool> _isOurService(int port) async {
-  final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
-  try {
-    final request = await client.get('127.0.0.1', port, '/health');
-    final response = await request.close().timeout(const Duration(seconds: 3));
-    final body = await response.transform(utf8.decoder).join();
-    final json = jsonDecode(body);
-    return json is Map && json['service'] == HelperService.serviceId;
-  } catch (_) {
-    return false;
-  } finally {
-    client.close(force: true);
-  }
 }

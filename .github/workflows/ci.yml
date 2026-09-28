@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 jobs:
@@ -20,8 +21,71 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
       - run: dart test
-      - run: dart build cli
+
+  plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        run: for file in plugin/js/*.js; do node --check "$file"; done
+      - name: Unit tests
+        run: node --test plugin/test/*.test.js
+      - name: app-version matches minAppVersion
+        run: |
+          want=$(node -p "require('./plugin/manifest.json').minAppVersion")
+          grep -q "app-version: $want" .github/workflows/ci.yml || {
+            echo "::error::app-version בוולידטור שונה מ-minAppVersion ($want)"; exit 1; }
+      # אותן בדיקות שהחנות מריצה, כולל בדיקת העיצוב. `app-version` שווה
+      # ל-minAppVersion שבמניפסט; מעלים את שניהם יחד.
+      - name: Official validator
+        uses: Otzaria/otzaria-plugin-validator@v1
+        with:
+          path: plugin
+          app-version: 0.9.97
+          fail-on-warnings: true
+          publish: false
+
+  installer:
+    needs: [helper, plugin]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.13.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: pwsh
+        run: ./installer/build.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: responsa-helper
-          path: helper/build/cli/windows_x64/bundle/
+          name: installer
+          path: |
+            installer/output/*.exe
+            installer/staging/*.otzplugin
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: installer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/output/*.exe
+            dist/staging/*.otzplugin
+          generate_release_notes: true
+          fail_on_unmatched_files: true

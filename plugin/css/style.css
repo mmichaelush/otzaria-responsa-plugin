@@ -115,7 +115,8 @@ input {
   gap: 10px;
   align-items: center;
   height: 56px;
-  padding: 0 8px 0 16px;
+  /* לוגי ולא פיזי: 16 בצד הכותרת (ימין ב-RTL), 8 בצד הכפתור. */
+  padding-inline: 16px 8px;
   background: var(--color-surface-container-high);
 }
 
@@ -142,13 +143,6 @@ input {
   color: var(--color-on-surface-variant);
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.topbar-logo {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
 }
 
 @media (max-width: 600px) {
@@ -348,12 +342,6 @@ input {
 
 .search-input::-webkit-search-cancel-button {
   display: none;
-}
-
-.search-hint {
-  margin: var(--space-2) var(--space-4) 0;
-  font-size: 0.85em;
-  color: var(--color-on-surface-variant);
 }
 
 /* ---------- רשימת תוצאות ---------- */

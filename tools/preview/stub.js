@@ -96,6 +96,9 @@
     if (scenario === 'serviceMissing') {
       throw new Error('SocketException: Connection refused');
     }
+    if (scenario === 'serviceError' && params.url.endsWith('/status')) {
+      throw new Error('Network stream timed out');
+    }
     const path = params.url.replace(/^https?:\/\/[^/]+/, '');
     const body = params.body ? JSON.parse(params.body) : {};
     if (path === '/catalog/build') {
@@ -124,6 +127,10 @@
     const payload = {
       plugin: { id: 'com.otzaria-responsa', version: '0.1.0' },
       app: { version: '0.9.97', platform: scenario === 'unsupported' ? 'linux' : 'windows' },
+      permissions:
+        scenario === 'permissionDenied'
+          ? ['app.open_url']
+          : ['network.localhost', 'app.open_url'],
       theme: {
         mode: dark ? 'dark' : 'light',
         colorScheme: dark ? schemes.dark : schemes.light,

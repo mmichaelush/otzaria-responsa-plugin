@@ -91,9 +91,12 @@ class ResponsaController {
   final List<String> _openedWindows = [];
 
   /// חלון ראשי אחרי הפעלה קרה עולה בדרך כלל תוך ~5 שניות.
-  static const Duration launchTimeout = Duration(seconds: 60);
+  static const Duration launchTimeout = Duration(seconds: 40);
 
-  static const Duration openBudget = Duration(minutes: 3);
+  /// יחד עם [launchTimeout] פחות מ-120 השניות שאחריהן התוסף מוותר
+  /// (`fetchStream`): פתיחה שנמשכת מעבר לזה מקפיצה חלון כשאיש כבר לא מחכה.
+  /// פתיחה רגילה אורכת כשלוש שניות.
+  static const Duration openBudget = Duration(seconds: 75);
 
   /// מצב ההתקנה והמופע. מהיר; אינו נוגע בתוכנה.
   Future<ResponsaStatus> status() async {
@@ -184,7 +187,7 @@ class ResponsaController {
       logLine('ResponsaController: isolate failed: $error\n$stackTrace');
       return ResponsaOpenReport(
         ok: false,
-        failure: ResponsaFailure.timeout,
+        failure: ResponsaFailure.unexpected,
         message: 'פתיחת הספר בבר אילן נכשלה באופן בלתי צפוי: $error',
       );
     }

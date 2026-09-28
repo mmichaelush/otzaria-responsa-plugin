@@ -19,6 +19,8 @@ AppId={{8C1E4D2A-5B7F-4E3A-9C61-2F0B7A9D4E15}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
+VersionInfoVersion={#AppVersion}
+VersionInfoDescription={#AppName}
 AppPublisher=מיכאלוש
 AppPublisherURL=https://github.com/mmichaelush/otzaria-responsa-plugin
 AppSupportURL=https://github.com/mmichaelush/otzaria-responsa-plugin/blob/main/docs/USER_GUIDE.md
@@ -64,18 +66,24 @@ Source: "staging\{#PluginFile}"; DestDir: "{app}"; Flags: ignoreversion
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#RunValue}"; ValueData: """{app}\bin\{#HelperExe}"""; Flags: uninsdeletevalue
 
 [Run]
-; מפעילים את השירות מיד, כדי שלא יהיה צורך להתנתק ולהתחבר.
-Filename: "{app}\bin\{#HelperExe}"; Flags: nowait runasoriginaluser
-Filename: "{code:OtzariaExe}"; Parameters: """{app}\{#PluginFile}"""; Description: "{cm:InstallPlugin}"; Flags: postinstall nowait skipifsilent runasoriginaluser; Check: OtzariaFound
+; מפעילים את השירות מיד, כדי שלא יהיה צורך להתנתק ולהתחבר. מתקין שהורץ כמנהל
+; היה מעביר את ההרשאה לשירות, ומשם לבר אילן שהשירות מפעיל; דרך explorer
+; התהליך עולה בהרשאות הרגילות של המשתמש, כמו בכניסה ל-Windows.
+Filename: "{app}\bin\{#HelperExe}"; Flags: nowait; Check: not IsAdmin
+Filename: "{win}\explorer.exe"; Parameters: """{app}\bin\{#HelperExe}"""; Flags: nowait; Check: IsAdmin
+Filename: "{code:OtzariaExe}"; Parameters: """{app}\{#PluginFile}"""; Description: "{cm:InstallPlugin}"; Flags: postinstall nowait skipifsilent; Check: OtzariaFound and not IsAdmin
+Filename: "{win}\explorer.exe"; Parameters: """{app}\{#PluginFile}"""; Description: "{cm:InstallPlugin}"; Flags: postinstall nowait skipifsilent; Check: OtzariaFound and IsAdmin
 
 [UninstallRun]
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#HelperExe}"; Flags: runhidden; RunOnceId: "StopHelper"
+; רק של המשתמש הזה: מתקין שרץ כמנהל היה סוגר גם שירות של משתמש אחר.
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /FI ""USERNAME eq {username}"" /IM {#HelperExe}"; Flags: runhidden; RunOnceId: "StopHelper"
 
 [Code]
 var
   OtzariaPath: String;
 
-{ הנתיב הראשון בפקודה, עם או בלי מרכאות: `"C:\...\otzaria.exe" "%1"`. }
+{ הנתיב שבפקודה, עם או בלי מרכאות: `"C:\...\otzaria.exe" "%1"`. בלי מרכאות
+  חותכים אחרי `.exe` ולא ברווח הראשון, כי `C:\Program Files` מכיל רווח. }
 function FirstToken(Command: String): String;
 var
   Close: Integer;
@@ -89,8 +97,8 @@ begin
   end
   else
   begin
-    Close := Pos(' ', Command);
-    if Close > 0 then Result := Copy(Command, 1, Close - 1) else Result := Command;
+    Close := Pos('.exe', Lowercase(Command));
+    if Close > 0 then Result := Copy(Command, 1, Close + 3) else Result := Command;
   end;
 end;
 
@@ -125,6 +133,7 @@ begin
     or TryInstallLocation(HKCU)
     or TryInstallLocation(HKLM32)
     or TryCandidate(ExpandConstant('{commonpf64}\Otzaria\otzaria.exe'))
+    or TryCandidate(ExpandConstant('{commonpf32}\Otzaria\otzaria.exe'))
     or TryCandidate(ExpandConstant('{localappdata}\Programs\Otzaria\otzaria.exe'))
     or TryProtocol(HKLM64)
     or TryProtocol(HKCU);
@@ -146,8 +155,11 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#HelperExe}', '', SW_HIDE,
+  Exec(ExpandConstant('{sys}\taskkill.exe'),
+    ExpandConstant('/F /FI "USERNAME eq {username}" /IM {#HelperExe}'), '', SW_HIDE,
     ewWaitUntilTerminated, ResultCode);
+  { TerminateProcess אסינכרוני: ממתינים שהקובץ ישתחרר לפני שדורסים אותו. }
+  Sleep(700);
   Result := '';
 end;
 

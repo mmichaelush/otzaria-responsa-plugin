@@ -25,8 +25,16 @@ class FakeBackend implements ResponsaBackend {
 
   Uint8List? iconBytes;
 
+  /// השהיה מלאכותית, כדי לבדוק מה קורה בין בקשה לתחילת הבנייה.
+  Duration statusDelay = Duration.zero;
+
   @override
-  Future<ResponsaStatus> status() async => installed
+  Future<ResponsaStatus> status() async {
+    if (statusDelay > Duration.zero) await Future<void>.delayed(statusDelay);
+    return _status();
+  }
+
+  ResponsaStatus _status() => installed
       ? ResponsaStatus(
           installed: true,
           running: true,
@@ -61,7 +69,7 @@ class FakeBackend implements ResponsaBackend {
       ..add(
         const ResponsaBuildProgress.failed(
           ResponsaBuildFailure.cancelled,
-          'בניית הקטלוג בוטלה.',
+          'קריאת רשימת הספרים בוטלה.',
         ),
       )
       ..close();

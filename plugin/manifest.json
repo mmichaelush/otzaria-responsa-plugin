@@ -13,12 +13,13 @@
   "sdkVersion": "1.x",
   "permissions": [
     "network.localhost",
-    "app.open_url"
+    "app.open_url",
+    "events.subscribe:plugin.permissions_changed"
   ],
   "network": {
     "enabled": true,
     "allowlist": [
-      "http://127.0.0.1:39700"
+      "127.0.0.1"
     ]
   },
   "contributes": {

@@ -158,12 +158,17 @@ class BuildCoordinator {
   /// `false` כשאין בנייה לבטל.
   bool cancel() {
     if (!_running) return false;
+    _cancelRequested = true;
     _backend.cancelBuild();
     return true;
   }
 
-  /// מספר הצמתים שנמדד בעצי המהדורות המוכרות (docs/57). בבנייה ראשונה
-  /// הוא המכנה, כדי שהאחוז יהיה אמיתי ולא "חלק 6 מתוך 20" שאינם שווים.
+  /// ביטול שהגיע לפני שהמנוע התחיל (בזמן הערכת המכנה) אינו מגיע אליו.
+  bool _cancelRequested = false;
+
+  /// מספר הצמתים שנמדד בעצי המהדורות המוכרות (סריקות חיות של CD25 ו-CD29).
+  /// בבנייה ראשונה הוא המכנה, כדי שהאחוז יהיה אמיתי ולא "חלק 6 מתוך 20",
+  /// שאינם שווים בגודלם.
   static const Map<int, int> knownNodeCounts = {25: 1251889, 29: 1552791};
 
   Future<int?> _expectedNodes() async {
@@ -182,7 +187,16 @@ class BuildCoordinator {
     _running = true;
     _last = null;
     _startedAt = DateTime.now();
+    _cancelRequested = false;
     final expected = await _expectedNodes();
+    if (_cancelRequested) {
+      _finish(
+        const BuildFailed(
+          ApiError('cancelled', 409, 'קריאת רשימת הספרים בוטלה.'),
+        ),
+      );
+      return;
+    }
     _emit(const BuildStarted());
     try {
       await for (final progress in _backend.build(targetPath: _targetPath)) {
@@ -192,7 +206,7 @@ class BuildCoordinator {
               BuildFailed(
                 ApiError.fromBuildFailure(
                   progress.failure ?? ResponsaBuildFailure.internal,
-                  progress.error ?? 'בניית הקטלוג נכשלה.',
+                  progress.error ?? 'קריאת רשימת הספרים נכשלה.',
                 ),
               ),
             );
@@ -219,13 +233,15 @@ class BuildCoordinator {
       }
       _finish(
         const BuildFailed(
-          ApiError('internal', 500, 'בניית הקטלוג הסתיימה ללא תוצאה.'),
+          ApiError('internal', 500, 'קריאת רשימת הספרים הסתיימה בלי תוצאה.'),
         ),
       );
     } catch (error, stackTrace) {
       logLine('BuildCoordinator: $error\n$stackTrace');
       _finish(
-        BuildFailed(ApiError('internal', 500, 'בניית הקטלוג נכשלה: $error')),
+        BuildFailed(
+          ApiError('internal', 500, 'קריאת רשימת הספרים נכשלה: $error'),
+        ),
       );
     }
   }

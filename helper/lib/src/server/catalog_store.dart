@@ -24,7 +24,14 @@ class CatalogStore {
     final current = _loading;
     if (current != null && stamp == _loadedStamp) return current;
     _loadedStamp = stamp;
-    return _loading = _load();
+    late final Future<CatalogIndex?> loading;
+    loading = _load().then((index) {
+      // כשל לא נשמר: נעילה רגעית (בנייה שמחליפה את הקובץ) אסור שתשאיר את
+      // החיפוש מת עד שהקובץ ישתנה שוב.
+      if (index == null && identical(_loading, loading)) invalidate();
+      return index;
+    });
+    return _loading = loading;
   }
 
   Future<CatalogIndex?> _load() async {

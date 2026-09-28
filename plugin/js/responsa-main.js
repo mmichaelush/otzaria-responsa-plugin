@@ -24,6 +24,9 @@
   // boot חוזר רק מרענן את המצב, ולכן בטוח.
   bridge.on('plugin.boot', (payload) => app.boot(payload));
   bridge.on('theme.changed', (theme) => applyTheme(theme));
+  bridge.on('plugin.permissions_changed', (detail) =>
+    app.permissionsChanged(detail && detail.permissions),
+  );
   bridge.on('plugin.suspended', () => app.suspend());
   bridge.on('plugin.resumed', () => app.resume());
 })();

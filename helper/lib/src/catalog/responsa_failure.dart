@@ -9,6 +9,9 @@ enum ResponsaFailure {
   mdiWindowLimitReached,
   timeout,
   cancelled,
+
+  /// חריג שלא צפינו. ההודעה נושאת את הסיבה.
+  unexpected,
 }
 
 /// כשל של פעולת אוטומציה, עם הקשר לאבחון.

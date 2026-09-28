@@ -6,6 +6,7 @@ import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/server/api_error.dart';
 import 'package:responsa_helper/src/server/build_coordinator.dart';
 import 'package:responsa_helper/src/server/helper_service.dart';
+import 'package:responsa_helper/src/server/peer_session.dart';
 
 typedef _JsonHandler =
     Future<Map<String, Object?>> Function(Map<String, Object?> body);
@@ -17,7 +18,13 @@ class HttpApi {
     this._service, {
     required this.port,
     this.heartbeat = const Duration(seconds: 10),
-  }) {
+    int? Function(int clientPort)? clientSession,
+    int? ownSession,
+  }) : _clientSession =
+           clientSession ??
+           ((clientPort) =>
+               PeerSession.ofClient(clientPort: clientPort, serverPort: port)),
+       _ownSession = ownSession ?? PeerSession.own {
     _get = {
       '/health': (_) async => _service.health(),
       '/status': (_) => _service.status(),
@@ -37,6 +44,8 @@ class HttpApi {
   final HelperService _service;
   final int port;
   final Duration heartbeat;
+  final int? Function(int clientPort) _clientSession;
+  final int? _ownSession;
 
   static const int maxBodyBytes = 64 * 1024;
   static const String buildPath = '/catalog/build';
@@ -62,9 +71,7 @@ class HttpApi {
         }
         await _streamBuild(
           request,
-          mode == 'start'
-              ? _service.builds.watchOrStart()
-              : _service.builds.attach(),
+          mode == 'start' ? _service.startBuild() : _service.builds.attach(),
         );
       } else if (_get[path] case final handler?) {
         _requireMethod(request, 'GET');
@@ -97,14 +104,31 @@ class HttpApi {
   /// שולח אותן. בדיקת `Host` חוסמת DNS rebinding.
   void _guard(HttpRequest request) {
     final headers = request.headers;
-    if (headers.value('origin') != null ||
-        headers.value('sec-fetch-site') != null ||
-        headers.value('sec-fetch-mode') != null) {
+    // `headers[...]` ולא `value`: כותרת כפולה הייתה זורקת ומחזירה 500.
+    if (headers['origin'] != null ||
+        headers['sec-fetch-site'] != null ||
+        headers['sec-fetch-mode'] != null) {
       throw const ApiError.forbidden('בקשה מדפדפן אינה מותרת.');
     }
-    final host = headers.value(HttpHeaders.hostHeader)?.toLowerCase();
+    final hosts = headers[HttpHeaders.hostHeader];
+    final host = hosts != null && hosts.length == 1
+        ? hosts.single.toLowerCase()
+        : null;
     if (host != '127.0.0.1:$port' && host != 'localhost:$port') {
       throw const ApiError.forbidden('כתובת יעד לא מותרת.');
+    }
+    // משתמש Windows אחר שמחובר למחשב מגיע לאותו 127.0.0.1. הוא יקבל שירות
+    // משלו על פורט אחר (bin/responsa_helper.dart).
+    final remotePort = request.connectionInfo?.remotePort;
+    if (_ownSession != null && remotePort != null) {
+      final client = _clientSession(remotePort);
+      if (client != null && client != _ownSession) {
+        throw const ApiError(
+          'otherSession',
+          403,
+          'השירות הזה שייך למשתמש Windows אחר שמחובר למחשב.',
+        );
+      }
     }
   }
 
@@ -192,7 +216,12 @@ class HttpApi {
       (event) => write(event.toJson()),
       onDone: finish,
     );
+    // לקוח שהתנתק: מפסיקים להאזין מיד, ולא רק בכתיבה הבאה.
+    unawaited(
+      response.done.then((_) => finish(), onError: (Object _) => finish()),
+    );
     await done.future;
+    await subscription.cancel();
     ticker.cancel();
     await writes;
     await _close(response);

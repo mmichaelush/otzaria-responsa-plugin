@@ -4,8 +4,10 @@ import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/server/api_error.dart';
 import 'package:responsa_helper/src/server/build_coordinator.dart';
+import 'package:responsa_helper/src/server/catalog_index.dart';
 import 'package:responsa_helper/src/server/catalog_store.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
+import 'package:responsa_helper/src/server/peer_session.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 
 /// הלוגיקה של השירות, בלי HTTP: כל נקודת קצה ב-docs/PROTOCOL.md היא מתודה
@@ -41,6 +43,7 @@ class HelperService {
     'apiVersion': apiVersion,
     'serverVersion': serverVersion,
     'capabilities': capabilities,
+    if (PeerSession.own != null) 'sessionId': PeerSession.own,
   };
 
   Future<Map<String, Object?>> status() async {
@@ -71,8 +74,7 @@ class HelperService {
     final query = _string(body, 'q');
     final offset = _int(body, 'offset', fallback: 0, min: 0);
     final limit = _int(body, 'limit', fallback: 50, min: 1, max: maxPageSize);
-    final index = await store.index();
-    if (index == null) throw const ApiError.catalogMissing();
+    final index = await _requireIndex();
     final hits = index.search(query);
     return {
       'total': hits.length,
@@ -90,8 +92,7 @@ class HelperService {
     if (keys.length > maxKeys) {
       throw const ApiError.badRequest('יותר מדי מפתחות בבקשה אחת.');
     }
-    final index = await store.index();
-    if (index == null) throw const ApiError.catalogMissing();
+    final index = await _requireIndex();
     return {
       'results': [
         for (final key in keys.cast<String>())
@@ -100,11 +101,43 @@ class HelperService {
     };
   }
 
+  /// הבנייה ופתיחה לא יכולות לרוץ יחד: שתיהן מפעילות את חלון "עיון" של אותו
+  /// מופע, והפתיחה הייתה משבשת את הסריקה.
+  Stream<BuildEvent> startBuild() {
+    if (_opening && !builds.isRunning) {
+      throw const ApiError.busy(
+        'ספר נפתח כרגע בבר אילן. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
+      );
+    }
+    return builds.watchOrStart();
+  }
+
+  /// קטלוג חסר הוא מצב רגיל (טרם נבנה); קטלוג שקיים ואינו נקרא הוא תקלה,
+  /// ואסור להציג אותו כ"חסר": התוסף היה מרענן ומחפש שוב ושוב.
+  Future<CatalogIndex> _requireIndex() async {
+    final index = await store.index();
+    if (index != null) return index;
+    if (await store.repository.exists()) {
+      throw const ApiError(
+        'catalogUnreadable',
+        500,
+        'לא ניתן לקרוא את רשימת הספרים. אפשר לבנות אותה מחדש: גלגל השיניים '
+            '← "בנייה מחדש".',
+      );
+    }
+    throw const ApiError.catalogMissing();
+  }
+
   /// פתיחה אחת בכל רגע: שתי פתיחות חופפות מתחרות על אותו מופע ומשאירות
   /// חלונות שאיש אינו סוגר.
   Future<Map<String, Object?>> open(Map<String, Object?> body) async {
     final key = _string(body, 'key');
     if (key.isEmpty) throw const ApiError.badRequest('חסר מפתח ספר.');
+    if (builds.isRunning) {
+      throw const ApiError.busy(
+        'בר אילן קורא כרגע את רשימת הספרים. אפשר לפתוח ספרים כשהקריאה תסתיים.',
+      );
+    }
     if (_opening) {
       throw const ApiError.busy(
         'ספר אחר נפתח כרגע בבר אילן. יש להמתין רגע ולנסות שוב.',
@@ -112,8 +145,7 @@ class HelperService {
     }
     _opening = true;
     try {
-      final index = await store.index();
-      if (index == null) throw const ApiError.catalogMissing();
+      final index = await _requireIndex();
       final book = index.byKey(key);
       if (book == null) throw const ApiError.unknownBook();
       final references = await store.repository.openRefsFor(key);
@@ -210,11 +242,14 @@ class HelperService {
             '$book לא נפתח. יש לסגור בו כמה חלונות ולנסות שוב.',
       ResponsaFailure.resultsNotCleared =>
         'רשימת התוצאות בבר אילן לא התנקתה, ולכן לא ניתן לדעת אם התוצאה '
-            'שייכת ל$book. הפתיחה בוטלה; אפשר לנסות שוב.',
+            'שייכת ${title.isEmpty ? 'לספר' : 'ל$book'}. הפתיחה בוטלה; אפשר '
+            'לנסות שוב.',
       ResponsaFailure.timeout =>
         'בר אילן לא הגיב בזמן בעת פתיחת $book. ייתכן שהוא עסוק או ממתין '
             'לתשובה בחלון אחר.',
       ResponsaFailure.cancelled => 'הפתיחה בוטלה.',
+      ResponsaFailure.unexpected =>
+        detail ?? 'פתיחת $book בבר אילן נכשלה באופן בלתי צפוי.',
     };
   }
 

@@ -17,17 +17,50 @@ class FakeBridge {
 
   call(method, payload) {
     this.calls.push({ method, payload });
-    if (method === 'network.fetchStream') return this._stream(payload);
+    if (method === 'network.fetchStream') return this._iterator(payload);
     return Promise.resolve({ success: true, data: true, error: null });
   }
 
   on() {}
 
+  /**
+   * כמו הזרם של אוצריא (plugin_tab_page.dart, createRpcStream): `return()`
+   * סוגר מיד, גם כשקריאת `next()` ממתינה. ל-async generator רגיל זה לא נכון:
+   * ה-return שלו ממתין עד שהגנרטור ממשיך.
+   */
+  _iterator(params) {
+    const source = this._stream(params);
+    let closed = false;
+    let wake = null;
+    return {
+      next() {
+        if (closed) return Promise.resolve({ value: undefined, done: true });
+        return new Promise((resolve, reject) => {
+          wake = resolve;
+          source.next().then(
+            (item) => !closed && resolve(item),
+            (error) => !closed && reject(error),
+          );
+        });
+      },
+      return() {
+        closed = true;
+        if (wake) wake({ value: undefined, done: true });
+        return Promise.resolve({ value: undefined, done: true });
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    };
+  }
+
   async *_stream(params) {
     const path = params.url.replace(/^https?:\/\/[^/]+/, '');
-    this.requests.push({ path, params, body: params.body ? JSON.parse(params.body) : null });
+    const port = Number((params.url.match(/:(\d+)\//) || [])[1]);
+    this.requests.push({ path, port, params, body: params.body ? JSON.parse(params.body) : null });
     await Promise.resolve();
-    let route = this.routes[path];
+    // מסלול לפי פורט ונתיב (`39701/health`) קודם למסלול לפי נתיב בלבד.
+    let route = this.routes[port + path] !== undefined ? this.routes[port + path] : this.routes[path];
     if (typeof route === 'function') route = await route(params, this);
     if (route instanceof Error) throw route;
     if (!route) throw new Error('SocketException: Connection refused');

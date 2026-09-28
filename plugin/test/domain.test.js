@@ -26,15 +26,34 @@ test('screenFor: אין שירות מאזין', () => {
   );
 });
 
-test('screenFor: תוכנה אחרת בפורט, ושירות בגרסה אחרת', () => {
+test('screenFor: הרשאה חסרה, בין מהרשימה ובין מהמארח', () => {
   assert.equal(
-    Domain.screenFor({ health: { service: 'other' }, status: null }),
-    Screen.portTaken,
+    Domain.screenFor({ platform: 'windows', permissions: ['app.open_url'] }),
+    Screen.permissionDenied,
   );
   assert.equal(
-    Domain.screenFor({ health: { service: 'otzaria-responsa', apiVersion: 2 } }),
-    Screen.serviceOutdated,
+    Domain.screenFor({ failure: { code: 'permissionDenied' } }),
+    Screen.permissionDenied,
   );
+});
+
+test('screenFor: תוכנה אחרת בפורט', () => {
+  assert.equal(Domain.screenFor({ failure: { code: 'portTaken' } }), Screen.portTaken);
+  assert.equal(Domain.screenFor({ health: { service: 'other' } }), Screen.portTaken);
+});
+
+test('screenFor: גרסאות לא תואמות, בשני הכיוונים', () => {
+  const service = (apiVersion) => ({ service: 'otzaria-responsa', apiVersion });
+  assert.equal(Domain.screenFor({ health: service(0) }), Screen.serviceOutdated);
+  assert.equal(Domain.screenFor({ health: service(2) }), Screen.pluginOutdated);
+});
+
+test('screenFor: השירות ענה ונכשל אחר כך = לא מגיב', () => {
+  assert.equal(
+    Domain.screenFor({ health, failure: { code: 'timeout' } }),
+    Screen.serviceError,
+  );
+  assert.equal(Domain.screenFor({ failure: { code: 'timeout' } }), Screen.serviceMissing);
 });
 
 test('screenFor: בר אילן לא מותקן', () => {
@@ -77,6 +96,15 @@ test('catalogNotice', () => {
   assert.equal(Domain.catalogNotice(status({ catalog: catalogReady })), null);
   assert.equal(
     Domain.catalogNotice(
+      status({
+        catalog: catalogReady,
+        build: { state: 'failed', error: { code: 'notResponding', message: 'x' } },
+      }),
+    ).kind,
+    'rebuildFailed',
+  );
+  assert.equal(
+    Domain.catalogNotice(
       status({ catalog: Object.assign({}, catalogReady, { matchesInstallation: false }) }),
     ).kind,
     'otherInstallation',
@@ -95,7 +123,7 @@ test('buildProgress: עם מכנה', () => {
     150000,
   );
   assert.equal(p.percent, 50);
-  assert.match(p.detail, /מתוך כ-/);
+  assert.match(p.detail, /נקראו .* מתוך כ-/);
   assert.equal(p.remaining, 'נותרו כ-3 דקות');
 });
 
@@ -140,10 +168,20 @@ test('booksLabel', () => {
   assert.equal(Domain.booksLabel(8402), '8,402 ספרים');
 });
 
-test('errorAdvice', () => {
-  assert.deepEqual(Domain.errorAdvice('catalogMissing'), { refresh: true, rebuild: false });
-  assert.deepEqual(Domain.errorAdvice('referenceNotFound'), { refresh: false, rebuild: true });
-  assert.deepEqual(Domain.errorAdvice('wrongBook'), { refresh: false, rebuild: false });
+test('needsRefresh', () => {
+  assert.equal(Domain.needsRefresh('catalogMissing'), true);
+  assert.equal(Domain.needsRefresh('otherSession'), true);
+  assert.equal(Domain.needsRefresh('catalogUnreadable'), false);
+  assert.equal(Domain.needsRefresh('wrongBook'), false);
+});
+
+test('foundLabel ו-serviceUrls', () => {
+  assert.equal(Domain.foundLabel(1), 'נמצא ספר אחד');
+  assert.equal(Domain.foundLabel(78), 'נמצאו 78 ספרים');
+  const urls = Domain.serviceUrls();
+  assert.equal(urls.length, 10);
+  assert.equal(urls[0], 'http://127.0.0.1:39700');
+  assert.equal(urls[9], 'http://127.0.0.1:39709');
 });
 
 test('formatBuiltAt', () => {

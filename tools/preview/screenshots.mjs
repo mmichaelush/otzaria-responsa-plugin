@@ -31,6 +31,8 @@ const shots = [
   ['info-panel', 'scenario=ready&info=1'],
   ['not-installed', 'scenario=notInstalled'],
   ['port-taken', 'scenario=portTaken'],
+  ['permission-denied', 'scenario=permissionDenied'],
+  ['service-error', 'scenario=serviceError'],
 ];
 
 for (const [name, query] of shots) {

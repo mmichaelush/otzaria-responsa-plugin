@@ -300,21 +300,35 @@ class ResponsaCatalogWriter {
     final target = File(targetPath);
     final backup = File('$targetPath.previous');
     var backedUp = false;
-    if (target.existsSync()) {
-      if (backup.existsSync()) backup.deleteSync();
-      target.renameSync(backup.path);
-      backedUp = true;
-    }
     try {
-      File(buildingPath).renameSync(targetPath);
+      if (target.existsSync()) {
+        if (backup.existsSync()) _retry(backup.deleteSync);
+        _retry(() => target.renameSync(backup.path));
+        backedUp = true;
+      }
+      _retry(() => File(buildingPath).renameSync(targetPath));
     } catch (error) {
       if (backedUp && !target.existsSync()) {
         backup.renameSync(targetPath);
       }
       throw ResponsaCatalogBuildException(
-        'לא ניתן היה להחליף את קובץ הקטלוג. הקטלוג הקודם נשמר. ($error)',
+        'לא ניתן היה לשמור את הרשימה החדשה. הרשימה הקודמת נשארה. ($error)',
       );
     }
     if (backup.existsSync()) backup.deleteSync();
+  }
+
+  /// SQLite ב-Windows פותח בלי FILE_SHARE_DELETE, ולכן קריאה מקבילה (חיפוש,
+  /// `/status`) חוסמת שינוי שם לרגע. ממתינים לה במקום לזרוק חמש דקות בנייה.
+  static void _retry(void Function() action) {
+    for (var attempt = 1; ; attempt++) {
+      try {
+        action();
+        return;
+      } on FileSystemException {
+        if (attempt >= 40) rethrow;
+        sleep(const Duration(milliseconds: 250));
+      }
+    }
   }
 }

@@ -48,12 +48,39 @@ class _Entry {
   _Entry(this.book)
     : title = ResponsaHebrew.spellingKey(book.title),
       author = ResponsaHebrew.spellingKey(book.author),
-      path = ResponsaHebrew.spellingKey(book.contextPath.replaceAll('/', ' '));
+      path = ResponsaHebrew.spellingKey(book.contextPath.replaceAll('/', ' ')) {
+    titleWords = _words(title);
+    authorWords = _words(author);
+    pathWords = _words(path);
+  }
 
   final ResponsaCatalogBook book;
   final String title;
   final String author;
   final String path;
+  late final List<String> titleWords;
+  late final List<String> authorWords;
+  late final List<String> pathWords;
+
+  static List<String> _words(String key) =>
+      key.split(' ').where((word) => word.isNotEmpty).toList();
+
+  /// אותיות השימוש שמתחברות לתחילת מילה (`והרשב"א`, `לרמב"ם`).
+  static const String _prefixLetters = 'והבכלמש';
+
+  /// מילה ששאילתה מתחילה אותה, ולא תת-מחרוזת בכל מקום: `שת` (מ"שו"ת") אסור
+  /// שיתאים ל"החדשות". מילה שמתחילה באות שימוש נבדקת גם בלעדיה.
+  static bool _matches(List<String> words, String token) {
+    for (final word in words) {
+      if (word.startsWith(token)) return true;
+      if (word.length > token.length &&
+          _prefixLetters.contains(word[0]) &&
+          word.startsWith(token, 1)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /// `null` = לא מתאים. דרגה נמוכה = התאמה טובה יותר: כותרת זהה, כותרת
   /// שמתחילה בשאילתה, כל המילים בכותרת, בכותרת ובמחבר, ולבסוף בנתיב.
@@ -61,11 +88,11 @@ class _Entry {
     var inTitle = 0;
     var inAuthor = 0;
     for (final token in tokens) {
-      if (title.contains(token)) {
+      if (_matches(titleWords, token)) {
         inTitle++;
-      } else if (author.contains(token)) {
+      } else if (_matches(authorWords, token)) {
         inAuthor++;
-      } else if (!path.contains(token)) {
+      } else if (!_matches(pathWords, token)) {
         return null;
       }
     }

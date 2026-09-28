@@ -4,8 +4,12 @@
 (function (root) {
   'use strict';
 
-  /** חייב להתאים ל-`network.allowlist` שבמניפסט ולפורט של השירות. */
-  const SERVICE_URL = 'http://127.0.0.1:39700';
+  /**
+   * השירות מאזין לפורט הפנוי הראשון בטווח: כל משתמש Windows שמחובר למחשב
+   * מקבל שירות משלו (helper/bin/responsa_helper.dart). חייב להתאים לטווח שם.
+   */
+  const FIRST_PORT = 39700;
+  const PORT_COUNT = 10;
 
   /** גרסת הפרוטוקול שהתוסף מדבר (docs/PROTOCOL.md §7). */
   const API_VERSION = 1;
@@ -14,12 +18,18 @@
 
   const PAGE_SIZE = 50;
 
+  /** ההרשאה שבלעדיה אין ערוץ לשירות. */
+  const LOCALHOST_PERMISSION = 'network.localhost';
+
   /** המסכים האפשריים. בכל רגע מוצג בדיוק אחד. */
   const Screen = Object.freeze({
     loading: 'loading',
     unsupported: 'unsupported',
+    permissionDenied: 'permissionDenied',
     serviceMissing: 'serviceMissing',
+    serviceError: 'serviceError',
     serviceOutdated: 'serviceOutdated',
+    pluginOutdated: 'pluginOutdated',
     portTaken: 'portTaken',
     notInstalled: 'notInstalled',
     needsCatalog: 'needsCatalog',
@@ -40,6 +50,11 @@
     return formatCount(count) + ' ספרים';
   }
 
+  /** "נמצא ספר אחד" / "נמצאו 12 ספרים". */
+  function foundLabel(count) {
+    return count === 1 ? 'נמצא ספר אחד' : 'נמצאו ' + booksLabel(count);
+  }
+
   /** מחבר · מקום · שנה, בלי שדות ריקים. */
   function bookMeta(book) {
     return [book.author, book.pubPlace, book.pubDate]
@@ -55,49 +70,81 @@
     return book.contextPath.split('/').filter(Boolean).join(' › ');
   }
 
+  /** בלי ההרשאה אין טעם לפנות לשירות: כל פנייה נכשלת באותה הודעה. */
+  function hasLocalhostPermission(permissions) {
+    return !Array.isArray(permissions) || permissions.includes(LOCALHOST_PERMISSION);
+  }
+
   /**
    * איזה מסך להציג. [health] ו-[status] הם תשובות השירות, או `null` כשלא
    * התקבלו; [failure] הוא השגיאה שבגללה לא התקבלו.
    */
-  function screenFor({ platform, health, status, failure }) {
+  function screenFor({ platform, permissions, health, status, failure }) {
     if (platform && platform !== 'windows') return Screen.unsupported;
-    if (failure && failure.code === 'serviceUnavailable') {
-      return Screen.serviceMissing;
+    if (!hasLocalhostPermission(permissions)) return Screen.permissionDenied;
+    if (failure) {
+      switch (failure.code) {
+        case 'permissionDenied':
+          return Screen.permissionDenied;
+        case 'serviceUnavailable':
+          return Screen.serviceMissing;
+        case 'portTaken':
+          return Screen.portTaken;
+        default:
+          // השירות ענה ל-/health ונכשל אחר כך: הוא קיים, רק לא מגיב כרגע.
+          return health ? Screen.serviceError : Screen.serviceMissing;
+      }
     }
     if (health) {
       if (health.service !== SERVICE_ID) return Screen.portTaken;
+      if (health.apiVersion > API_VERSION) return Screen.pluginOutdated;
       if (health.apiVersion !== API_VERSION) return Screen.serviceOutdated;
     }
-    if (!status) return failure ? Screen.serviceMissing : Screen.loading;
+    if (!status) return Screen.loading;
     const build = status.build || {};
     const catalog = status.catalog || {};
     // קטלוג קיים נשאר שמיש בזמן בנייה מחדש, ולכן החיפוש לא נחסם.
     if (catalog.exists && catalog.bookCount > 0) return Screen.ready;
     if (build.state === 'running') return Screen.building;
     if (!status.installed) return Screen.notInstalled;
-    if (build.state === 'failed') return Screen.buildFailed;
+    const error = build.error || {};
+    if (build.state === 'failed' && error.code !== 'cancelled') {
+      return Screen.buildFailed;
+    }
     return Screen.needsCatalog;
   }
 
   /**
-   * הערה מעל החיפוש כשהקטלוג קיים אבל כדאי לבנות אותו מחדש, או `null`.
-   * הקטלוג עדיין שמיש בשני המקרים, ולכן זו הערה ולא חסימה.
+   * הערה מעל החיפוש כשהרשימה קיימת אבל כדאי לקרוא אותה מחדש, או `null`.
+   * הרשימה עדיין שמישה בכל המקרים, ולכן זו הערה ולא חסימה.
    */
   function catalogNotice(status) {
     const catalog = (status && status.catalog) || {};
     if (!catalog.exists) return null;
+    const build = status.build || {};
+    const error = build.error || {};
+    if (build.state === 'failed' && error.code !== 'cancelled') {
+      return {
+        kind: 'rebuildFailed',
+        text:
+          'קריאת הרשימה מחדש לא הושלמה' +
+          (error.message ? ': ' + error.message : '.') +
+          ' הרשימה הקודמת נשארה בשימוש.',
+      };
+    }
     if (status.installed && catalog.matchesInstallation === false) {
       return {
         kind: 'otherInstallation',
         text:
-          'הקטלוג נבנה מהתקנה אחרת של בר אילן. ייתכן שחלק מהספרים לא ייפתחו; ' +
-          'מומלץ לבנות אותו מחדש.',
+          'רשימת הספרים נקראה מהתקנה אחרת של בר אילן, ולכן ייתכן שחלק ' +
+          'מהספרים לא ייפתחו. מומלץ לקרוא אותה מחדש.',
       };
     }
     if (catalog.outdated) {
       return {
         kind: 'outdated',
-        text: 'הקטלוג נבנה בגרסה קודמת של התוסף. מומלץ לבנות אותו מחדש.',
+        text:
+          'רשימת הספרים נקראה בגרסה קודמת של התוסף. מומלץ לקרוא אותה מחדש.',
       };
     }
     return null;
@@ -121,12 +168,12 @@
     let detail = '';
     if (stage === 'classifying') {
       fraction = 0.99;
-      detail = 'נסרקו ' + formatCount(scanned) + ' רשומות';
+      detail = 'נקראו ' + formatCount(scanned) + ' רשומות';
     } else if (expected > 0 && scanned > 0) {
-      // לעולם לא 100% לפני הסיום: המכנה הוא הערכה מהבנייה הקודמת.
+      // לעולם לא 100% לפני הסיום: המכנה הוא הערכה מהקריאה הקודמת.
       fraction = Math.min(scanned / expected, 0.98);
       detail =
-        'נסרקו ' + formatCount(scanned) + ' מתוך כ-' + formatCount(expected) +
+        'נקראו ' + formatCount(scanned) + ' מתוך כ-' + formatCount(expected) +
         ' רשומות';
     } else if (progress && progress.sectionsTotal > 0) {
       detail =
@@ -153,25 +200,20 @@
   }
 
   /**
-   * מה עושים אחרי שגיאה מהשירות. `rebuild` = הצעה לבנות את הקטלוג מחדש,
-   * `refresh` = המצב השתנה ויש לקרוא אותו שוב.
+   * האם שגיאה מהשירות אומרת שהמצב השתנה ויש לקרוא אותו שוב (הרשימה נמחקה,
+   * השירות נעלם).
    */
-  function errorAdvice(code) {
-    switch (code) {
-      case 'catalogMissing':
-      case 'unknownBook':
-        return { refresh: true, rebuild: false };
-      case 'referenceNotFound':
-        return { refresh: false, rebuild: true };
-      case 'serviceUnavailable':
-      case 'notInstalled':
-        return { refresh: true, rebuild: false };
-      default:
-        return { refresh: false, rebuild: false };
-    }
+  function needsRefresh(code) {
+    return (
+      code === 'catalogMissing' ||
+      code === 'unknownBook' ||
+      code === 'serviceUnavailable' ||
+      code === 'notInstalled' ||
+      code === 'otherSession'
+    );
   }
 
-  /** תאריך הבנייה לתצוגה, או ריק. */
+  /** תאריך הקריאה לתצוגה, או ריק. */
   function formatBuiltAt(iso) {
     if (typeof iso !== 'string' || iso === '') return '';
     const date = new Date(iso);
@@ -183,22 +225,36 @@
     });
   }
 
+  /** כתובות השירות האפשריות, לפי סדר החיפוש. */
+  function serviceUrls() {
+    const urls = [];
+    for (let i = 0; i < PORT_COUNT; i++) {
+      urls.push('http://127.0.0.1:' + (FIRST_PORT + i));
+    }
+    return urls;
+  }
+
   const api = {
-    SERVICE_URL,
+    FIRST_PORT,
+    PORT_COUNT,
     API_VERSION,
     SERVICE_ID,
     PAGE_SIZE,
+    LOCALHOST_PERMISSION,
     Screen,
     formatCount,
     booksLabel,
+    foundLabel,
     bookMeta,
     bookContext,
+    hasLocalhostPermission,
     screenFor,
     catalogNotice,
     buildProgress,
     remainingLabel,
-    errorAdvice,
+    needsRefresh,
     formatBuiltAt,
+    serviceUrls,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaDomain = api;

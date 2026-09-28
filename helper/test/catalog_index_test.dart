@@ -59,6 +59,22 @@ void main() {
     expect(keys('משנה גמרא'), isEmpty);
   });
 
+  test('מילה שמתחילה בשאילתה, לא תת-מחרוזת באמצע מילה', () {
+    final shut = CatalogIndex([
+      book('a', 'רשב"א החדשות', path: 'ספרי שאלות ותשובות (שו"ת)/ראשונים'),
+      book('b', 'רשב"א', path: 'ספרי שאלות ותשובות (שו"ת)/ראשונים'),
+    ]);
+    // `שת` (מ"שו"ת") נמצא בנתיב בשניהם; ב"החדשות" הוא באמצע מילה ואינו
+    // הופך את הכותרת להתאמה טובה יותר.
+    expect([for (final hit in shut.search('שו"ת רשב"א')) hit.key], ['b', 'a']);
+  });
+
+  test('אות שימוש בתחילת מילה אינה מסתירה התאמה', () {
+    final index = CatalogIndex([book('1', 'שו"ת והרשב"א')]);
+    expect(index.search('רשבא'), hasLength(1));
+    expect(index.search('שבא'), isEmpty);
+  });
+
   test('חיפוש לפי מפתח', () {
     expect(index.byKey('4')?.title, 'משנה ברורה');
     expect(index.byKey('404'), isNull);
