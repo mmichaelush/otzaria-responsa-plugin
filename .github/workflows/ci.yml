@@ -36,7 +36,7 @@ jobs:
       - name: app-version matches minAppVersion
         run: |
           want=$(node -p "require('./plugin/manifest.json').minAppVersion")
-          grep -q "app-version: $want" .github/workflows/ci.yml || {
+          grep -qF "app-version: $want" .github/workflows/ci.yml || {
             echo "::error::app-version בוולידטור שונה מ-minAppVersion ($want)"; exit 1; }
       # אותן בדיקות שהחנות מריצה, כולל בדיקת העיצוב. `app-version` שווה
       # ל-minAppVersion שבמניפסט; מעלים את שניהם יחד.

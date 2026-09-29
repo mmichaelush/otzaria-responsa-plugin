@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
@@ -23,7 +24,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.1.0';
+  static const String serverVersion = '0.1.1';
   static const int apiVersion = 1;
   static const List<String> capabilities = ['catalog', 'open', 'icon'];
 
@@ -117,6 +118,13 @@ class HelperService {
   Future<CatalogIndex> _requireIndex() async {
     final index = await store.index();
     if (index != null) return index;
+    // בין שני שינויי השם של החלפת הרשימה אין קובץ לרגע; זה לא "חסר".
+    if (builds.isRunning &&
+        await File('${store.repository.databasePath}.previous').exists()) {
+      throw const ApiError.busy(
+        'רשימת הספרים מתעדכנת ברגע זה. אפשר לנסות שוב בעוד כמה שניות.',
+      );
+    }
     if (await store.repository.exists()) {
       throw const ApiError(
         'catalogUnreadable',

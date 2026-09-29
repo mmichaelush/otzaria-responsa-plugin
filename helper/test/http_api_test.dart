@@ -574,6 +574,26 @@ void main() {
     });
   });
 
+  test('בין שני שינויי השם של החלפת הרשימה: busy ולא catalogMissing', () async {
+    await start(withCatalog: false);
+    File('${service.paths.catalog}.previous').writeAsStringSync('old');
+    final request = await client.post(
+      '127.0.0.1',
+      server.port,
+      '/catalog/build',
+    );
+    request.headers.contentType = ContentType.json;
+    request.write('{}');
+    final stream = (await request.close()).drain<void>();
+    for (var i = 0; i < 100 && backend.buildEvents == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    final result = await call('POST', '/catalog/search', body: {'q': 'x'});
+    expect(errorCode(result.json), 'busy');
+    await backend.buildEvents!.close();
+    await stream;
+  });
+
   group('משתמש Windows אחר', () {
     test('בקשה מ-session אחר נדחית', () async {
       await start(clientSession: (_) => 2);

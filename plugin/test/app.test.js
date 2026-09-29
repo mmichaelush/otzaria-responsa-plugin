@@ -343,6 +343,39 @@ test('חזרה ללשונית בזמן בנייה מצטרפת בלי להתחי
   app.suspend();
 });
 
+test('רענון ישן אינו מחזיר את מסך ההתחלה בזמן בנייה ראשונה', async () => {
+  let release;
+  const slow = new Promise((resolve) => (release = resolve));
+  let calls = 0;
+  const { app } = setup({
+    '/status': async () => {
+      calls++;
+      if (calls > 1) await slow;
+      return reply(200, noCatalog);
+    },
+    '/catalog/build': { status: 200, chunks: ['{"type":"progress","scanned":1}\n'], hang: true },
+  });
+  await app.boot(windows);
+  const stale = app.refresh();
+  app.startBuild();
+  release();
+  await stale;
+  assert.equal(app.model.screen, Screen.building);
+  app.suspend();
+});
+
+test('בנייה שנדחתה ב"עסוק" מוסברת למשתמש', async () => {
+  const { app, bridge } = setup({
+    '/status': reply(200, ready),
+    '/catalog/build': reply(409, { error: { code: 'busy', message: 'ספר נפתח כרגע' } }),
+  });
+  await app.boot(windows);
+  app.startBuild();
+  await until(() => app.model.buildActive === false);
+  assert.deepEqual(bridge.notifications('ui.showError'), ['ספר נפתח כרגע']);
+  app.suspend();
+});
+
 test('Windows בלבד', async () => {
   const { app, bridge } = setup({});
   await app.boot({ app: { platform: 'linux' } });

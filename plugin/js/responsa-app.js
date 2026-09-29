@@ -277,7 +277,10 @@
     // ---------------------------------------------------- בנייה
 
     startBuild() {
-      if (this.model.buildActive) return;
+      // בזמן פתיחה השירות היה מחזיר "עסוק": בר אילן תפוס.
+      if (this.model.buildActive || this.model.openingKey !== null) return;
+      // רענון שעוד בדרך יחזור עם "אין בנייה" ויחזיר את מסך ההתחלה.
+      this.refreshSeq++;
       Object.assign(this.model, {
         buildActive: true,
         progress: { stage: 'starting' },
@@ -347,8 +350,11 @@
         this.view.announce(text);
       } else if (terminal && terminal.type === 'error' && terminal.code === 'cancelled') {
         this.view.announce('קריאת רשימת הספרים בוטלה');
+      } else if (terminal && terminal.type === 'error' && terminal.code === 'busy') {
+        // בנייה שלא התחילה אינה נרשמת ב-/status, ולכן רק כאן אפשר להסביר.
+        this._notify('ui.showError', terminal.message);
       }
-      // כשל מוצג מתוך /status: מסך כשל בבנייה ראשונה, הערה בבנייה מחדש.
+      // כשל אחר מוצג מתוך /status: מסך כשל בבנייה ראשונה, הערה בבנייה מחדש.
       this.refresh();
     }
 

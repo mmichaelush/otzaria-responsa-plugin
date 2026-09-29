@@ -309,13 +309,18 @@ class ResponsaCatalogWriter {
       _retry(() => File(buildingPath).renameSync(targetPath));
     } catch (error) {
       if (backedUp && !target.existsSync()) {
-        backup.renameSync(targetPath);
+        _retry(() => backup.renameSync(targetPath));
       }
       throw ResponsaCatalogBuildException(
         'לא ניתן היה לשמור את הרשימה החדשה. הרשימה הקודמת נשארה. ($error)',
       );
     }
-    if (backup.existsSync()) backup.deleteSync();
+    // הרשימה החדשה כבר במקומה: עותק ישן שאנטי-וירוס מחזיק אינו כשל בנייה.
+    try {
+      if (backup.existsSync()) _retry(backup.deleteSync);
+    } on FileSystemException catch (error) {
+      logLine('ResponsaCatalogWriter: cannot delete ${backup.path}: $error');
+    }
   }
 
   /// SQLite ב-Windows פותח בלי FILE_SHARE_DELETE, ולכן קריאה מקבילה (חיפוש,

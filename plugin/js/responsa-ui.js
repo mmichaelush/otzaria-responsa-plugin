@@ -553,7 +553,11 @@
           { class: 'panel-actions' },
           button('tonal', 'בנייה מחדש', actions.rebuild, {
             key: 'panel-rebuild',
-            disabled: !status || !status.installed || model.buildActive,
+            disabled:
+              !status ||
+              !status.installed ||
+              model.buildActive ||
+              model.openingKey !== null,
           }),
         ),
       ),

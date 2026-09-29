@@ -186,8 +186,8 @@ dart run bin/responsa_helper.dart --port=39800 --data-dir=C:\temp\rp
 
 | רמה | פקודה | מה נבדק |
 |---|---|---|
-| **שירות** | `cd helper && dart test` | 248 בדיקות: המנוע, החיפוש, HTTP מקצה לקצה מול `FakeBackend`, אבטחה, session, בנייה ו-attach, ויומן מקבילי |
-| **תוסף** | `node --test plugin/test/*.test.js` | 73 בדיקות: domain, service (גילוי פורט, הודעות המארח, fetchStream מדומה), app (בקר מול View מדומה), ומראה של בדיקת העיצוב |
+| **שירות** | `cd helper && dart test` | 249 בדיקות: המנוע, החיפוש, HTTP מקצה לקצה מול `FakeBackend`, אבטחה, session, בנייה ו-attach, ויומן מקבילי |
+| **תוסף** | `node --test plugin/test/*.test.js` | 75 בדיקות: domain, service (גילוי פורט, הודעות המארח, fetchStream מדומה), app (בקר מול View מדומה), ומראה של בדיקת העיצוב |
 | **החנות** | הוולידטור הרשמי (`installer/build.ps1` או CI) | אותן בדיקות שהחנות מריצה, כולל עיצוב |
 | **חזותי** | `node tools/preview/screenshots.mjs` | כל מסך, בהיר וכהה, ב-Edge headless |
 | **חי** | `dart test --run-skipped test/live_*` | מול בר אילן אמיתי: בנייה, פתיחת מדגם, פתיחת הכול |
