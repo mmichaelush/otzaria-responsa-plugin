@@ -72,7 +72,10 @@ $ErrorActionPreference = 'Stop'
 $env:INPUT_BUILD = $null
 $output | Where-Object { $_ -notmatch '^OUTPUT ' } | Write-Host
 if ($validatorExit -ne 0) { throw 'הוולידטור נכשל' }
-$pluginFile = ($output | Select-String '^OUTPUT plugin-file=(.+)$').Matches[0].Groups[1].Value
+# לפי השם ולא לפי הפלט: ב-GitHub Actions הוולידטור כותב את הנתיב ל-
+# $GITHUB_OUTPUT ולא ל-stdout.
+$pluginFile = Join-Path $root "$($manifest.id)-$version.otzplugin"
+if (-not (Test-Path $pluginFile)) { throw "קובץ התוסף לא נבנה: $pluginFile" }
 Move-Item -Force $pluginFile (Join-Path $staging 'OtzariaResponsa.otzplugin')
 
 Step 'Inno Setup'
