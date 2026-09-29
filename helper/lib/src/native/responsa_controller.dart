@@ -10,6 +10,7 @@ import 'package:responsa_helper/src/native/responsa_installation_discovery.dart'
 import 'package:responsa_helper/src/native/responsa_instance.dart';
 import 'package:responsa_helper/src/native/responsa_launcher.dart';
 import 'package:responsa_helper/src/native/responsa_profile.dart';
+import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 
 /// מצב פרויקט השו"ת כפי שאוצריא רואה אותו.
 class ResponsaStatus {
@@ -70,6 +71,28 @@ class ResponsaOpenReport {
   });
 }
 
+/// תוצאת חיפוש כפי שהיא חוזרת ל-UI. `ok == false` הוא ערך, לא חריג.
+class ResponsaSearchReport {
+  final bool ok;
+  final ResponsaFailure? failure;
+
+  /// הסבר הכשל. הטקסט של בר אילן עצמו נמצא ב-[outcome].
+  final String? message;
+
+  final ResponsaSearchOutcome? outcome;
+
+  /// כמו בפתיחה: חלון התוצאות נוסף לחלונות שאוצריא פתחה.
+  final List<String> openedWindows;
+
+  const ResponsaSearchReport({
+    required this.ok,
+    this.failure,
+    this.message,
+    this.outcome,
+    this.openedWindows = const [],
+  });
+}
+
 /// הגבול בין UI אסינכרוני לאוטומציה חוסמת: כל פעולה חוסמת רצה באיזולט רקע,
 /// כי ב-Windows ה-UI isolate רץ על ה-platform thread וקריאת Win32 מקפיאה אותו.
 class ResponsaController {
@@ -84,6 +107,8 @@ class ResponsaController {
   /// ההגדרה, וערך לכוד היה נשאר `false` עד הפעלה מחדש.
   bool get autoStart => _allowAutoStart();
 
+  /// פתיחה וחיפוש חולקים אותו: שתי פעולות חופפות מתחרות על אותו מופע
+  /// ומשאירות חלונות פתוחים שאיש אינו סוגר.
   var _busy = false;
 
   /// כאן ולא באוטומציה, כי כל פתיחה רצה באיזולט משלה; בלעדיה
@@ -97,6 +122,9 @@ class ResponsaController {
   /// (`fetchStream`): פתיחה שנמשכת מעבר לזה מקפיצה חלון כשאיש כבר לא מחכה.
   /// פתיחה רגילה אורכת כשלוש שניות.
   static const Duration openBudget = Duration(seconds: 75);
+
+  /// כמו [openBudget]. חיפוש כבד אורך עד כ-15 שניות.
+  static const Duration searchBudget = Duration(seconds: 75);
 
   /// מצב ההתקנה והמופע. מהיר; אינו נוגע בתוכנה.
   Future<ResponsaStatus> status() async {
@@ -146,19 +174,22 @@ class ResponsaController {
       );
     }
 
-    // פתיחה אחת בכל רגע: שתי פתיחות חופפות מתחרות על אותו מופע
-    // ומשאירות חלונות פתוחים שאיש אינו סוגר.
     if (_busy) {
       return const ResponsaOpenReport(
         ok: false,
-        failure: ResponsaFailure.responsaNotRunning,
-        message: 'פתיחת ספר בבר אילן כבר מתבצעת. יש להמתין לסיומה.',
+        failure: ResponsaFailure.busy,
+        message: 'פעולה אחרת בבר אילן כבר מתבצעת. יש להמתין לסיומה.',
       );
     }
     _busy = true;
     try {
-      final launch = await _ensureRunning(installPath);
-      if (launch != null) return launch;
+      if (await _launchFailure(installPath) case final message?) {
+        return ResponsaOpenReport(
+          ok: false,
+          failure: ResponsaFailure.responsaNotRunning,
+          message: message,
+        );
+      }
 
       final report = await _runInIsolate(
         _OpenRequest(
@@ -168,15 +199,71 @@ class ResponsaController {
           openedWindows: List.of(_openedWindows),
         ),
       );
-      if (report.openedWindows.isNotEmpty) {
-        _openedWindows
-          ..clear()
-          ..addAll(report.openedWindows);
-      }
+      _keepOpenedWindows(report.openedWindows);
       return report;
     } finally {
       _busy = false;
     }
+  }
+
+  /// חיפוש טקסט מלא, שתוצאותיו נשארות בממשק של בר אילן. [installPath] כמו
+  /// בפתיחה: ההתקנה שממנה נבנה הקטלוג, כשיש.
+  Future<ResponsaSearchReport> searchText(
+    String query, {
+    String? installPath,
+  }) async {
+    if (!Platform.isWindows) {
+      return const ResponsaSearchReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: 'חיפוש בבר אילן נתמך ב-Windows בלבד.',
+      );
+    }
+    if (_busy) {
+      return const ResponsaSearchReport(
+        ok: false,
+        failure: ResponsaFailure.busy,
+        message: 'פעולה אחרת בבר אילן כבר מתבצעת. יש להמתין לסיומה.',
+      );
+    }
+    _busy = true;
+    try {
+      if (await _launchFailure(installPath) case final message?) {
+        return ResponsaSearchReport(
+          ok: false,
+          failure: ResponsaFailure.responsaNotRunning,
+          message: message,
+        );
+      }
+
+      final request = _SearchRequest(
+        query: query,
+        installPath: installPath,
+        openedWindows: List.of(_openedWindows),
+      );
+      final ResponsaSearchReport report;
+      try {
+        report = await Isolate.run(() => _searchInIsolate(request));
+      } catch (error, stackTrace) {
+        logLine('ResponsaController: isolate failed: $error\n$stackTrace');
+        return ResponsaSearchReport(
+          ok: false,
+          failure: ResponsaFailure.unexpected,
+          message: 'החיפוש בבר אילן נכשל באופן בלתי צפוי: $error',
+        );
+      }
+      _keepOpenedWindows(report.openedWindows);
+      return report;
+    } finally {
+      _busy = false;
+    }
+  }
+
+  void _keepOpenedWindows(List<String> windows) {
+    if (windows.isEmpty) return;
+    _openedWindows
+      ..clear()
+      ..addAll(windows);
   }
 
   Future<ResponsaOpenReport> _runInIsolate(_OpenRequest request) async {
@@ -193,39 +280,36 @@ class ResponsaController {
     }
   }
 
-  /// `null` כשהכול תקין. הכשל הוא `responsaNotRunning` ולא `timeout`, שהיה
-  /// מציג בטעות "התוכנה אינה מגיבה".
-  Future<ResponsaOpenReport?> _ensureRunning(String? installPath) async {
+  /// `null` כשהכול תקין; אחרת ההודעה למשתמש. הכשל הוא `responsaNotRunning`
+  /// ולא `timeout`, שהיה מציג בטעות "התוכנה אינה מגיבה".
+  Future<String?> _launchFailure(String? installPath) async {
     final result = await ResponsaLauncher.ensureRunning(
       installPath: installPath,
       allowLaunch: autoStart,
       timeout: launchTimeout,
     );
     if (result.running) return null;
-    return ResponsaOpenReport(
-      ok: false,
-      failure: ResponsaFailure.responsaNotRunning,
-      message: result.message,
-    );
+    return result.message ??
+        'בר אילן אינו פעיל. יש לפתוח את פרויקט השו"ת ולנסות שוב.';
   }
 
   // ------------------------------------------------ מה שרץ באיזולט
 
-  static Future<ResponsaOpenReport> _openBookInIsolate(
-    _OpenRequest request,
-  ) async {
-    // רק מופע של ההתקנה שממנה נבנה הקטלוג, ולא חונה מחוץ למסך - שם הספר
-    // נפתח והמשתמש אינו רואה דבר.
+  /// רק מופע של ההתקנה שממנה נבנה הקטלוג, ולא חונה מחוץ למסך - שם הספר
+  /// נפתח והמשתמש אינו רואה דבר. `automation == null` עם הודעה למשתמש.
+  static ({ResponsaAutomation? automation, String? message}) _attach(
+    String? installPath,
+    List<String> openedWindows,
+  ) {
     final selection = ResponsaInstallationDiscovery.selectInstallation(
-      preferredPath: request.installPath,
+      preferredPath: installPath,
     );
     final instance = selection == null
         ? null
         : ResponsaInstance.pick(selection.instances);
     if (instance == null) {
-      return ResponsaOpenReport(
-        ok: false,
-        failure: ResponsaFailure.responsaNotRunning,
+      return (
+        automation: null,
         message: selection == null
             ? 'בר אילן אינו מותקן במחשב הזה.'
             : 'בר אילן (${selection.installation.displayName}) אינו פעיל. '
@@ -236,12 +320,30 @@ class ResponsaController {
     final version = ResponsaInstallationDiscovery.versionFromWindowTitle(
       instance.title,
     );
-
-    final automation = ResponsaAutomation(
-      pid: instance.pid,
-      profile: ResponsaVersionProfile.forVersion(version),
-      openedWindows: request.openedWindows,
+    return (
+      automation: ResponsaAutomation(
+        pid: instance.pid,
+        profile: ResponsaVersionProfile.forVersion(version),
+        openedWindows: openedWindows,
+      ),
+      message: null,
     );
+  }
+
+  static Future<ResponsaOpenReport> _openBookInIsolate(
+    _OpenRequest request,
+  ) async {
+    final (:automation, :message) = _attach(
+      request.installPath,
+      request.openedWindows,
+    );
+    if (automation == null) {
+      return ResponsaOpenReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: message,
+      );
+    }
 
     try {
       final outcome = automation.openBook(
@@ -271,6 +373,40 @@ class ResponsaController {
       );
     }
   }
+
+  static Future<ResponsaSearchReport> _searchInIsolate(
+    _SearchRequest request,
+  ) async {
+    final (:automation, :message) = _attach(
+      request.installPath,
+      request.openedWindows,
+    );
+    if (automation == null) {
+      return ResponsaSearchReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: message,
+      );
+    }
+
+    try {
+      final outcome = ResponsaSearchAutomation(
+        automation,
+      ).search(request.query, ResponsaDeadline(searchBudget));
+      return ResponsaSearchReport(
+        ok: true,
+        outcome: outcome,
+        openedWindows: automation.openedWindows,
+      );
+    } on ResponsaAutomationException catch (error) {
+      return ResponsaSearchReport(
+        ok: false,
+        failure: error.failure,
+        message: error.message,
+        openedWindows: automation.openedWindows,
+      );
+    }
+  }
 }
 
 class _OpenRequest {
@@ -284,6 +420,18 @@ class _OpenRequest {
   const _OpenRequest({
     required this.references,
     this.expectedTitle,
+    this.installPath,
+    this.openedWindows = const [],
+  });
+}
+
+class _SearchRequest {
+  final String query;
+  final String? installPath;
+  final List<String> openedWindows;
+
+  const _SearchRequest({
+    required this.query,
     this.installPath,
     this.openedWindows = const [],
   });

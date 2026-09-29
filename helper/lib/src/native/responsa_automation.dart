@@ -51,6 +51,10 @@ class ResponsaDeadline {
 
   Duration get remaining => budget - _watch.elapsed;
   bool get expired => remaining <= Duration.zero;
+
+  /// תקציב משנה לחוליה אחת, שלעולם אינו חורג מהתקציב הכולל.
+  ResponsaDeadline within(Duration cap) =>
+      ResponsaDeadline(remaining < cap ? remaining : cap);
 }
 
 /// אוטומציה חוסמת מול מופע חי של פרויקט השו"ת - חייבת לרוץ באיזולט רקע.
@@ -72,10 +76,10 @@ class ResponsaAutomation {
     List<String> openedWindows = const [],
   }) : _openedWindows = [...openedWindows];
 
-  static const Duration _poll = Duration(milliseconds: 250);
+  static const Duration poll = Duration(milliseconds: 250);
 
   /// כל כמה זמן לשלוח שוב את פקודת פתיחת דיאלוג העיון.
-  static const Duration _commandRepeat = Duration(seconds: 3);
+  static const Duration commandRepeat = Duration(seconds: 3);
 
   /// הדיאלוג נפתח ב-1–2 שניות כשהכול תקין; תקציב נדיב לא מציל מצב תקוע,
   /// רק מכפיל את זמן הכשל בכל חוליה.
@@ -93,19 +97,19 @@ class ResponsaAutomation {
   bool Function() cancelled = _neverCancelled;
   static bool _neverCancelled() => false;
 
-  void _wait(Duration duration, ResponsaDeadline deadline) {
+  void pause(Duration duration, ResponsaDeadline deadline) {
     final end = Stopwatch()..start();
     while (end.elapsed < duration) {
-      _checkpoint(deadline);
+      checkpoint(deadline);
       // השעון עלול לחרוג כבר אחרי תנאי הלולאה, ו-`sleep` עם משך שלילי זורק.
       final left = duration - end.elapsed;
       if (left <= Duration.zero) break;
-      sleepFor(left < _poll ? left : _poll);
+      sleepFor(left < poll ? left : poll);
     }
-    _checkpoint(deadline);
+    checkpoint(deadline);
   }
 
-  void _checkpoint(ResponsaDeadline deadline) {
+  void checkpoint(ResponsaDeadline deadline) {
     if (cancelled()) {
       throw const ResponsaAutomationException(
         ResponsaFailure.cancelled,
@@ -141,13 +145,23 @@ class ResponsaAutomation {
 
   /// מודאל "מידע" פתוח חוסם את כל הערוץ (כל הפניה מחזירה 0 תוצאות).
   /// מחזיר כמה נראו ולא כמה נסגרו: עצם הופעתו היא תשובה סופית של המנתח.
+  /// שאלה נענית ב"ביטול", לעולם לא ב"כן": "כן" מריץ פעולה חדשה.
   int dismissInfoModals({int limit = 5}) {
     var seen = 0;
     for (var attempt = 0; attempt < limit; attempt++) {
       final modals = ResponsaDiscovery.discoverAll(pid, profile.infoModalHints);
       if (modals.isEmpty) return seen;
       for (final modal in modals) {
-        if (modal.handle('ok_button') case final button?) {
+        final ok = modal.handle('ok_button');
+        final button = ok ?? modal.handle('cancel_button');
+        if (button != null) {
+          if (ok == null) {
+            final message = switch (modal.handle('message')) {
+              final text? => ResponsaWin32.windowText(text),
+              null => '',
+            };
+            logLine('ResponsaAutomation: שאלה פתוחה נסגרה בביטול: $message');
+          }
           ResponsaWin32.click(button);
         }
         seen++;
@@ -171,16 +185,14 @@ class ResponsaAutomation {
     if (existing != null) return existing;
 
     final main = mainWindow;
-    final own = ResponsaDeadline(
-      deadline.remaining < dialogBudget ? deadline.remaining : dialogBudget,
-    );
+    final own = deadline.within(dialogBudget);
     Stopwatch? sinceCommand;
     while (!own.expired && !deadline.expired) {
-      if (sinceCommand == null || sinceCommand.elapsed >= _commandRepeat) {
+      if (sinceCommand == null || sinceCommand.elapsed >= commandRepeat) {
         ResponsaWin32.postCommand(main, profile.browseCommand);
         sinceCommand = Stopwatch()..start();
       }
-      _wait(const Duration(milliseconds: 600), deadline);
+      pause(const Duration(milliseconds: 600), deadline);
       final found = findCitationDialog() ?? _switchToCitationTab(deadline);
       if (found != null) return found;
     }
@@ -200,7 +212,7 @@ class ResponsaAutomation {
       for (final child in ResponsaWin32.children(dialog)) {
         if (ResponsaWin32.className(child) == 'SysTabControl32') {
           ResponsaWin32.setTabFocus(child, profile.citationTabIndex);
-          _wait(const Duration(milliseconds: 800), deadline);
+          pause(const Duration(milliseconds: 800), deadline);
         }
       }
     }
@@ -223,13 +235,11 @@ class ResponsaAutomation {
 
     // רשימת התוצאות לא מתנקה מאליה, והספירה אחריה תשקר. `clear_button` אינו
     // חובה, ובלי תקציב משלו הלולאה שורפת את כל הפעולה על חוליה אחת.
-    final own = ResponsaDeadline(
-      deadline.remaining < clearBudget ? deadline.remaining : clearBudget,
-    );
+    final own = deadline.within(clearBudget);
     while (!own.expired) {
       // `-1` = הרשימה לא ענתה, וזה אינו "ריקה".
       if (ResponsaWin32.listBoxCount(results) == 0) return;
-      _wait(_poll, deadline);
+      pause(poll, deadline);
     }
     throw const ResponsaAutomationException(
       ResponsaFailure.resultsNotCleared,
@@ -265,7 +275,7 @@ class ResponsaAutomation {
     var waitFor = settle;
     for (var attempt = 0; attempt < attempts; attempt++) {
       ResponsaWin32.click(search);
-      _wait(waitFor, deadline);
+      pause(waitFor, deadline);
       // המודאל "לא נמצאה כל תוצאה!" הוא תשובה סופית, לא כשל זמני.
       if (dismissInfoModals() > 0) {
         return (dialog: dialog, results: const <String>[]);
@@ -280,6 +290,13 @@ class ResponsaAutomation {
   }
 
   // ------------------------------------------------- שחרור חלונות MDI
+
+  /// חלון שאוצריא יצרה, ולכן מותר לשחרר אותו בתקרה.
+  void adoptWindow(String title) {
+    if (title.isNotEmpty && !_openedWindows.contains(title)) {
+      _openedWindows.add(title);
+    }
+  }
 
   /// בכ-22 חלונות התוכנה מפסיקה בשקט ליצור חלונות. עד התקרה הקשה נסגרים רק
   /// חלונות שאוצריא פתחה; מעליה גם אחרים, במינימום ולעולם לא הפעיל.
@@ -419,7 +436,7 @@ class ResponsaAutomation {
     }
 
     ResponsaWin32.listBoxSelect(dialog.container, listBox, index);
-    _wait(const Duration(milliseconds: 400), deadline);
+    pause(const Duration(milliseconds: 400), deadline);
     // `false` = התוכנה תקועה והבקשה לא התקבלה; המתנה לחלון הייתה שורפת את
     // כל התקציב ומדווחת "פג הזמן".
     if (!ResponsaWin32.click(showButton)) {
@@ -447,9 +464,7 @@ class ResponsaAutomation {
 
     // נרשם כשלנו לפני האימות ולפני כל מה שיכול לזרוק: חלון שנפסל ולא נרשם
     // לא ישוחרר לעולם, והמופע מצטבר עד שהוא מפסיק לפתוח.
-    if (!before.contains(title) && !_openedWindows.contains(title)) {
-      _openedWindows.add(title);
-    }
+    if (!before.contains(title)) adoptWindow(title);
 
     dismissInfoModals();
     sleepFor(_afterOpenSettle);
@@ -580,11 +595,9 @@ class ResponsaAutomation {
   ) {
     final targets = [?expectedTitle, chosen];
     // חציון הפתיחה 2.8 שניות; מופע שלא יצר חלון תוך [windowBudget] תקוע.
-    final own = ResponsaDeadline(
-      deadline.remaining < windowBudget ? deadline.remaining : windowBudget,
-    );
+    final own = deadline.within(windowBudget);
     while (!own.expired) {
-      _checkpoint(deadline);
+      checkpoint(deadline);
       final titles = ResponsaWin32.mdiTitles(main);
       final fresh = [
         for (final title in titles)
@@ -606,7 +619,7 @@ class ResponsaAutomation {
       // חלון חדש יחיד שאינו תואם מתקבל והאימות יכריע. לא כשיש כמה: שחזור
       // הסשן מוסיף חלונות "חדשים" גם דקות אחרי העלייה.
       if (fresh.length == 1) return fresh.single;
-      sleepFor(_poll);
+      sleepFor(poll);
     }
     throw const ResponsaAutomationException(
       ResponsaFailure.timeout,

@@ -31,7 +31,8 @@ class ApiError implements Exception {
 
   const ApiError.busy(String message) : this('busy', 409, message);
 
-  factory ApiError.fromOpenFailure(
+  /// פתיחה וחיפוש חולקים את הכשלים של האוטומציה.
+  factory ApiError.fromAutomationFailure(
     ResponsaFailure failure,
     String message, {
     List<String> triedRefs = const [],
@@ -44,7 +45,9 @@ class ApiError implements Exception {
         message,
         details,
       ),
+      ResponsaFailure.busy => ApiError('busy', 409, message, details),
       ResponsaFailure.citationDialogNotFound ||
+      ResponsaFailure.searchDialogNotFound ||
       ResponsaFailure.resultsNotCleared => ApiError(
         'dialogNotFound',
         502,

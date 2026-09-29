@@ -38,6 +38,7 @@ class HttpApi {
       '/catalog/search': _service.search,
       '/catalog/books': _service.books,
       '/book/open': _service.open,
+      '/text/search': _service.searchText,
     };
   }
 

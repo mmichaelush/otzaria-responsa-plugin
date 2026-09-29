@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
+import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/server/api_error.dart';
 import 'package:responsa_helper/src/server/build_coordinator.dart';
 import 'package:responsa_helper/src/server/catalog_index.dart';
@@ -10,6 +11,7 @@ import 'package:responsa_helper/src/server/catalog_store.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
+import 'package:responsa_helper/src/text/responsa_query.dart';
 
 /// הלוגיקה של השירות, בלי HTTP: כל נקודת קצה ב-docs/PROTOCOL.md היא מתודה
 /// כאן, ומחזירה JSON או זורקת [ApiError].
@@ -24,19 +26,29 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.1.1';
+  static const String serverVersion = '0.2.0';
   static const int apiVersion = 1;
-  static const List<String> capabilities = ['catalog', 'open', 'icon'];
+  static const List<String> capabilities = [
+    'catalog',
+    'open',
+    'icon',
+    'searchText',
+  ];
 
   static const int maxPageSize = 200;
   static const int maxKeys = 200;
+
+  /// בחירה ארוכה נחתכת ב-[ResponsaQuery], ולא נדחית.
+  static const int maxSelectionLength = 10000;
 
   final ResponsaBackend _backend;
   final HelperPaths paths;
   final CatalogStore store;
   late final BuildCoordinator builds;
 
-  bool _opening = false;
+  /// פתיחה או חיפוש שרצים עכשיו. אחד בכל רגע, ולעולם לא בזמן בנייה: כולם
+  /// מפעילים את אותו מופע, ופעולה שנייה משבשת את הראשונה.
+  _Automation? _automation;
 
   Map<String, Object?> health() => {
     'ok': true,
@@ -103,14 +115,50 @@ class HelperService {
   }
 
   /// הבנייה ופתיחה לא יכולות לרוץ יחד: שתיהן מפעילות את חלון "עיון" של אותו
-  /// מופע, והפתיחה הייתה משבשת את הסריקה.
+  /// מופע, והפתיחה הייתה משבשת את הסריקה. חיפוש מפעיל את אותו מופע.
   Stream<BuildEvent> startBuild() {
-    if (_opening && !builds.isRunning) {
-      throw const ApiError.busy(
-        'ספר נפתח כרגע בבר אילן. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
-      );
+    if (_automation case final running? when !builds.isRunning) {
+      throw ApiError.busy(switch (running) {
+        _Automation.open =>
+          'ספר נפתח כרגע בבר אילן. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
+        _Automation.search =>
+          'בר אילן מחפש כרגע. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
+      });
     }
     return builds.watchOrStart();
+  }
+
+  /// מריץ [action] כפעולת האוטומציה היחידה, או דוחה ב-`busy` עם הסבר מה
+  /// תופס את בר אילן.
+  Future<T> _exclusive<T>(_Automation kind, Future<T> Function() action) async {
+    if (builds.isRunning) {
+      throw ApiError.busy(switch (kind) {
+        _Automation.open =>
+          'בר אילן קורא כרגע את רשימת הספרים. אפשר לפתוח ספרים כשהקריאה '
+              'תסתיים.',
+        _Automation.search =>
+          'בר אילן קורא כרגע את רשימת הספרים. אפשר לחפש בו כשהקריאה '
+              'תסתיים.',
+      });
+    }
+    if (_automation case final running?) {
+      throw ApiError.busy(switch ((running, kind)) {
+        (_Automation.open, _Automation.open) =>
+          'ספר אחר נפתח כרגע בבר אילן. יש להמתין רגע ולנסות שוב.',
+        (_Automation.open, _Automation.search) =>
+          'ספר נפתח כרגע בבר אילן. יש להמתין רגע ולנסות שוב.',
+        (_Automation.search, _Automation.open) =>
+          'בר אילן מחפש כרגע. אפשר לפתוח את הספר כשהחיפוש יסתיים.',
+        (_Automation.search, _Automation.search) =>
+          'חיפוש אחר רץ כרגע בבר אילן. יש להמתין לסיומו ולנסות שוב.',
+      });
+    }
+    _automation = kind;
+    try {
+      return await action();
+    } finally {
+      _automation = null;
+    }
   }
 
   /// קטלוג חסר הוא מצב רגיל (טרם נבנה); קטלוג שקיים ואינו נקרא הוא תקלה,
@@ -141,18 +189,7 @@ class HelperService {
   Future<Map<String, Object?>> open(Map<String, Object?> body) async {
     final key = _string(body, 'key');
     if (key.isEmpty) throw const ApiError.badRequest('חסר מפתח ספר.');
-    if (builds.isRunning) {
-      throw const ApiError.busy(
-        'בר אילן קורא כרגע את רשימת הספרים. אפשר לפתוח ספרים כשהקריאה תסתיים.',
-      );
-    }
-    if (_opening) {
-      throw const ApiError.busy(
-        'ספר אחר נפתח כרגע בבר אילן. יש להמתין רגע ולנסות שוב.',
-      );
-    }
-    _opening = true;
-    try {
+    return _exclusive(_Automation.open, () async {
       final index = await _requireIndex();
       final book = index.byKey(key);
       if (book == null) throw const ApiError.unknownBook();
@@ -181,15 +218,8 @@ class HelperService {
         'open ${book.key} failed: ${failure.name} ${report.message} '
         'tried=${jsonEncode(report.triedRefs)}',
       );
-      if (failure == ResponsaFailure.responsaNotRunning &&
-          !(await _backend.status()).installed) {
-        throw const ApiError(
-          'notInstalled',
-          409,
-          'בר אילן (פרויקט השו"ת) אינו מותקן במחשב הזה.',
-        );
-      }
-      throw ApiError.fromOpenFailure(
+      await _rejectIfNotInstalled(failure);
+      throw ApiError.fromAutomationFailure(
         failure,
         openFailureMessage(
           failure,
@@ -199,8 +229,80 @@ class HelperService {
         ),
         triedRefs: report.triedRefs,
       );
-    } finally {
-      _opening = false;
+    });
+  }
+
+  /// מריץ חיפוש בבר אילן ומשאיר את התשובה שלו על המסך. אינו תלוי בקטלוג.
+  Future<Map<String, Object?>> searchText(Map<String, Object?> body) async {
+    final query = ResponsaQuery.parse(
+      _string(body, 'q', maxLength: maxSelectionLength),
+    );
+    if (query == null) {
+      throw const ApiError.badRequest(
+        'בטקסט שנבחר אין מילים בעברית לחיפוש בבר אילן. יש לסמן מילה או משפט '
+        'בעברית ולנסות שוב.',
+      );
+    }
+    return _exclusive(_Automation.search, () async {
+      final report = await _backend.searchText(
+        query.text,
+        installPath: await store.repository.sourceInstallPath(),
+      );
+      final outcome = report.outcome;
+      if (report.ok &&
+          outcome != null &&
+          outcome.state != ResponsaSearchState.pending) {
+        logLine(
+          'search "${query.text}": ${outcome.state.name}'
+          '${outcome.count == null ? '' : ' ${outcome.count}'}'
+          '${outcome.broughtToFront ? '' : ' (not brought to front)'}',
+        );
+        return {
+          'ok': true,
+          'outcome': outcome.state.name,
+          'count': ?outcome.count,
+          'message': ?_searchMessage(outcome),
+          'query': query.text,
+          'truncated': query.truncated,
+          'broughtToFront': outcome.broughtToFront,
+        };
+      }
+      final failure = report.failure ?? ResponsaFailure.timeout;
+      logLine(
+        'search "${query.text}" failed: ${failure.name} ${report.message}',
+      );
+      await _rejectIfNotInstalled(failure);
+      throw ApiError.fromAutomationFailure(
+        failure,
+        searchFailureMessage(failure, detail: report.message),
+      );
+    });
+  }
+
+  /// הטקסט של בר אילן כשיש; בלעדיו הסבר משלנו, כי "שאל" או "סירב" בלי
+  /// הודעה אינם אומרים למשתמש מה לעשות.
+  static String? _searchMessage(ResponsaSearchOutcome outcome) =>
+      switch (outcome.state) {
+        ResponsaSearchState.asked =>
+          outcome.message ??
+              'בר אילן לא מצא תוצאות, ושואל שאלה בחלון שפתח. יש לעבור לבר '
+                  'אילן ולענות בו.',
+        ResponsaSearchState.refused =>
+          outcome.message ??
+              'בר אילן לא ביצע את החיפוש, והסיבה מוצגת בחלון שפתח. יש לעבור '
+                  'לבר אילן, לקרוא אותה ולשנות את החיפוש.',
+        ResponsaSearchState.found || ResponsaSearchState.pending => null,
+      };
+
+  /// הבקר מבחין בין "אינו מותקן" ל"לא עלה בזמן" רק בהודעה; הקוד נקבע כאן.
+  Future<void> _rejectIfNotInstalled(ResponsaFailure failure) async {
+    if (failure == ResponsaFailure.responsaNotRunning &&
+        !(await _backend.status()).installed) {
+      throw const ApiError(
+        'notInstalled',
+        409,
+        'בר אילן (פרויקט השו"ת) אינו מותקן במחשב הזה.',
+      );
     }
   }
 
@@ -256,16 +358,55 @@ class HelperService {
         'בר אילן לא הגיב בזמן בעת פתיחת $book. ייתכן שהוא עסוק או ממתין '
             'לתשובה בחלון אחר.',
       ResponsaFailure.cancelled => 'הפתיחה בוטלה.',
+      ResponsaFailure.busy =>
+        detail ?? 'פעולה אחרת בבר אילן כבר מתבצעת. יש להמתין לסיומה.',
+      // חיפוש בלבד; כאן רק לשלמות.
+      ResponsaFailure.searchDialogNotFound =>
+        detail ?? 'פתיחת $book בבר אילן נכשלה. אפשר לנסות שוב.',
       ResponsaFailure.unexpected =>
         detail ?? 'פתיחת $book בבר אילן נכשלה באופן בלתי צפוי.',
     };
   }
 
-  static String _string(Map<String, Object?> body, String name) {
+  /// כמו [openFailureMessage]: מה נכשל ומה עושים.
+  static String searchFailureMessage(
+    ResponsaFailure failure, {
+    String? detail,
+  }) => switch (failure) {
+    ResponsaFailure.responsaNotRunning =>
+      detail ??
+          'בר אילן אינו פעיל ולא ניתן היה להפעיל אותו. '
+              'יש לפתוח את פרויקט השו"ת ולנסות שוב.',
+    ResponsaFailure.searchDialogNotFound =>
+      'בר אילן לא פתח את חלון החיפוש. ייתכן שחלון אחר פתוח בבר אילן '
+          'וממתין לתשובה. יש לסגור אותו ולנסות שוב.',
+    ResponsaFailure.mdiWindowLimitReached =>
+      'בבר אילן פתוחים כבר חלונות רבים והוא מפסיק לפתוח חדשים, ולכן '
+          'התוצאות לא הוצגו. יש לסגור בו כמה חלונות ולנסות שוב.',
+    ResponsaFailure.timeout =>
+      'בר אילן לא השיב על החיפוש בזמן. ייתכן שהוא עסוק או ממתין לתשובה '
+          'בחלון אחר. יש לעבור לבר אילן, לסגור את החלון ולנסות שוב.',
+    ResponsaFailure.busy =>
+      detail ?? 'פעולה אחרת בבר אילן כבר מתבצעת. יש להמתין לסיומה.',
+    ResponsaFailure.cancelled => 'החיפוש בוטל.',
+    // כשלים של פתיחת ספר; החיפוש אינו מגיע אליהם.
+    ResponsaFailure.citationDialogNotFound ||
+    ResponsaFailure.resultsNotCleared ||
+    ResponsaFailure.referenceNotParsed ||
+    ResponsaFailure.openedWrongBook ||
+    ResponsaFailure.unexpected =>
+      detail ?? 'החיפוש בבר אילן נכשל באופן בלתי צפוי. אפשר לנסות שוב.',
+  };
+
+  static String _string(
+    Map<String, Object?> body,
+    String name, {
+    int maxLength = 500,
+  }) {
     final value = body[name];
     if (value == null) return '';
     if (value is! String) throw ApiError.badRequest('$name חייב להיות מחרוזת.');
-    if (value.length > 500) throw ApiError.badRequest('$name ארוך מדי.');
+    if (value.length > maxLength) throw ApiError.badRequest('$name ארוך מדי.');
     return value.trim();
   }
 
@@ -286,3 +427,5 @@ class HelperService {
     return value;
   }
 }
+
+enum _Automation { open, search }

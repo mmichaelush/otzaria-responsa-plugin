@@ -59,8 +59,15 @@ class ResponsaVersionProfile {
 
   final int browseCommand;
 
+  /// יוצר את ארבעת דיאלוגי החיפוש; רק מצב החיפוש של המשתמש מוצג, והשאר
+  /// קיימים מוסתרים. שליחה חוזרת אינה מציגה את המוסתרים.
+  final int searchCommand;
+
   final DialogHints citationDialogHints;
   final DialogHints infoModalHints;
+  final DialogHints searchDialogHints;
+  final DialogHints searchSummaryHints;
+  final DialogHints searchProgressHints;
 
   /// תווית העמוד "כתיבת מקורות" בתוך ה-TabControl של דיאלוג העיון.
   final int citationTabIndex;
@@ -79,8 +86,12 @@ class ResponsaVersionProfile {
     required this.version,
     this.mainWindowClass = 'ResponsaProject',
     this.browseCommand = 32781,
+    this.searchCommand = 32857,
     this.citationDialogHints = citationHints,
     this.infoModalHints = infoModalHintsDefault,
+    this.searchDialogHints = searchHints,
+    this.searchSummaryHints = searchSummaryHintsDefault,
+    this.searchProgressHints = searchProgressHintsDefault,
     this.citationTabIndex = 1,
     this.mdiSoftLimit = 12,
     this.mdiKeep = 4,
@@ -139,6 +150,8 @@ class ResponsaVersionProfile {
     ],
   );
 
+  /// גם שאלה (כן/לא/ביטול) ולא רק הודעה: שאלה פתוחה חוסמת את התוכנה כמו
+  /// הודעה, ובלי כפתור אישור היא לא הייתה נמצאת ולא נסגרת לעולם.
   static const DialogHints infoModalHintsDefault = DialogHints(
     role: 'info_modal',
     windowClass: '#32770',
@@ -148,7 +161,79 @@ class ResponsaVersionProfile {
         role: 'ok_button',
         classNames: {'Button'},
         textContains: {'אישור', 'OK'},
+        required: false,
+      ),
+      ControlHints(
+        role: 'cancel_button',
+        classNames: {'Button'},
+        controlIds: {2},
+        textContains: {'ביטול', 'Cancel', 'Annuler'},
+        required: false,
+      ),
+      ControlHints(
+        role: 'message',
+        classNames: {'Static'},
+        controlIds: {65535},
+        required: false,
       ),
     ],
+  );
+
+  /// כן/לא במודאל "מידע": הוא שואל ולא רק מודיע. נבדק על תמונת הכפתורים
+  /// ולא בגילוי המבני, שבכפתור יחיד היה מתאים גם את "אישור".
+  static const ControlHints questionButtonHints = ControlHints(
+    role: 'question_button',
+    classNames: {'Button'},
+    controlIds: {6, 7},
+    textContains: {'כן', 'לא', 'Yes', 'No', 'Oui', 'Non'},
+  );
+
+  // "חיפוש קל", "חיפוש מתקדם" ו"חיפוש בניסוח חופשי". "חיפוש טבלאי" (כ-17
+  // שדות, בלי 1233) אינו מתאים, וזה מכוון: אין בו שדה שאילתה אחד.
+  // הכותרות באנגלית ובצרפתית לא נמדדו.
+  static const DialogHints searchHints = DialogHints(
+    role: 'search',
+    windowClass: '#32770',
+    titleContains: {'חיפוש', 'Search', 'Recherche'},
+    controls: [
+      ControlHints(
+        role: 'query_edit',
+        classNames: {'Edit'},
+        controlIds: {1233},
+      ),
+      ControlHints(
+        role: 'run_button',
+        classNames: {'Button'},
+        controlIds: {1},
+        textContains: {'בצע', 'Search', 'Rechercher'},
+      ),
+    ],
+  );
+
+  /// המודאל שאחרי חיפוש מוצלח (`2543 תוצאות`). מזהה 1 משותף בו לכפתור,
+  /// ל-`AfxWnd110u` ול-`ScrollBar`, ולכן האישור נמצא לפי טקסט בלבד.
+  static const DialogHints searchSummaryHintsDefault = DialogHints(
+    role: 'search_summary',
+    windowClass: '#32770',
+    titleContains: {'תוצאות', 'Results', 'results', 'Résultats', 'résultats'},
+    controls: [
+      ControlHints(
+        role: 'expand_button',
+        classNames: {'Button'},
+        controlIds: {341},
+        textContains: {'הרחבה', 'Expand', 'Élargir'},
+      ),
+      ControlHints(
+        role: 'ok_button',
+        classNames: {'Button'},
+        textContains: {'אישור', 'OK'},
+      ),
+    ],
+  );
+
+  static const DialogHints searchProgressHintsDefault = DialogHints(
+    role: 'search_progress',
+    windowClass: '#32770',
+    titleContains: {'התקדמות', 'Progress', 'Progression'},
   );
 }

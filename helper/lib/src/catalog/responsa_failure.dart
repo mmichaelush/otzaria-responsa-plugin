@@ -2,7 +2,11 @@
 /// כדי ששכבת הספק והממשק לא ייבאו את מודול ה-Win32 בשביל enum.
 enum ResponsaFailure {
   responsaNotRunning,
+
+  /// פעולה אחרת של אוצריא רצה כבר מול אותו מופע.
+  busy,
   citationDialogNotFound,
+  searchDialogNotFound,
   resultsNotCleared,
   referenceNotParsed,
   openedWrongBook,

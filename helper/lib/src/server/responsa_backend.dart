@@ -21,6 +21,9 @@ abstract interface class ResponsaBackend {
     String? installPath,
   });
 
+  /// מפעיל את בר אילן אם צריך. [query] כבר מנוקה (`ResponsaQuery`).
+  Future<ResponsaSearchReport> searchText(String query, {String? installPath});
+
   Future<Uint8List?> icon({
     required String? installPath,
     required String cachePath,
@@ -52,6 +55,12 @@ class NativeResponsaBackend implements ResponsaBackend {
     expectedTitle: expectedTitle,
     installPath: installPath,
   );
+
+  @override
+  Future<ResponsaSearchReport> searchText(
+    String query, {
+    String? installPath,
+  }) => _controller.searchText(query, installPath: installPath);
 
   @override
   Future<Uint8List?> icon({

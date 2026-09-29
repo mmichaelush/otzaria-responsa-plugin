@@ -1,4 +1,3 @@
-import 'package:meta/meta.dart';
 import 'package:responsa_helper/src/native/responsa_profile.dart';
 import 'package:responsa_helper/src/native/responsa_win32.dart';
 
@@ -38,7 +37,6 @@ class ResponsaDiscovery {
     return null;
   }
 
-  @visibleForTesting
   static bool titleMatches(String title, DialogHints hints) {
     if (hints.titleEquals.isNotEmpty) {
       return hints.titleEquals.contains(title.trim());

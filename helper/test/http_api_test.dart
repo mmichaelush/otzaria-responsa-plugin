@@ -279,6 +279,85 @@ void main() {
     });
   });
 
+  group('חיפוש בבר אילן', () {
+    setUp(() => start());
+
+    test('health מכריז על היכולת', () async {
+      final json = (await call('GET', '/health')).json as Map;
+      expect(json['capabilities'], contains('searchText'));
+      expect(json['serverVersion'], HelperService.serverVersion);
+    });
+
+    test('מחזיר את התשובה של בר אילן ואת השאילתה שנשלחה', () async {
+      final result = await call(
+        'POST',
+        '/text/search',
+        body: {'q': 'בְּרֵאשִׁית בָּרָא'},
+      );
+      expect(result.status, 200);
+      expect(result.json, {
+        'ok': true,
+        'outcome': 'found',
+        'count': 7,
+        'query': 'בראשית ברא',
+        'truncated': false,
+        'broughtToFront': true,
+      });
+    });
+
+    test('שיטה שגויה', () async {
+      expect((await call('GET', '/text/search')).status, 405);
+    });
+
+    test('גוף שגוי', () async {
+      for (final body in [
+        {'q': 5},
+        {'q': ''},
+        {'q': 'English only'},
+        <String, Object?>{},
+      ]) {
+        final result = await call('POST', '/text/search', body: body);
+        expect(result.status, 400, reason: '$body');
+        expect(errorCode(result.json), 'badRequest');
+      }
+      expect(backend.searchCalls, isEmpty);
+    });
+
+    test('בלי JSON', () async {
+      final result = await call(
+        'POST',
+        '/text/search',
+        body: 'q=x',
+        json: false,
+        headers: {'content-type': 'text/plain'},
+      );
+      expect(result.status, 415);
+    });
+
+    test('כשל מתורגם לקוד ולהודעה', () async {
+      backend.onSearch = (_) async => const ResponsaSearchReport(
+        ok: false,
+        failure: ResponsaFailure.searchDialogNotFound,
+        message: 'x',
+      );
+      final result = await call('POST', '/text/search', body: {'q': 'שבת'});
+      expect(result.status, 502);
+      expect(errorCode(result.json), 'dialogNotFound');
+    });
+
+    test('חיפוש בזמן פתיחה: busy', () async {
+      final gate = Completer<ResponsaOpenReport>();
+      backend.onOpen = (_) => gate.future;
+      final opening = call('POST', '/book/open', body: {'key': '7'});
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final search = await call('POST', '/text/search', body: {'q': 'שבת'});
+      expect(search.status, 409);
+      expect(errorCode(search.json), 'busy');
+      gate.complete(const ResponsaOpenReport(ok: true, usedRef: 'x'));
+      expect((await opening).status, 200);
+    });
+  });
+
   group('בנייה', () {
     setUp(() => start());
 

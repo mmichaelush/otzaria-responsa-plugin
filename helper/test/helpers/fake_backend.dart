@@ -5,6 +5,7 @@ import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
 import 'package:responsa_helper/src/native/responsa_controller.dart';
 import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_profile.dart';
+import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 
 /// מחליף את בר אילן בבדיקות. הבנייה נשלטת מבחוץ דרך [buildEvents], כדי
@@ -22,6 +23,10 @@ class FakeBackend implements ResponsaBackend {
   /// מה ש-[openBook] מחזיר. ברירת מחדל: הצלחה.
   Future<ResponsaOpenReport> Function(List<String> references)? onOpen;
   final List<List<String>> openCalls = [];
+
+  /// מה ש-[searchText] מחזיר. ברירת מחדל: נמצאו 7 תוצאות.
+  Future<ResponsaSearchReport> Function(String query)? onSearch;
+  final List<({String query, String? installPath})> searchCalls = [];
 
   Uint8List? iconBytes;
 
@@ -90,6 +95,24 @@ class FakeBackend implements ResponsaBackend {
         window: expectedTitle,
         usedRef: references.first,
         broughtToFront: true,
+      ),
+    );
+  }
+
+  @override
+  Future<ResponsaSearchReport> searchText(String query, {String? installPath}) {
+    searchCalls.add((query: query, installPath: installPath));
+    final handler = onSearch;
+    if (handler != null) return handler(query);
+    return Future.value(
+      const ResponsaSearchReport(
+        ok: true,
+        outcome: ResponsaSearchOutcome(
+          ResponsaSearchState.found,
+          count: 7,
+          summaryShown: true,
+          broughtToFront: true,
+        ),
       ),
     );
   }

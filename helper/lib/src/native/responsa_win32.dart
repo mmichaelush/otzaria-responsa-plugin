@@ -83,6 +83,22 @@ class ResponsaWin32 {
   static bool click(int hwnd, {int timeoutMs = defaultSendTimeoutMs}) =>
       send(hwnd, bmClick, timeoutMs: timeoutMs) != null;
 
+  /// לחיצה בלי לחכות לה: כפתור שמריץ פעולה ארוכה ופותח מודאל לא מחזיר
+  /// שליטה, ו-[click] עליו נתקע (נמדד).
+  static void postClick(int hwnd) {
+    PostMessage(
+      HWND(Pointer.fromAddress(hwnd)),
+      bmClick,
+      const WPARAM(0),
+      const LPARAM(0),
+    );
+  }
+
+  /// `WM_NULL`: האם התור של החלון מתרוקן עכשיו, כלומר התוכנה אינה באמצע
+  /// פעולה חוסמת.
+  static bool responds(int hwnd, {int timeoutMs = 500}) =>
+      send(hwnd, 0, timeoutMs: timeoutMs) != null;
+
   // ------------------------------------------------------------- טקסט
 
   static String className(int hwnd) {
