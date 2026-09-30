@@ -33,6 +33,7 @@ class HelperService {
     'open',
     'icon',
     'searchText',
+    'export',
   ];
 
   static const int maxPageSize = 200;
@@ -110,6 +111,20 @@ class HelperService {
       'results': [
         for (final key in keys.cast<String>())
           if (index.byKey(key) case final book?) book.toJson(),
+      ],
+    };
+  }
+
+  /// כל הרשימה בבקשה אחת, בשורות `[key, title, author, contextPath]`: כך
+  /// התוסף מעביר אותה לחיפוש הספרייה של אוצריא בלי אלפי בקשות.
+  Future<Map<String, Object?>> export() async {
+    final index = await _requireIndex();
+    final info = await store.repository.info();
+    return {
+      if (info.builtAt != null) 'builtAt': info.builtAt,
+      'books': [
+        for (final book in index.books)
+          [book.key, book.title, book.author, book.contextPath],
       ],
     };
   }
@@ -235,7 +250,7 @@ class HelperService {
   /// מריץ חיפוש בבר אילן ומשאיר את התשובה שלו על המסך. אינו תלוי בקטלוג.
   Future<Map<String, Object?>> searchText(Map<String, Object?> body) async {
     final query = ResponsaQuery.parse(
-      _string(body, 'q', maxLength: maxSelectionLength),
+      _string(body, 'q', maxLength: maxSelectionLength, truncate: true),
     );
     if (query == null) {
       throw const ApiError.badRequest(
@@ -398,15 +413,21 @@ class HelperService {
       detail ?? 'החיפוש בבר אילן נכשל באופן בלתי צפוי. אפשר לנסות שוב.',
   };
 
+  /// [truncate] — ערך ארוך נחתך במקום להידחות: בחיפוש טקסט רק תחילתו
+  /// נשלחת לבר אילן, ולקוח ישן אינו מקצר את הטקסט המסומן בעצמו.
   static String _string(
     Map<String, Object?> body,
     String name, {
     int maxLength = 500,
+    bool truncate = false,
   }) {
     final value = body[name];
     if (value == null) return '';
     if (value is! String) throw ApiError.badRequest('$name חייב להיות מחרוזת.');
-    if (value.length > maxLength) throw ApiError.badRequest('$name ארוך מדי.');
+    if (value.length > maxLength) {
+      if (!truncate) throw ApiError.badRequest('$name ארוך מדי.');
+      return value.substring(0, maxLength).trim();
+    }
     return value.trim();
   }
 

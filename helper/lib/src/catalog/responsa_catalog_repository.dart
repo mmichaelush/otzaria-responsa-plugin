@@ -73,6 +73,10 @@ class ResponsaCatalogBook {
   final String? author;
   final String? pubPlace;
   final String? pubDate;
+
+  /// שורת המהדורה המלאה מהביבליוגרפיה של בר אילן (`בני ברק תש"מ, ד"צ ...`),
+  /// שממנה נקראו [pubPlace] ו-[pubDate]. מוצגת בפרטי הספר.
+  final String? edition;
   final String topics;
 
   /// הנתיב בעץ של בר אילן בלי שם הספר, מופרד ב-`/`.
@@ -88,6 +92,7 @@ class ResponsaCatalogBook {
     this.author,
     this.pubPlace,
     this.pubDate,
+    this.edition,
     this.topics = '',
     this.otzariaCategory,
   });
@@ -98,6 +103,7 @@ class ResponsaCatalogBook {
     if (author != null) 'author': author,
     if (pubPlace != null) 'pubPlace': pubPlace,
     if (pubDate != null) 'pubDate': pubDate,
+    if (edition != null) 'edition': edition,
     if (topics.isNotEmpty) 'topics': topics,
     'contextPath': contextPath,
     if (otzariaCategory != null) 'otzariaCategory': otzariaCategory,
@@ -247,6 +253,7 @@ class ResponsaCatalogRepository {
       author: _text(row['author']),
       pubPlace: _text(row['pub_place']),
       pubDate: _text(row['pub_date']),
+      edition: _text(row['edition']),
       topics: row['topics']?.toString() ?? '',
       contextPath: contextPathOf(refPath),
       otzariaCategory: otzaria == null || otzaria.isEmpty

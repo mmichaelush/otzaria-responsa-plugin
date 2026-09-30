@@ -20,6 +20,10 @@ class CatalogIndex {
 
   int get length => _entries.length;
 
+  /// בסדר הקטלוג.
+  Iterable<ResponsaCatalogBook> get books =>
+      _entries.map((entry) => entry.book);
+
   ResponsaCatalogBook? byKey(String key) => _byKey[key];
 
   /// כל ההתאמות, מהטובה ביותר. שאילתה ריקה אינה מחזירה דבר, כדי לא להציף

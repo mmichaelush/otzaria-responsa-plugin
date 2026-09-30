@@ -29,6 +29,7 @@ class HttpApi {
       '/health': (_) async => _service.health(),
       '/status': (_) => _service.status(),
       '/icon': (_) => _service.icon(),
+      '/catalog/export': (_) => _service.export(),
     };
     _post = {
       '/catalog/cancel': (_) async => {

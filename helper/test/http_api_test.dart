@@ -223,6 +223,41 @@ void main() {
     });
   });
 
+  group('ייצוא', () {
+    test('כל הספרים בשורות מקוצרות, עם זמן הקריאה', () async {
+      await start();
+      final result = await call('GET', '/catalog/export');
+      expect(result.status, 200);
+      final json = result.json as Map;
+      expect(json['builtAt'], isA<String>());
+      final rows = json['books'] as List;
+      expect(rows, hasLength(sampleBooks.length));
+      // `contains` בלי `equals` משווה רשימה לפי זהות.
+      expect(
+        rows,
+        contains(equals(['7', 'משנה ברורה', 'רבי ישראל מאיר הכהן', ''])),
+      );
+      expect(
+        rows,
+        contains(
+          equals([
+            '31',
+            'חידושי אגדות',
+            null,
+            'מפרשים ופוסקים על הבבלי/מהרש"א',
+          ]),
+        ),
+      );
+    });
+
+    test('בלי קטלוג: catalogMissing', () async {
+      await start(withCatalog: false);
+      final result = await call('GET', '/catalog/export');
+      expect(result.status, 404);
+      expect(errorCode(result.json), 'catalogMissing');
+    });
+  });
+
   group('פתיחה', () {
     setUp(() => start());
 
@@ -303,6 +338,16 @@ void main() {
         'truncated': false,
         'broughtToFront': true,
       });
+    });
+
+    test('טקסט ארוך מהמותר נחתך ואינו נדחה', () async {
+      // מעט יותר מהמותר, ועדיין מתחת לגבול גוף הבקשה (64KB).
+      final long = 'שבת ' * (HelperService.maxSelectionLength ~/ 4 + 100);
+      expect(long.length, greaterThan(HelperService.maxSelectionLength));
+      final result = await call('POST', '/text/search', body: {'q': long});
+      expect(result.status, 200);
+      expect(backend.searchCalls, hasLength(1));
+      expect((result.json as Map)['truncated'], isTrue);
     });
 
     test('שיטה שגויה', () async {

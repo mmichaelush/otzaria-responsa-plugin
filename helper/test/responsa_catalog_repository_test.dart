@@ -123,11 +123,24 @@ void main() {
         'author': 'רבי אברהם בורנשטיין (פולין המאה ה- 19)',
         'pub_place': 'ירושלים',
         'pub_date': 'תשס"ו',
+        'edition': 'ירושלים תשס"ו, ד"צ פיוטרקוב תרע"ב',
       });
 
       expect(book.author, 'רבי אברהם בורנשטיין (פולין המאה ה- 19)');
       expect(book.pubPlace, 'ירושלים');
       expect(book.pubDate, 'תשס"ו');
+      expect(book.edition, 'ירושלים תשס"ו, ד"צ פיוטרקוב תרע"ב');
+      expect(book.toJson()['edition'], book.edition);
+    });
+
+    test('קטלוג ישן בלי עמודת מהדורה: הספר נקרא בלי מהדורה', () {
+      final book = ResponsaCatalogRepository.bookOf({
+        'external_key': '5',
+        'title': 'ספר',
+        'ref_path': 'ספר',
+      });
+      expect(book.edition, isNull);
+      expect(book.toJson().containsKey('edition'), isFalse);
     });
 
     /// הממשק מציג שורת מחבר לפי `author != null`, ולכן מחרוזת ריקה הייתה
