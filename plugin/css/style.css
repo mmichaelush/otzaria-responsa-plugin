@@ -362,13 +362,15 @@ textarea {
   color: var(--color-on-surface-variant);
 }
 
-/* השדה ב-dir="auto" כדי ששם עברי יוצג נכון גם בממשק באנגלית. שדה ריק
+/* השדות ב-dir="auto" כדי שטקסט עברי יוצג נכון גם בממשק באנגלית. שדה ריק
    מקבל את כיוון הממשק: אחרת הטקסט המנחה והסמן היו נצמדים לשמאל. */
-.search-input:placeholder-shown {
+.search-input:placeholder-shown,
+.report-text:placeholder-shown {
   direction: rtl;
 }
 
-[dir='ltr'] .search-input:placeholder-shown {
+[dir='ltr'] .search-input:placeholder-shown,
+[dir='ltr'] .report-text:placeholder-shown {
   direction: ltr;
 }
 
@@ -506,7 +508,7 @@ textarea {
   }
 
   .result-actions {
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   .result-details {
@@ -1274,10 +1276,6 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-.facts dd[dir='ltr'] {
-  text-align: end;
-}
-
 /* בחלון צר: תווית מעל ערך, כדי שנתיב ארוך לא יישבר לשורות של מילה. */
 @media (max-width: 520px) {
   .facts {
@@ -1287,10 +1285,6 @@ textarea {
 
   .facts dd + dt {
     margin-top: var(--space-2);
-  }
-
-  .facts dd[dir='ltr'] {
-    text-align: start;
   }
 }
 
@@ -1473,7 +1467,7 @@ textarea {
 }
 
 .welcome-actions {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 /* ---------- קישורים ("אודות") ---------- */

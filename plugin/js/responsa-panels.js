@@ -606,7 +606,8 @@
         { class: 'facts' },
         statusFacts(model).map(([label, value, dir]) => [
           el('dt', {}, label),
-          el('dd', { dir: dir || null }, value),
+          // <bdi>: נתיב או גרסה נקראים משמאל לימין, אבל השורה מיושרת לתווית.
+          el('dd', {}, dir ? el('bdi', { dir }, value) : value),
         ]),
       ),
       el(
@@ -650,8 +651,8 @@
                 'li',
                 { class: 'log-line', dataset: { level: entry.level } },
                 el('time', { class: 'log-time', dir: 'ltr' }, root.ResponsaLog.clock(entry.time)),
-                el('span', { class: 'log-message', dir: 'auto' }, entry.message),
-                entry.detail ? el('span', { class: 'log-detail', dir: 'auto' }, entry.detail) : null,
+                el('span', { class: 'log-message' }, el('bdi', {}, entry.message)),
+                entry.detail ? el('span', { class: 'log-detail' }, el('bdi', {}, entry.detail)) : null,
               ),
             ),
           )
