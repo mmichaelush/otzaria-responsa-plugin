@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "com.otzaria-responsa",
   "name": "בר אילן",
-  "version": "0.1.1",
-  "description": "חיפוש ספרי פרויקט השו\"ת של בר אילן המותקן במחשב, לפי שם הספר או המחבר, ופתיחתם בבר אילן בלחיצה.",
+  "version": "0.2.0",
+  "description": "חיפוש ספרי פרויקט השו\"ת של בר אילן המותקן במחשב, לפי שם הספר או המחבר, ופתיחתם בבר אילן. כולל חיפוש טקסט מסומן בבר אילן בלחיצה ימנית.",
   "author": "מיכאלוש",
   "homepage": "https://github.com/mmichaelush/otzaria-responsa-plugin",
   "stability": "beta",
@@ -14,7 +14,14 @@
   "permissions": [
     "network.localhost",
     "app.open_url",
-    "events.subscribe:plugin.permissions_changed"
+    "app.startup_contributions",
+    "app.run_on_startup",
+    "app.shortcuts",
+    "reader.context_menu",
+    "navigation.write",
+    "ui.create_shortcut",
+    "events.subscribe:plugin.permissions_changed",
+    "events.subscribe:settings.changed"
   ],
   "network": {
     "enabled": true,
@@ -27,7 +34,38 @@
       "title": "בר אילן",
       "order": 910,
       "defaultPinned": true,
-      "iconName": "library_24_regular"
+      "iconName": "book_open_medium_search_24_regular"
+    },
+    "background": {
+      "entrypoint": "background.html"
+    },
+    "startup": {
+      "contextMenuItems": [
+        {
+          "id": "responsa-search",
+          "title": "חיפוש בבר אילן",
+          "icon": "search_24_regular",
+          "when": {
+            "storage": {
+              "key": "responsa_context_menu",
+              "notEquals": false
+            }
+          }
+        }
+      ],
+      "shortcuts": [
+        {
+          "id": "responsa-search-selection",
+          "label": "חיפוש הטקסט המסומן בבר אילן",
+          "key": "ctrl+alt+b",
+          "contextMenuItemId": "responsa-search"
+        },
+        {
+          "id": "responsa-open-panel",
+          "label": "פתיחת לשונית בר אילן",
+          "command": "responsa.openPanel"
+        }
+      ]
     }
   }
 }

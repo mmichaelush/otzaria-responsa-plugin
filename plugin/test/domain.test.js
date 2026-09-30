@@ -189,3 +189,80 @@ test('formatBuiltAt', () => {
   assert.equal(Domain.formatBuiltAt('not a date'), '');
   assert.match(Domain.formatBuiltAt('2026-09-28T19:13:04'), /2026/);
 });
+
+test('subtitleFor: שורת המשנה בפס העליון לפי המסך', () => {
+  const ready = { screen: Domain.Screen.ready, status: { version: 25, catalog: { bookCount: 8402 } } };
+  assert.equal(Domain.subtitleFor(ready), '8,402 ספרים · מהדורה 25');
+  assert.equal(Domain.subtitleFor({ ...ready, buildActive: true }), '8,402 ספרים · מהדורה 25 · קורא מחדש…');
+  assert.equal(Domain.subtitleFor({ screen: Domain.Screen.permissionDenied }), 'נדרשת הרשאה');
+  assert.equal(Domain.subtitleFor({ screen: Domain.Screen.loading }), '');
+});
+
+test('bookDetails: כל מה שבקטלוג, ורק שדות שיש בהם ערך', () => {
+  const details = Domain.bookDetails({
+    key: '7008',
+    title: 'אבני נזר',
+    author: 'רבי אברהם בורנשטיין',
+    pubPlace: 'ירושלים',
+    pubDate: 'תשס"ו',
+    edition: 'ירושלים תשס"ו, ד"צ פיוטרקוב תרע"ב',
+    contextPath: 'שו"ת/אחרונים',
+    topics: '',
+    otzariaCategory: 'שו"ת/אחרונים',
+  });
+  assert.deepEqual(
+    details.map(({ label, value }) => [label, value]),
+    [
+      ['מחבר', 'רבי אברהם בורנשטיין'],
+      ['מקום הדפסה', 'ירושלים'],
+      ['שנת הדפסה', 'תשס"ו'],
+      ['מהדורה', 'ירושלים תשס"ו, ד"צ פיוטרקוב תרע"ב'],
+      ['מיקום בבר אילן', 'שו"ת › אחרונים'],
+      ['קטגוריה מקבילה באוצריא', 'שו"ת › אחרונים'],
+      ['מזהה בבר אילן', '7008'],
+    ],
+  );
+});
+
+test('bookDetails: מהדורה שאינה יותר ממקום ושנה אינה חוזרת פעמיים', () => {
+  const details = Domain.bookDetails({ key: '1', pubPlace: 'וינה', pubDate: 'תרנ"ח', edition: 'וינה, תרנ"ח' });
+  assert.deepEqual(
+    details.map(({ label }) => label),
+    ['מקום הדפסה', 'שנת הדפסה', 'מזהה בבר אילן'],
+  );
+});
+
+test('setupChecklist: מה מוכן, מה חסר ומה עוד לא ידוע', () => {
+  const states = (model) => Object.fromEntries(Domain.setupChecklist(model).map((i) => [i.id, i.state]));
+  assert.deepEqual(states({ screen: Screen.loading, permissions: null }), {
+    responsa: 'unknown',
+    service: 'unknown',
+    permission: 'unknown',
+    catalog: 'unknown',
+  });
+  assert.deepEqual(states({ screen: Screen.serviceMissing, permissions: ['network.localhost'] }), {
+    responsa: 'unknown',
+    service: 'missing',
+    permission: 'missing',
+    catalog: 'unknown',
+  });
+  assert.deepEqual(
+    states({
+      screen: Screen.ready,
+      health,
+      status: status({ catalog: catalogReady }),
+      permissions: ['network.localhost', 'app.startup_contributions'],
+    }),
+    { responsa: 'done', service: 'done', permission: 'done', catalog: 'done' },
+  );
+  assert.equal(
+    states({ screen: Screen.notInstalled, health, status: { installed: false }, permissions: [] })
+      .responsa,
+    'missing',
+  );
+});
+
+test('Links: כתובות https בלבד, והפורום מצביע על ההבהרה', () => {
+  for (const url of Object.values(Domain.Links)) assert.match(url, /^https:\/\//);
+  assert.equal(Domain.Links.forum, 'https://otzaria.org/forum/post/40010');
+});

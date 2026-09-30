@@ -16,6 +16,8 @@ class FakeView {
     this.updates = 0;
     this.results = 0;
     this.announced = [];
+    this.sheets = [];
+    this.languages = 0;
   }
   render(model) {
     this.renders.push(model.screen);
@@ -26,9 +28,18 @@ class FakeView {
   renderResults() {
     this.results++;
   }
-  renderInfo() {}
+  renderSheet(model) {
+    this.sheets.push(model.sheet);
+  }
+  updateReport() {}
+  applyLanguage() {
+    this.languages++;
+  }
   announce(text) {
     this.announced.push(text);
+  }
+  focusSearch() {
+    this.focused = (this.focused || 0) + 1;
   }
 }
 
@@ -381,4 +392,251 @@ test('Windows בלבד', async () => {
   await app.boot({ app: { platform: 'linux' } });
   assert.equal(app.model.screen, Screen.unsupported);
   assert.equal(bridge.requests.length, 0);
+});
+
+// ------------------------------------------------------- הגדרות ועזרה
+
+test('לוח ההגדרות והעזרה נפתחים ונסגרים; כרטיסייה לא מוכרת נשארת על הקודמת', async () => {
+  const { app, view } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  app.actions.openSettings();
+  app.actions.openHelp('status');
+  app.actions.openHelp('nope');
+  app.actions.closeSheet();
+  app.actions.closeSheet();
+  assert.deepEqual(view.sheets.slice(-4), ['settings', 'help', 'help', null]);
+  assert.equal(app.model.helpTab, 'status');
+  app.suspend();
+});
+
+test('plugin.page_opened עם view פותח את הלוח המבוקש', async () => {
+  const { app } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  app.pageOpened({ param: { view: 'help', tab: 'troubleshoot' } });
+  assert.equal(app.model.sheet, 'help');
+  assert.equal(app.model.helpTab, 'troubleshoot');
+  app.pageOpened({ param: { view: 'settings' } });
+  assert.equal(app.model.sheet, 'settings');
+  app.pageOpened(null);
+  assert.equal(app.model.sheet, 'settings');
+  app.suspend();
+});
+
+test('מתג שנכשל בשמירה נשאר במצבו, עם הסבר', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  bridge.methods['storage.set'] = { error: { code: 'error.internal' } };
+  await app.boot(windows);
+  await app.actions.setSetting('contextMenu', false);
+  assert.equal(app.model.settings.contextMenu, true);
+  assert.deepEqual(bridge.notifications('ui.showError'), ['ההגדרה לא נשמרה. אפשר לנסות שוב.']);
+  app.suspend();
+});
+
+test('בחירת אנגלית: הדף נבנה מחדש באנגלית, ופריט התפריט מתורגם', async () => {
+  const { app, view, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  const renders = view.renders.length;
+  await app.actions.setLanguage('en');
+  try {
+    assert.equal(globalThis.ResponsaI18n.language, 'en');
+    assert.ok(view.renders.length > renders);
+    await until(() => bridge.calls.some((c) => c.method === 'reader.updateContextMenuItem'));
+    const patch = bridge.calls.find((c) => c.method === 'reader.updateContextMenuItem');
+    assert.deepEqual(patch.payload, { id: 'responsa-search', patch: { title: 'Search in Bar-Ilan' } });
+    assert.deepEqual(
+      bridge.calls.filter((c) => c.method === 'storage.set').map((c) => c.payload),
+      [{ key: 'responsa_language', value: 'en' }],
+    );
+  } finally {
+    await app.actions.setLanguage('he');
+    app.suspend();
+  }
+});
+
+test('שפת אוצריא השתנתה: חלה רק כשבתוסף נבחר "כמו באוצריא"', async () => {
+  const { app } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  try {
+    app.hostSettingChanged({ key: 'key-settings-language', newValue: 'en' });
+    assert.equal(globalThis.ResponsaI18n.language, 'en');
+    app.hostSettingChanged({ key: 'key-other', newValue: 'he' });
+    assert.equal(globalThis.ResponsaI18n.language, 'en');
+  } finally {
+    app.hostSettingChanged({ key: 'key-settings-language', newValue: 'he' });
+    app.suspend();
+  }
+});
+
+test('דיווח: נשלח עם פרטי המערכת, ומתנקה אחרי שליחה', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  bridge.methods['feedback.report'] = 'sent';
+  await app.boot({ ...windows, plugin: { version: '0.2.0' } });
+  app.actions.editReport('קצר');
+  await app.actions.sendReport();
+  assert.equal(bridge.calls.some((c) => c.method === 'feedback.report'), false, 'פחות מ-10 תווים');
+
+  app.actions.editReport('הספר לא נפתח בבר אילן');
+  await app.actions.sendReport();
+  const sent = bridge.calls.find((c) => c.method === 'feedback.report').payload;
+  assert.match(sent.details, /^הספר לא נפתח בבר אילן\n\n---\n/);
+  assert.match(sent.details, /גרסת התוסף: 0\.2\.0/);
+  assert.equal(app.model.report.text, '');
+  assert.deepEqual(bridge.notifications('ui.showSuccess'), ['הדיווח נשלח. תודה!']);
+  app.suspend();
+});
+
+test('דיווח שהמשתמש ביטל נשאר בתיבה', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  bridge.methods['feedback.report'] = 'cancelled';
+  await app.boot(windows);
+  app.actions.editReport('הספר לא נפתח בבר אילן');
+  await app.actions.sendReport();
+  assert.equal(app.model.report.text, 'הספר לא נפתח בבר אילן');
+  assert.equal(app.model.report.sending, false);
+  app.suspend();
+});
+
+test('קיצור דרך: הצלחה, ביטול בדיאלוג של אוצריא, וכשל', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  bridge.methods['shortcut.create'] = { created: true };
+  await app.actions.createShortcut('desktop');
+  bridge.methods['shortcut.create'] = { created: false };
+  await app.actions.createShortcut('desktop');
+  bridge.methods['shortcut.create'] = { error: { code: 'error.unsupported' } };
+  await app.actions.createShortcut('startMenu');
+  assert.deepEqual(bridge.notifications('ui.showSuccess'), ['קיצור הדרך נוצר בשולחן העבודה.']);
+  assert.deepEqual(bridge.notifications('ui.showError'), ['לא ניתן היה ליצור את קיצור הדרך.']);
+  app.suspend();
+});
+
+test('רשימה מוכנה ומארח שתומך: נשלחת לחיפוש הספרייה', async () => {
+  const { app, bridge } = setup({
+    '/health': reply(200, {
+      ok: true,
+      service: 'otzaria-responsa',
+      apiVersion: 1,
+      capabilities: ['catalog', 'open', 'export'],
+    }),
+    '/status': reply(200, { ...ready, catalog: { ...ready.catalog, builtAt: '2026-09-29T10:00:00Z' } }),
+    '/catalog/export': reply(200, { builtAt: '2026-09-29T10:00:00Z', books: [['7', 'אבני נזר', null, '']] }),
+  });
+  bridge.methods['storage.get'] = null;
+  await app.boot({ ...windows, permissions: ['network.localhost', 'library.books.provide', 'app.startup_contributions'] });
+  await until(() => bridge.calls.some((c) => c.method === 'library.setProviderBooks'));
+  const sent = bridge.calls.find((c) => c.method === 'library.setProviderBooks').payload;
+  assert.deepEqual(sent.books, [{ id: 7, title: 'אבני נזר', category: 'בר אילן' }]);
+  app.suspend();
+});
+
+test('אירוע מהספרייה בזמן שהלשונית פתוחה: "פותח…" מוצג ונעלם', async () => {
+  const { app, view } = setup({
+    '/status': reply(200, ready),
+    '/book/open': reply(200, { ok: true, broughtToFront: true }),
+  });
+  await app.boot(windows);
+  const updates = view.updates;
+  await app.engine.openFromLibrary({ provider: 'responsa', id: 3232, title: 'חידושי אגדות' });
+  assert.equal(app.model.activity, null);
+  assert.ok(view.updates >= updates + 2);
+  app.suspend();
+});
+
+// ------------------------------------------------ מסך פתיחה, קישורים, פרטים
+
+test('מסך הפתיחה: מוצג בהפעלה הראשונה, ו"הבנתי" שומר שלא יוצג שוב', async () => {
+  const { app, bridge, view } = setup({ '/status': reply(200, ready) });
+  const stored = {};
+  bridge.methods['storage.get'] = ({ key }) => (key in stored ? stored[key] : null);
+  bridge.methods['storage.set'] = ({ key, value }) => {
+    stored[key] = value;
+    return true;
+  };
+  await app.boot(windows);
+  assert.equal(app.model.sheet, 'welcome');
+  assert.equal(view.sheets[0], 'welcome');
+  app.actions.finishWelcome();
+  await until(() => stored.responsa_welcome_seen === true);
+  assert.equal(app.model.sheet, null);
+  assert.equal(view.focused, 1, 'הפוקוס חוזר לתיבת החיפוש');
+  app.suspend();
+
+  const again = setup({ '/status': reply(200, ready) });
+  again.bridge.methods['storage.get'] = ({ key }) => (key in stored ? stored[key] : null);
+  await again.app.boot(windows);
+  assert.equal(again.app.model.sheet, null);
+  again.app.suspend();
+});
+
+test('מסך הפתיחה: מעבר ממנו לעזרה נחשב סגירה שלו', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  const stored = {};
+  bridge.methods['storage.get'] = () => null;
+  bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
+  await app.boot(windows);
+  app.actions.openHelp('guide');
+  await until(() => stored.responsa_welcome_seen === true);
+  assert.equal(app.model.sheet, 'help');
+  app.suspend();
+});
+
+test('קישור בלי אינטרנט: הסבר עם הכתובת, בלי לפתוח דפדפן', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot({ ...windows, connectivity: { isOnline: false } });
+  assert.equal(app.model.online, false);
+  await app.actions.openLink('guide');
+  assert.equal(bridge.calls.some((c) => c.method === 'app.openUrl'), false);
+  assert.match(bridge.notifications('ui.showMessage')[0], /אין כרגע חיבור לאינטרנט.*USER_GUIDE/);
+  app.suspend();
+});
+
+test('קישור עם אינטרנט (או כשעוד לא ידוע) נפתח בדפדפן', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot({ ...windows, connectivity: { isOnline: null } });
+  assert.equal(app.model.online, null);
+  await app.actions.openLink('forum');
+  const opened = bridge.calls.find((c) => c.method === 'app.openUrl');
+  assert.equal(opened.payload.url, Domain.Links.forum);
+  await app.actions.openLink('nothing');
+  assert.equal(bridge.calls.filter((c) => c.method === 'app.openUrl').length, 1, 'שם לא מוכר');
+  app.suspend();
+});
+
+test('פרטי ספר: לחיצה פותחת וסוגרת, וחיפוש חדש מאפס', async () => {
+  const { app } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  app.model.query = 'אבני';
+  app.actions.toggleDetails('7008');
+  assert.equal(app.model.expandedKey, '7008');
+  app.actions.toggleDetails('7008');
+  assert.equal(app.model.expandedKey, null);
+  app.actions.toggleDetails('31');
+  app.search('אבני ', {});
+  assert.equal(app.model.expandedKey, '31', 'רווח בסוף אינו חיפוש חדש');
+  app.search('מהרש"א', {});
+  assert.equal(app.model.expandedKey, null);
+  app.suspend();
+});
+
+test('מסך שגיאה: קוד הכשל נשמר לציטוט בפנייה', async () => {
+  const { app } = setup({ '/status': reply(500, { error: { code: 'internal', message: 'x' } }) });
+  await app.boot(windows);
+  assert.equal(app.model.screen, Screen.serviceError);
+  assert.equal(app.model.errorCode, 'internal');
+  app.suspend();
+});
+
+test('דיווח: מצורף יומן הפעולות, בלי שם המשתמש שבנתיבים', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  bridge.methods['feedback.report'] = 'sent';
+  await app.boot(windows);
+  app.log.warn('נכשל: C:\\Users\\Moshe\\AppData\\x');
+  app.actions.editReport('הספר לא נפתח בבר אילן');
+  await app.actions.sendReport();
+  const { details } = bridge.calls.find((c) => c.method === 'feedback.report').payload;
+  assert.match(details, /--- יומן פעולות ---/);
+  assert.match(details, /C:\\Users\\…\\AppData/);
+  assert.doesNotMatch(details, /Moshe/);
+  assert.ok(details.length <= 5000);
+  app.suspend();
 });

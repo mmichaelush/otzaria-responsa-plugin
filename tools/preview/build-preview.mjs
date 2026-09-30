@@ -19,6 +19,7 @@ const stub = readFileSync(join(here, 'stub.js'), 'utf8');
 const html = readFileSync(join(plugin, 'index.html'), 'utf8')
   .replaceAll('href="css/', `href="${toPlugin}/css/`)
   .replaceAll('src="js/', `src="${toPlugin}/js/`)
+  .replaceAll('src="i18n/', `src="${toPlugin}/i18n/`)
   .replace(
     '<link rel="stylesheet"',
     `<script>window.__RESPONSA_FIXTURES__ = ${fixtures};</script>\n    <script>${stub}</script>\n    <link rel="stylesheet"`,

@@ -13,12 +13,19 @@ class FakeBridge {
     this.routes = routes || {};
     this.calls = [];
     this.requests = [];
+    /** `method → data | (payload) => data | { error }`; ברירת מחדל: `true`. */
+    this.methods = {};
   }
 
   call(method, payload) {
     this.calls.push({ method, payload });
     if (method === 'network.fetchStream') return this._iterator(payload);
-    return Promise.resolve({ success: true, data: true, error: null });
+    let answer = Object.hasOwn(this.methods, method) ? this.methods[method] : true;
+    if (typeof answer === 'function') answer = answer(payload);
+    if (answer && typeof answer === 'object' && answer.error) {
+      return Promise.resolve({ success: false, data: null, error: answer.error });
+    }
+    return Promise.resolve({ success: true, data: answer, error: null });
   }
 
   on() {}

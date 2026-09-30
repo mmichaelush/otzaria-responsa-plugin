@@ -1,7 +1,7 @@
 // מצלם כל מסך של התוסף בתצוגה המקדימה, בהיר וכהה, עם Edge או Chrome.
 //   node tools/preview/screenshots.mjs [out-dir]
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -10,6 +10,17 @@ const outDir = resolve(process.argv[2] || join(here, 'out', 'shots'));
 mkdirSync(outDir, { recursive: true });
 execFileSync(process.execPath, [join(here, 'build-preview.mjs')], { stdio: 'inherit' });
 const page = pathToFileURL(join(here, 'out', 'preview.html')).href;
+
+// חלון ראש-שקט אינו צר מ-500px, ולכן גודל טלפון מצולם דרך iframe ברוחב המדויק.
+const framePath = join(here, 'out', 'frame.html');
+writeFileSync(
+  framePath,
+  '<!DOCTYPE html><html><body style="margin:0"><iframe id="f" style="border:0;display:block"></iframe>' +
+    '<script>const [w, h, src] = decodeURIComponent(location.hash.slice(1)).split("|");' +
+    'const f = document.getElementById("f"); f.style.width = w + "px"; f.style.height = h + "px"; f.src = src;</script>' +
+    '</body></html>',
+);
+const frame = pathToFileURL(framePath).href;
 
 const browsers = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -28,26 +39,61 @@ const shots = [
   ['ready-none', 'scenario=ready&query=' + encodeURIComponent('זזזז')],
   ['other-installation', 'scenario=otherInstallation&query=' + encodeURIComponent('אבני נזר')],
   ['rebuilding', 'scenario=rebuilding&query=' + encodeURIComponent('אבני נזר')],
-  ['info-panel', 'scenario=ready&info=1'],
+  ['settings-panel', 'scenario=ready&sheet=settings'],
+  ['settings-library', 'scenario=ready&sheet=settings&library=1'],
+  ['help-guide', 'scenario=ready&sheet=help'],
+  ['help-troubleshoot', 'scenario=ready&sheet=help&tab=troubleshoot'],
+  ['help-status', 'scenario=ready&sheet=help&tab=status'],
+  ['help-about', 'scenario=ready&sheet=help&tab=about'],
+  ['english-results', 'scenario=ready&lang=en&query=' + encodeURIComponent('מהרש"א')],
+  ['english-settings', 'scenario=ready&lang=en&sheet=settings&library=1'],
   ['not-installed', 'scenario=notInstalled'],
   ['port-taken', 'scenario=portTaken'],
   ['permission-denied', 'scenario=permissionDenied'],
   ['service-error', 'scenario=serviceError'],
+  ['welcome', 'scenario=ready&welcome=1'],
+  ['welcome-first-run', 'scenario=serviceMissing&welcome=1'],
+  ['book-details', 'scenario=ready&details=3232&query=' + encodeURIComponent('מהרש"א')],
+  ['help-about-offline', 'scenario=ready&sheet=help&tab=about&offline=1'],
+  ['service-missing-offline', 'scenario=serviceMissing&offline=1'],
+  // גדלי מסך: חלון צר (טלפון, או אוצריא בחצי מסך) וחלון רחב.
+  ['narrow-results', 'scenario=ready&details=3232&query=' + encodeURIComponent('מהרש"א'), '380,820'],
+  ['narrow-welcome', 'scenario=ready&welcome=1', '380,820'],
+  ['narrow-settings', 'scenario=ready&sheet=settings&library=1', '380,820'],
+  ['narrow-help', 'scenario=ready&sheet=help&tab=status', '380,820'],
+  ['wide-results', 'scenario=ready&query=' + encodeURIComponent('מהרש"א'), '1600,900'],
 ];
 
-for (const [name, query] of shots) {
+for (const [name, query, size] of shots) {
   for (const mode of ['light', 'dark']) {
     const file = join(outDir, `${name}-${mode}.png`);
+    const [width, height] = (size || '1000,720').split(',').map(Number);
+    const url =
+      width < 500
+        ? `${frame}#${encodeURIComponent(`${width}|${height}|${page}?${query}&mode=${mode}`)}`
+        : `${page}?${query}&mode=${mode}`;
     execFileSync(browser, [
       '--headless=new',
       '--disable-gpu',
       '--hide-scrollbars',
       '--force-device-scale-factor=1',
-      '--window-size=1000,720',
+      '--window-size=' + Math.max(width, 500) + ',' + height,
+      '--allow-file-access-from-files',
       '--virtual-time-budget=4000',
       `--screenshot=${file}`,
-      `${page}?${query}&mode=${mode}`,
+      url,
     ], { stdio: 'ignore' });
+    // הצילום ברוחב החלון; בגודל טלפון חותכים לרוחב ה-iframe.
+    if (width < 500) {
+      execFileSync(process.platform === 'win32' ? 'py' : 'python3', [
+        ...(process.platform === 'win32' ? ['-3'] : []),
+        '-c',
+        'import sys; from PIL import Image; im = Image.open(sys.argv[1]); ' +
+          'im.crop((0, 0, int(sys.argv[2]), im.height)).save(sys.argv[1])',
+        file,
+        String(width),
+      ]);
+    }
     console.log(file);
   }
 }

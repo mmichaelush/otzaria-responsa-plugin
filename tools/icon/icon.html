@@ -2,9 +2,36 @@
 <html lang="he" dir="ltr"><head><meta charset="UTF-8"><style>
 html,body{margin:0;background:transparent;overflow:hidden} svg{position:absolute;left:0;top:0}
 </style></head><body>
-<!-- אייקון התוסף: ספריית Fluent על רקע primary של אוצריא. לא הסמל של בר אילן, שהוא סימן מסחרי. -->
+<!--
+  אייקון התוסף: ספר פתוח עם זכוכית מגדלת, על רקע ה-primary של אוצריא. באותו
+  רעיון כמו book_open_medium_search_24_regular של אוצריא (האייקון שבסרגל
+  הכלים), אבל ציור מקורי: ספריית האייקונים של אוצריא ברישיון GPL-3.0. לא
+  הסמל של בר אילן, שהוא סימן מסחרי. נבנה ל-PNG ול-ICO ב-build_app_icon.mjs.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a6a1c"/><stop offset="1" stop-color="#6e470a"/></linearGradient></defs>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9a6a1c"/>
+      <stop offset="1" stop-color="#6e470a"/>
+    </linearGradient>
+    <!-- העדשה "חותכת" את הדף שמתחתיה, כמו באייקוני אוצריא. -->
+    <mask id="lens-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="#ffffff"/>
+      <circle cx="16.4" cy="13.9" r="4.55" fill="#000000"/>
+    </mask>
+  </defs>
   <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#g)"/>
-  <g transform="translate(40 40) scale(7.333)" fill="#ffffff"><path d="M83 438H104Q121 437 133 426Q145 415 146 399V104Q146 88 135 76Q124 64 107 63H83Q67 63 55 74Q43 85 42 101V396Q42 412 53 424Q64 436 80 437L104 438ZM208 438H229Q246 437 258 426Q270 415 271 399V104Q271 88 260 76Q249 64 232 63H208Q192 63 180 74Q168 85 167 101V396Q167 412 178 424Q189 436 205 437L229 438ZM354 396Q367 396 378 388Q389 380 393 368L457 120Q461 104 453 89.5Q445 75 430 70L407 64Q391 60 376.5 67.5Q362 75 357 91L293 339Q289 354 297 368.5Q305 383 320 388L343 395Q348 396 354 396ZM104 406H83Q80 406 77 403.5Q74 401 73 398V104Q73 100 75.5 97.5Q78 95 81 94H104Q108 94 111 96.5Q114 99 114 102L115 396Q115 400 112.5 402.5Q110 405 106 406ZM229 406H208Q205 406 202 403.5Q199 401 198 398V104Q198 100 200.5 97.5Q203 95 206 94H229Q233 94 236 96.5Q239 99 239 102L240 396Q240 400 237.5 402.5Q235 405 231 406ZM354 365H352L331 359Q327 358 325 355Q323 352 323 348L386 102Q388 94 396 94L419 99Q423 100 425 103Q427 106 427 110L364 357Q362 365 354 365Z" transform="translate(0 24) scale(0.048 -0.048)"/></g>
+  <g transform="translate(32 30) scale(8)" fill="none" stroke="#ffffff" stroke-width="1.55"
+     stroke-linecap="round" stroke-linejoin="round">
+    <g mask="url(#lens-cut)">
+      <!-- שני הדפים והשדרה. -->
+      <path d="M12 7.1 C10 5.7 7.3 5.2 3.9 5.5 V17.6 C7.3 17.3 10 17.8 12 19.2 Z"/>
+      <path d="M12 7.1 C14 5.7 16.7 5.2 20.1 5.5 V17.6 C16.7 17.3 14 17.8 12 19.2"/>
+      <!-- שורות טקסט בדף הימני (ספר עברי נפתח מימין). -->
+      <path d="M14.3 9.2 H17.7"/>
+    </g>
+    <path d="M6.3 9.4 H9.7 M6.3 12 H9.7 M6.3 14.6 H8.7"/>
+    <circle cx="16.4" cy="13.9" r="3.05"/>
+    <path d="M18.6 16.1 L21 18.5" stroke-width="1.9"/>
+  </g>
 </svg></body></html>

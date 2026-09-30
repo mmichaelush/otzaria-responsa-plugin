@@ -10,17 +10,18 @@
     <div class="app-shell">
       <header class="topbar">
         <div class="topbar-titles">
-          <h1 class="topbar-title">פרויקט השו"ת (בר אילן)</h1>
+          <h1 class="topbar-title"></h1>
           <span class="topbar-subtitle"></span>
         </div>
-        <button
-          type="button"
-          class="icon-button info-toggle"
-          aria-label="מידע וניהול"
-          aria-pressed="false"
-          aria-controls="info-panel"
-          title="מידע וניהול"
-        ></button>
+        <div class="topbar-actions">
+          <button type="button" class="icon-button help-toggle"></button>
+          <button
+            type="button"
+            class="icon-button settings-toggle"
+            aria-pressed="false"
+            aria-controls="settings-sheet"
+          ></button>
+        </div>
       </header>
       <main class="app-content">
         <div class="content-column"></div>
@@ -32,20 +33,35 @@
 
     <div class="overlay-scrim"></div>
     <aside
-      class="overlay-panel"
-      id="info-panel"
+      class="side-sheet"
+      id="settings-sheet"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="info-title"
+      aria-labelledby="settings-title"
       aria-hidden="true"
     ></aside>
+    <section
+      class="help-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="help-title"
+      aria-hidden="true"
+    ></section>
 
-    <!-- סדר הטעינה: לוגיקה טהורה → שכבות עזר → בקר → כניסה. -->
+    <!-- סדר הטעינה: תרגום → לוגיקה טהורה → שכבות עזר → תצוגה → בקר → כניסה. -->
+    <script src="js/responsa-i18n.js"></script>
+    <script src="i18n/en.js"></script>
     <script src="js/responsa-domain.js"></script>
     <script src="js/responsa-icons.js"></script>
     <script src="js/responsa-theme.js"></script>
+    <script src="js/responsa-log.js"></script>
+    <script src="js/responsa-runtime.js"></script>
+    <script src="js/responsa-settings.js"></script>
     <script src="js/responsa-service.js"></script>
+    <script src="js/responsa-engine.js"></script>
     <script src="js/responsa-ui.js"></script>
+    <script src="js/responsa-panels.js"></script>
+    <script src="js/responsa-view.js"></script>
     <script src="js/responsa-app.js"></script>
     <script src="js/responsa-main.js"></script>
   </body>

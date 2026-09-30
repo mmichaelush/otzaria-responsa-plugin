@@ -1,6 +1,6 @@
-// בניית ה-DOM. כל טקסט נכנס דרך textContent בלבד (לעולם לא innerHTML), כך
-// ששמות ספרים מהקטלוג לא יכולים להזריק דבר לדף. אין כאן קריאות ל-SDK או
-// החלטות: כל פונקציה מקבלת מודל ופעולות ומחזירה אלמנט.
+// בניית ה-DOM של המסך הראשי. כל טקסט נכנס דרך textContent בלבד (לעולם לא
+// innerHTML), כך ששמות ספרים מהקטלוג לא יכולים להזריק דבר לדף. אין כאן
+// קריאות ל-SDK או החלטות: כל פונקציה מקבלת מודל ופעולות ומחזירה אלמנט.
 //
 // לכל כפתור יש `data-focus-key`, כדי שהתצוגה תחזיר אליו את הפוקוס אחרי שהוא
 // נבנה מחדש; לכל שדה שמתעדכן בזמן בנייה יש `data-role`, כדי לעדכן אותו במקום.
@@ -8,7 +8,9 @@
   'use strict';
 
   const Domain = root.ResponsaDomain;
+  const I18n = root.ResponsaI18n;
   const { icon } = root.ResponsaIcons;
+  const t = (text, vars) => I18n.t(text, vars);
 
   /** `el('p', {class: 'x'}, 'טקסט', child)` */
   function el(tag, attributes, ...children) {
@@ -24,11 +26,14 @@
     return node;
   }
 
+  /** רשימות מקוננות נפרשות: כך פונקציה יכולה להחזיר כמה שורות. */
   function append(node, children) {
-    for (const child of children.flat()) {
+    for (const child of children.flat(Infinity)) {
       if (child === null || child === undefined || child === false) continue;
       node.appendChild(
-        typeof child === 'string' ? document.createTextNode(child) : child,
+        typeof child === 'string' || typeof child === 'number'
+          ? document.createTextNode(String(child))
+          : child,
       );
     }
   }
@@ -51,15 +56,38 @@
     );
   }
 
+  function iconButton(iconName, label, onClick, options) {
+    const opts = options || {};
+    return el(
+      'button',
+      {
+        type: 'button',
+        class: 'icon-button' + (opts.className ? ' ' + opts.className : ''),
+        'aria-label': label,
+        title: label,
+        'aria-expanded': opts.expanded === undefined ? null : String(Boolean(opts.expanded)),
+        'aria-controls': opts.controls || null,
+        onclick: onClick,
+        dataset: opts.key ? { focusKey: opts.key } : undefined,
+      },
+      icon(iconName),
+    );
+  }
+
   function retryButton(model, actions) {
-    return button('text', 'בדיקה חוזרת', actions.retry, {
+    return button('text', t('בדיקה חוזרת'), actions.retry, {
       key: 'retry',
       busy: model.checking,
-      busyLabel: 'בודק…',
+      busyLabel: t('בודק…'),
     });
   }
 
-  function stateCard({ iconName, title, text, steps, actions, footnote, error }) {
+  /** "קוד לתמיכה: timeout" — מה שצריך לצטט בפנייה, בלי להטריד את השאר. */
+  function errorCodeLine(model) {
+    return model.errorCode ? t('קוד לתמיכה: {code}', { code: model.errorCode }) : null;
+  }
+
+  function stateCard({ iconName, title, text, steps, actions, footnote, error, code }) {
     return el(
       'section',
       { class: 'state-card' + (error ? ' is-error' : '') },
@@ -71,10 +99,9 @@
       steps && steps.length
         ? el('ol', { class: 'state-steps' }, steps.map((s) => el('li', {}, s)))
         : null,
-      actions && actions.length
-        ? el('div', { class: 'state-actions' }, actions)
-        : null,
+      actions && actions.length ? el('div', { class: 'state-actions' }, actions) : null,
       footnote ? el('p', { class: 'state-footnote' }, footnote) : null,
+      code ? el('p', { class: 'state-code', dir: 'auto' }, code) : null,
     );
   }
 
@@ -85,29 +112,29 @@
       'div',
       { class: 'page-spinner' },
       el('span', { class: 'spinner', 'aria-hidden': 'true' }),
-      el('span', { class: 'visually-hidden', 'data-role': 'title' }, 'מתחבר לשירות בר אילן…'),
+      el('span', { class: 'visually-hidden', 'data-role': 'title' }, t('מתחבר לשירות בר אילן…')),
     );
   }
 
   function unsupportedView() {
     return stateCard({
       iconName: 'warning_24_regular',
-      title: 'התוסף פועל רק ב-Windows',
-      text: 'פרויקט השו"ת של בר אילן הוא תוכנה ל-Windows, ולכן גם התוסף פועל רק שם.',
+      title: t('התוסף פועל רק ב-Windows'),
+      text: t('פרויקט השו"ת של בר אילן הוא תוכנה ל-Windows, ולכן גם התוסף פועל רק שם.'),
     });
   }
 
   function permissionDeniedView(model, actions) {
     return stateCard({
       iconName: 'settings_24_regular',
-      title: 'התוסף צריך הרשאה',
-      text:
-        'כדי לדבר עם הרכיב שמחבר את אוצריא לבר אילן, התוסף צריך את ההרשאה ' +
-        '"גישה לשירותים מקומיים". היא לא פותחת גישה לאינטרנט.',
+      title: t('התוסף צריך הרשאה'),
+      text: t(
+        'כדי לדבר עם הרכיב שמחבר את אוצריא לבר אילן, התוסף צריך את ההרשאה "גישה לשירותים מקומיים". היא לא פותחת גישה לאינטרנט.',
+      ),
       steps: [
-        'באוצריא פתחו את ההגדרות, ואז "ניהול תוספים".',
-        'בחרו ב"בר אילן".',
-        'הדליקו את "גישה לשירותים מקומיים".',
+        t('באוצריא פתחו את ההגדרות, ואז "כלים".'),
+        t('בחרו ב"בר אילן".'),
+        t('הדליקו את "גישה לשירותים מקומיים".'),
       ],
       actions: [retryButton(model, actions)],
     });
@@ -116,24 +143,30 @@
   function serviceMissingView(model, actions) {
     return stateCard({
       iconName: 'arrow_download_24_regular',
-      title: 'צריך להתקין רכיב קטן, פעם אחת',
-      text:
-        'כדי שאוצריא תוכל לעבוד עם תוכנת בר אילן, יש להתקין במחשב את ' +
-        '"שירות בר אילן לאוצריא". ההתקנה לוקחת פחות מדקה ואינה דורשת הרשאות מנהל.',
+      title: t('צריך להתקין רכיב קטן, פעם אחת'),
+      text: t(
+        'כדי שאוצריא תוכל לעבוד עם תוכנת בר אילן, יש להתקין במחשב את "שירות בר אילן לאוצריא". ההתקנה לוקחת פחות מדקה ואינה דורשת הרשאות מנהל.',
+      ),
       steps: [
-        'לחצו על "הורדת המתקין".',
-        'פתחו את הקובץ שירד, לחצו "הבא" ובסוף "סיום".',
-        'חזרו לכאן. המסך יתעדכן מעצמו.',
+        t('לחצו על "הורדת המתקין".'),
+        t('פתחו את הקובץ שירד, לחצו "הבא" ובסוף "סיום".'),
+        t('חזרו לכאן. המסך יתעדכן מעצמו.'),
       ],
       actions: [
-        button('filled', 'הורדת המתקין', actions.download, {
+        button('filled', t('הורדת המתקין'), actions.download, {
           key: 'download',
           icon: 'arrow_download_24_regular',
         }),
         retryButton(model, actions),
       ],
-      footnote:
-        'כבר התקנתם? ייתכן שהשירות לא פועל כרגע. הפעלה מחדש של המחשב תפעיל אותו.',
+      footnote: [
+        t('כבר התקנתם? ייתכן שהשירות לא פועל כרגע. הפעלה מחדש של המחשב תפעיל אותו.'),
+        model.online === false
+          ? t('אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר, מדף ההורדות של התוסף ב-GitHub, ולהעביר אותו בדיסק און קי.')
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' '),
     });
   }
 
@@ -141,24 +174,20 @@
     return stateCard({
       iconName: 'warning_24_regular',
       error: true,
-      title: 'השירות לא מגיב כרגע',
-      text: [
-        model.message,
-        'אם זה חוזר, הפעלה מחדש של המחשב בדרך כלל פותרת את זה.',
-      ],
+      title: t('השירות לא מגיב כרגע'),
+      text: [model.message, t('אם זה חוזר, הפעלה מחדש של המחשב בדרך כלל פותרת את זה.')],
       actions: [retryButton(model, actions)],
+      code: errorCodeLine(model),
     });
   }
 
   function outdatedView(model, actions, what) {
     return stateCard({
       iconName: 'arrow_download_24_regular',
-      title: what === 'plugin' ? 'צריך לעדכן את התוסף' : 'צריך לעדכן את שירות בר אילן',
-      text:
-        'גרסת השירות שבמחשב וגרסת התוסף אינן מתאימות זו לזו. המתקין החדש ' +
-        'מעדכן את שניהם.',
+      title: what === 'plugin' ? t('צריך לעדכן את התוסף') : t('צריך לעדכן את שירות בר אילן'),
+      text: t('גרסת השירות שבמחשב וגרסת התוסף אינן מתאימות זו לזו. המתקין החדש מעדכן את שניהם.'),
       actions: [
-        button('filled', 'הורדת הגרסה החדשה', actions.download, {
+        button('filled', t('הורדת הגרסה החדשה'), actions.download, {
           key: 'download',
           icon: 'arrow_download_24_regular',
         }),
@@ -171,10 +200,10 @@
     return stateCard({
       iconName: 'warning_24_regular',
       error: true,
-      title: 'תוכנה אחרת תופסת את החיבור של השירות',
-      text:
-        'תוכנה אחרת במחשב משתמשת בחיבור שהשירות צריך, ולכן השירות לא יכול ' +
-        'לפעול. הפעלה מחדש של המחשב בדרך כלל פותרת זאת.',
+      title: t('תוכנה אחרת תופסת את החיבור של השירות'),
+      text: t(
+        'תוכנה אחרת במחשב משתמשת בחיבור שהשירות צריך, ולכן השירות לא יכול לפעול. הפעלה מחדש של המחשב בדרך כלל פותרת זאת.',
+      ),
       actions: [retryButton(model, actions)],
     });
   }
@@ -182,10 +211,10 @@
   function notInstalledView(model, actions) {
     return stateCard({
       iconName: 'library_24_regular',
-      title: 'בר אילן לא נמצא במחשב',
-      text:
-        'התוסף עובד עם תוכנת פרויקט השו"ת של בר אילן, ולא מצא אותה במחשב ' +
-        'הזה. אחרי שתותקן, המסך יתעדכן מעצמו.',
+      title: t('בר אילן לא נמצא במחשב'),
+      text: t(
+        'התוסף עובד עם תוכנת פרויקט השו"ת של בר אילן, ולא מצא אותה במחשב הזה. אחרי שתותקן, המסך יתעדכן מעצמו.',
+      ),
       actions: [retryButton(model, actions)],
     });
   }
@@ -194,17 +223,13 @@
     const version = model.status && model.status.version;
     return stateCard({
       iconName: 'library_24_regular',
-      title: 'הכנה חד-פעמית',
+      title: t('הכנה חד-פעמית'),
       text: [
-        'כדי להציג כאן את ספרי בר אילן, התוסף צריך לקרוא פעם אחת את רשימת ' +
-          'הספרים מהתוכנה. זה לוקח כחמש דקות.',
-        'בזמן הזה בר אילן ייפתח ויעבוד לבד. אין צורך לגעת בו, ואפשר להמשיך ' +
-          'לעבוד באוצריא.',
+        t('כדי להציג כאן את ספרי בר אילן, התוסף צריך לקרוא פעם אחת את רשימת הספרים מהתוכנה. זה לוקח כחמש דקות.'),
+        t('בזמן הזה בר אילן ייפתח ויעבוד לבד. אל תלחצו בו ואל תסגרו אותו עד הסיום; אפשר להמשיך לעבוד באוצריא.'),
       ],
-      actions: [
-        button('filled', 'התחלה', actions.startBuild, { key: 'start-build' }),
-      ],
-      footnote: version ? 'נמצא במחשב: פרויקט השו"ת, מהדורה ' + version + '.' : null,
+      actions: [button('filled', t('התחלה'), actions.startBuild, { key: 'start-build' })],
+      footnote: version ? t('נמצא במחשב: פרויקט השו"ת, מהדורה {version}.', { version }) : null,
     });
   }
 
@@ -212,11 +237,10 @@
     return stateCard({
       iconName: 'warning_24_regular',
       error: true,
-      title: 'קריאת רשימת הספרים לא הושלמה',
-      text: [model.message, 'שום דבר לא נמחק. אפשר לנסות שוב.'],
-      actions: [
-        button('filled', 'ניסיון נוסף', actions.startBuild, { key: 'start-build' }),
-      ],
+      title: t('קריאת רשימת הספרים לא הושלמה'),
+      text: [model.message, t('שום דבר לא נמחק. אפשר לנסות שוב.')],
+      actions: [button('filled', t('ניסיון נוסף'), actions.startBuild, { key: 'start-build' })],
+      code: errorCodeLine(model),
     });
   }
 
@@ -230,7 +254,7 @@
         {
           class: 'progress',
           role: 'progressbar',
-          'aria-label': 'התקדמות קריאת רשימת הספרים',
+          'aria-label': t('התקדמות קריאת רשימת הספרים'),
           'aria-valuemin': '0',
           'aria-valuemax': '100',
           'data-role': 'track',
@@ -276,7 +300,7 @@
       }
     }
     const cancel = container.querySelector('[data-focus-key="cancel-build"]');
-    if (cancel) setBusy(cancel, model.cancelling, 'מבטל…', 'ביטול');
+    if (cancel) setBusy(cancel, model.cancelling, t('מבטל…'), t('ביטול'));
   }
 
   /** מחליף מצב "עסוק" בכפתור קיים בלי לבנות אותו מחדש (והפוקוס נשאר). */
@@ -284,12 +308,18 @@
     const want = String(Boolean(busy));
     if (node.dataset.busy === want) return;
     node.dataset.busy = want;
+    const refocus = !busy && node.dataset.refocus === 'true';
+    if (busy && node.ownerDocument.activeElement === node) node.dataset.refocus = 'true';
     node.disabled = Boolean(busy);
     node.setAttribute('aria-busy', want);
     node.replaceChildren(
       ...(busy ? [el('span', { class: 'spinner', 'aria-hidden': 'true' })] : []),
       busy ? busyLabel : label,
     );
+    if (refocus) {
+      delete node.dataset.refocus;
+      node.focus();
+    }
   }
 
   function buildingView(model, actions) {
@@ -301,14 +331,13 @@
       el(
         'p',
         { class: 'state-text' },
-        'בר אילן פתוח ועובד כרגע לבד. אין צורך לגעת בו. אפשר להמשיך לעבוד ' +
-          'באוצריא, וגם לסגור את הלשונית הזו: הקריאה תמשיך.',
+        t('בר אילן פתוח ועובד כרגע לבד. אל תלחצו בו ואל תסגרו אותו. אפשר להמשיך לעבוד באוצריא, וגם לסגור את הלשונית הזו: הקריאה תמשיך.'),
       ),
       progressBlock(),
       el(
         'div',
         { class: 'state-actions' },
-        button('outlined', 'ביטול', actions.cancelBuild, { key: 'cancel-build' }),
+        button('outlined', t('ביטול'), actions.cancelBuild, { key: 'cancel-build' }),
       ),
     );
     updateProgress(card, model);
@@ -326,10 +355,9 @@
         el(
           'span',
           { class: 'rebuild-banner-text' },
-          'קורא מחדש את רשימת הספרים. בינתיים החיפוש עובד על הרשימה הקיימת, ' +
-            'ופתיחת ספרים תתאפשר בסיום.',
+          t('קורא מחדש את רשימת הספרים. בינתיים החיפוש עובד על הרשימה הקיימת, ופתיחת ספרים תתאפשר בסיום.'),
         ),
-        button('text', 'ביטול', actions.cancelBuild, { key: 'cancel-build' }),
+        button('text', t('ביטול'), actions.cancelBuild, { key: 'cancel-build' }),
       ),
       progressBlock(),
     );
@@ -340,11 +368,13 @@
   // ------------------------------------------------------------- חיפוש
 
   function readyView(model, actions) {
+    const label = t('חיפוש ספר או מחבר בבר אילן');
     const input = el('input', {
       class: 'search-input',
       type: 'search',
-      placeholder: 'חיפוש ספר או מחבר בבר אילן',
-      'aria-label': 'חיפוש ספר או מחבר בבר אילן',
+      dir: 'auto',
+      placeholder: label,
+      'aria-label': label,
       autocomplete: 'off',
       spellcheck: 'false',
       dataset: { focusKey: 'search' },
@@ -363,11 +393,7 @@
     return el(
       'div',
       {},
-      el(
-        'div',
-        { class: 'banner-host' },
-        model.buildActive ? rebuildBanner(model, actions) : null,
-      ),
+      el('div', { class: 'banner-host' }, model.buildActive ? rebuildBanner(model, actions) : null),
       el('div', { class: 'notice-host' }, noticeView(model, actions)),
       el(
         'label',
@@ -381,21 +407,70 @@
           'data-role': 'search-spinner',
         }),
       ),
+      el('div', { class: 'activity-host' }, activityView(model)),
       el('div', { class: 'results-host' }, resultsBlock(model, actions)),
+    );
+  }
+
+  /** "פותח…"/"מחפש…" כשפעולה מהספרייה או מתפריט הלחיצה הימנית הגיעה לדף. */
+  function activityView(model) {
+    const activity = model.activity;
+    if (!activity) return null;
+    const text =
+      activity.kind === 'searching'
+        ? t('מחפש בבר אילן: "{title}"…', { title: activity.title })
+        : t('פותח בבר אילן: "{title}"…', { title: activity.title || t('הספר') });
+    return el(
+      'div',
+      { class: 'activity', role: 'status' },
+      el('span', { class: 'spinner', 'aria-hidden': 'true' }),
+      el('span', { class: 'activity-text' }, text),
     );
   }
 
   /** הערה מעל החיפוש, או `null`. בזמן בנייה מחדש אין מה להמליץ. */
   function noticeView(model, actions) {
     if (model.buildActive) return null;
+    const service = Domain.serviceNotice(model.health);
+    if (service) {
+      return el(
+        'div',
+        { class: 'notice', dataset: { kind: service.kind } },
+        icon('arrow_download_24_regular'),
+        el('span', { class: 'notice-text' }, service.text),
+        button('text', t('הורדת הגרסה החדשה'), actions.download, { key: 'notice-download' }),
+      );
+    }
     const notice = Domain.catalogNotice(model.status);
-    if (!notice) return null;
+    if (!notice) return permissionNotice(model, actions);
     return el(
       'div',
       { class: 'notice', dataset: { kind: notice.kind } },
       icon('warning_24_regular'),
       el('span', { class: 'notice-text' }, notice.text),
-      button('text', 'בנייה מחדש', actions.rebuild, { key: 'notice-rebuild' }),
+      button('text', t('קריאה מחדש'), actions.rebuild, { key: 'notice-rebuild' }),
+    );
+  }
+
+  /**
+   * ההרשאה "הוספת רכיבים לתוכנה" כבויה: בלעדיה אין לחיצה ימנית ואין ספרים
+   * בחיפוש הספרייה, ואוצריא מציעה אותה כבויה. המשתמש יכול לסגור את ההערה.
+   */
+  function permissionNotice(model, actions) {
+    if (!Domain.lacksStartupPermission(model.permissions) || model.settings.startupNotice) {
+      return null;
+    }
+    const text = Domain.hostSupportsLibrary(model.permissions)
+      ? t('"חיפוש בבר אילן" בלחיצה ימנית, וספרי בר אילן בחיפוש הספרייה, דורשים הרשאה אחת שכבויה עכשיו.')
+      : t('"חיפוש בבר אילן" בלחיצה ימנית דורש הרשאה אחת שכבויה עכשיו.');
+    return el(
+      'div',
+      { class: 'notice', dataset: { kind: 'startupPermission' } },
+      icon('info_24_regular'),
+      el('span', { class: 'notice-text' }, text + ' ' + Domain.startupPermissionHint()),
+      button('text', t('לא להציג שוב'), actions.dismissStartupNotice, {
+        key: 'dismiss-startup-notice',
+      }),
     );
   }
 
@@ -408,18 +483,12 @@
         el(
           'p',
           {},
-          'אפשר לחפש לפי שם הספר, שם המחבר, או שניהם יחד. למשל: אבני נזר, ' +
-            'מהרש"א, רא"ש יבמות.',
+          t('אפשר לחפש לפי שם הספר, שם המחבר, או שניהם יחד. למשל: אבני נזר, מהרש"א, רא"ש יבמות.'),
         ),
       );
     }
     if (model.searchError) {
-      return el(
-        'div',
-        { class: 'empty' },
-        icon('warning_24_regular'),
-        el('p', {}, model.searchError),
-      );
+      return el('div', { class: 'empty' }, icon('warning_24_regular'), el('p', {}, model.searchError));
     }
     if (model.results === null) return null;
     if (model.results.length === 0) {
@@ -427,7 +496,7 @@
         'div',
         { class: 'empty' },
         icon('search_info_24_regular'),
-        el('p', {}, 'לא נמצאו ספרים. אפשר לנסות מילה אחרת, או רק חלק מהשם.'),
+        el('p', {}, t('לא נמצאו ספרים. אפשר לנסות מילה אחרת, או רק חלק מהשם.')),
       );
     }
     return el(
@@ -436,17 +505,17 @@
       el('div', { class: 'results-header' }, el('span', {}, Domain.foundLabel(model.total))),
       el(
         'ul',
-        { class: 'results', 'aria-label': 'תוצאות החיפוש' },
+        { class: 'results', 'aria-label': t('תוצאות החיפוש') },
         model.results.map((book) => resultItem(book, model, actions)),
       ),
       model.results.length < model.total
         ? el(
             'div',
             { class: 'load-more' },
-            button('text', 'עוד תוצאות', actions.loadMore, {
+            button('text', t('עוד תוצאות'), actions.loadMore, {
               key: 'load-more',
               busy: model.loadingMore,
-              busyLabel: 'טוען…',
+              busyLabel: t('טוען…'),
             }),
           )
         : null,
@@ -457,128 +526,56 @@
     const meta = Domain.bookMeta(book);
     const context = Domain.bookContext(book);
     const opening = model.openingKey === book.key;
+    const expanded = model.expandedKey === book.key;
+    const detailsId = 'details-' + book.key;
     return el(
       'li',
-      { class: 'result' },
+      { class: 'result' + (expanded ? ' is-expanded' : '') },
       el(
         'div',
-        { class: 'result-body' },
-        el('h3', { class: 'result-title' }, book.title),
-        meta ? el('div', { class: 'result-meta' }, meta) : null,
-        context ? el('div', { class: 'result-context', title: context }, context) : null,
+        { class: 'result-row' },
+        el(
+          'div',
+          { class: 'result-body' },
+          // שמות מהקטלוג בעברית, גם כשהדף באנגלית: הכיוון לפי הטקסט עצמו.
+          el('h3', { class: 'result-title', dir: 'auto' }, book.title),
+          meta ? el('div', { class: 'result-meta', dir: 'auto' }, meta) : null,
+          context
+            ? el('div', { class: 'result-context', title: context, dir: 'auto' }, context)
+            : null,
+        ),
+        el(
+          'div',
+          { class: 'result-actions' },
+          iconButton('book_information_24_regular', t('פרטי הספר'), () => actions.toggleDetails(book.key), {
+            key: 'details-' + book.key,
+            className: 'details-toggle',
+            expanded,
+            controls: expanded ? detailsId : null,
+          }),
+          button('tonal', t('פתיחה בבר אילן'), () => actions.open(book), {
+            key: 'open-' + book.key,
+            icon: 'open_24_regular',
+            busy: opening,
+            busyLabel: t('פותח…'),
+            // בזמן קריאת הרשימה בר אילן תפוס; השירות היה מחזיר "עסוק".
+            disabled: model.buildActive || (model.openingKey !== null && !opening),
+          }),
+        ),
       ),
-      button('tonal', 'פתיחה בבר אילן', () => actions.open(book), {
-        key: 'open-' + book.key,
-        icon: 'open_24_regular',
-        busy: opening,
-        busyLabel: 'פותח…',
-        // בזמן קריאת הרשימה בר אילן תפוס; השירות היה מחזיר "עסוק".
-        disabled: model.buildActive || (model.openingKey !== null && !opening),
-      }),
+      expanded ? bookDetailsView(book, detailsId) : null,
     );
   }
 
-  // ------------------------------------------------------------- לוח מידע
-
-  function infoPanel(model, actions) {
-    const status = model.status;
-    const catalog = (status && status.catalog) || {};
-    const unknown = 'לא ידוע';
-    const facts = [];
-    const fact = (label, value, options) => {
-      if (!value) return;
-      // נתיב Windows הוא טקסט משמאל לימין; בלי dir הוא נשבר בתוך עברית.
-      const dir = options && options.ltr ? 'ltr' : null;
-      facts.push(el('dt', {}, label), el('dd', { dir }, value));
-    };
-    fact(
-      'בר אילן',
-      !status
-        ? unknown
-        : status.installed
-          ? 'מותקן' + (status.version ? ', מהדורה ' + status.version : '')
-          : 'לא נמצא',
-    );
-    fact('מיקום', status && status.installPath, { ltr: true });
-    fact(
-      'ספרים ברשימה',
-      !status
-        ? unknown
-        : catalog.exists
-          ? Domain.formatCount(catalog.bookCount)
-          : 'עוד לא נקראה',
-    );
-    fact('הרשימה נקראה', Domain.formatBuiltAt(catalog.builtAt));
-    fact('גרסת השירות', model.health && model.health.serverVersion);
-    fact('גרסת התוסף', model.pluginVersion);
-
+  /** הפרטים המלאים שבקטלוג, מתחת לשורה. */
+  function bookDetailsView(book, id) {
     return el(
-      'div',
-      {},
-      el(
-        'div',
-        { class: 'panel-header' },
-        el('h2', { class: 'panel-title', id: 'info-title' }, 'מידע וניהול'),
-        el(
-          'button',
-          {
-            type: 'button',
-            class: 'icon-button',
-            'aria-label': 'סגירה',
-            onclick: actions.closeInfo,
-            dataset: { focusKey: 'close-info' },
-          },
-          icon('dismiss_24_regular'),
-        ),
-      ),
-      el(
-        'section',
-        { class: 'panel-section' },
-        el('h3', { class: 'panel-section-title' }, 'מצב'),
-        el('dl', { class: 'facts' }, facts),
-      ),
-      el(
-        'section',
-        { class: 'panel-section' },
-        el('h3', { class: 'panel-section-title' }, 'רשימת הספרים'),
-        el(
-          'p',
-          { class: 'panel-text' },
-          'אם הותקנה מהדורה חדשה של בר אילן, או שספר מסוים לא נפתח, אפשר ' +
-            'לקרוא מחדש את רשימת הספרים. זה לוקח כחמש דקות, והרשימה הקיימת ' +
-            'נשארת בשימוש עד שהחדשה מוכנה.',
-        ),
-        el(
-          'div',
-          { class: 'panel-actions' },
-          button('tonal', 'בנייה מחדש', actions.rebuild, {
-            key: 'panel-rebuild',
-            disabled:
-              !status ||
-              !status.installed ||
-              model.buildActive ||
-              model.openingKey !== null,
-          }),
-        ),
-      ),
-      el(
-        'section',
-        { class: 'panel-section' },
-        el('h3', { class: 'panel-section-title' }, 'עזרה'),
-        el(
-          'p',
-          { class: 'panel-text' },
-          'מדריך שימוש מלא, ופתרון לבעיות נפוצות, נמצאים באתר התוסף.',
-        ),
-        el(
-          'div',
-          { class: 'panel-actions' },
-          button('text', 'מדריך למשתמש', actions.openGuide, {
-            key: 'guide',
-            icon: 'book_24_regular',
-          }),
-        ),
-      ),
+      'dl',
+      { class: 'result-details', id, 'aria-label': t('פרטי הספר') },
+      Domain.bookDetails(book).map(({ label, value }) => [
+        el('dt', {}, label),
+        el('dd', { dir: 'auto' }, value),
+      ]),
     );
   }
 
@@ -617,14 +614,16 @@
 
   const api = {
     el,
+    button,
+    iconButton,
     setBusy,
     screenView,
     readyView,
     resultsBlock,
     noticeView,
+    activityView,
     rebuildBanner,
     updateProgress,
-    infoPanel,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaUi = api;

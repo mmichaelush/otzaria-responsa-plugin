@@ -1,5 +1,6 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
-// המקומי, לפי `?scenario=...&mode=light|dark&query=...&info=1`. ערכות הצבעים הן
+// המקומי, לפי `?scenario=...&mode=light|dark&query=...&sheet=settings|help&tab=...
+// &lang=en&library=1`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
 (function () {
   'use strict';
@@ -79,7 +80,13 @@
       case '/health':
         return scenario === 'portTaken'
           ? { ok: true, service: 'something-else' }
-          : { ok: true, service: 'otzaria-responsa', apiVersion: scenario === 'serviceOutdated' ? 2 : 1, serverVersion: '0.1.0' };
+          : {
+              ok: true,
+              service: 'otzaria-responsa',
+              apiVersion: scenario === 'serviceOutdated' ? 2 : 1,
+              serverVersion: '0.2.0',
+              capabilities: ['catalog', 'open', 'icon', 'searchText', 'export'],
+            };
       case '/status':
         return status();
       case '/catalog/search':
@@ -111,11 +118,16 @@
   }
 
   const listeners = {};
+  // מסך הפתיחה מוצג רק כשמבקשים (`welcome=1`), כדי שלא יכסה כל מסך אחר.
+  const storage = params.get('welcome') ? {} : { responsa_welcome_seen: true };
   window.Otzaria = {
     call(method, payload) {
       if (method === 'network.fetchStream') return fetchStream(payload);
       console.log('[stub]', method, payload);
-      return Promise.resolve({ success: true, data: true, error: null });
+      let data = true;
+      if (method === 'storage.get') data = Object.hasOwn(storage, payload.key) ? storage[payload.key] : null;
+      if (method === 'storage.set') storage[payload.key] = payload.value;
+      return Promise.resolve({ success: true, data, error: null });
     },
     on(event, callback) {
       (listeners[event] = listeners[event] || []).push(callback);
@@ -125,12 +137,26 @@
 
   window.addEventListener('load', () => {
     const payload = {
-      plugin: { id: 'com.otzaria-responsa', version: '0.1.0' },
-      app: { version: '0.9.97', platform: scenario === 'unsupported' ? 'linux' : 'windows' },
+      plugin: { id: 'com.otzaria-responsa', version: '0.2.0' },
+      app: {
+        version: '0.9.97',
+        platform: scenario === 'unsupported' ? 'linux' : 'windows',
+        language: params.get('lang') || 'he',
+      },
+      connectivity: { isOnline: params.get('offline') ? false : true },
       permissions:
         scenario === 'permissionDenied'
           ? ['app.open_url']
-          : ['network.localhost', 'app.open_url'],
+          : [
+              'network.localhost',
+              'app.open_url',
+              'app.startup_contributions',
+              'app.shortcuts',
+              'reader.context_menu',
+              'navigation.write',
+              'ui.create_shortcut',
+              ...(params.get('library') ? ['library.books.provide'] : []),
+            ],
       theme: {
         mode: dark ? 'dark' : 'light',
         colorScheme: dark ? schemes.dark : schemes.light,
@@ -145,10 +171,23 @@
         if (!input) return;
         input.value = query;
         input.dispatchEvent(new Event('input'));
+        // `details=<key>`: פרטי הספר פתוחים, כמו אחרי לחיצה על הכפתור.
+        const details = params.get('details');
+        if (details) {
+          setTimeout(() => {
+            const toggle = document.querySelector('[data-focus-key="details-' + details + '"]');
+            if (toggle) toggle.click();
+          }, 400);
+        }
       }, 300);
     }
-    if (params.get('info')) {
-      setTimeout(() => document.querySelector('.info-toggle').click(), 400);
+    const sheet = params.get('sheet');
+    if (sheet) {
+      setTimeout(() => {
+        document.querySelector(sheet === 'help' ? '.help-toggle' : '.settings-toggle').click();
+        const tab = params.get('tab');
+        if (tab) setTimeout(() => document.querySelector('[data-tab="' + tab + '"]').click(), 100);
+      }, 400);
     }
   });
 })();
