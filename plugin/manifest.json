@@ -9,12 +9,13 @@
   "stability": "beta",
   "entrypoint": "index.html",
   "icon": "icon/icon.png",
-  "minAppVersion": "0.9.97",
+  "minAppVersion": "0.9.98",
   "sdkVersion": "1.x",
   "permissions": [
     "network.localhost",
     "app.open_url",
     "app.startup_contributions",
+    "library.books.provide",
     "app.run_on_startup",
     "app.shortcuts",
     "reader.context_menu",
@@ -64,6 +65,20 @@
           "id": "responsa-open-panel",
           "label": "פתיחת לשונית בר אילן",
           "command": "responsa.openPanel"
+        }
+      ],
+      "libraryBooks": [
+        {
+          "id": "responsa-books",
+          "provider": "responsa",
+          "title": "בר אילן",
+          "icon": "book_open_medium_search_24_regular",
+          "when": {
+            "storage": {
+              "key": "responsa_library_books",
+              "notEquals": false
+            }
+          }
         }
       ]
     }
