@@ -7,7 +7,8 @@
 1. `README.md`
 2. `docs/ARCHITECTURE.md`: הרכיבים, ההחלטות ולמה.
 3. `docs/PROTOCOL.md`: החוזה בין התוסף לשירות. שינוי בו מחייב עדכון של שני הצדדים, ושל `apiVersion` אם הוא שובר תאימות.
-4. הקובץ הרלוונטי והבדיקות שלו.
+4. `CONTRIBUTING.md`: מפת הקבצים, איפה שמים קוד חדש, פקודות האימות ופרמטרי התצוגה המקדימה.
+5. הקובץ הרלוונטי והבדיקות שלו.
 
 ## כללים
 
@@ -16,8 +17,17 @@
   - **יומן:** רק דרך `logLine`.
   - **Win32 חוסם:** כל קריאה רצה באיזולט, כדי שהשירות ימשיך לענות.
 - **`plugin/`:** גבולות השכבות בטבלה ב-`docs/ARCHITECTURE.md` §2.
-  - טקסט נכנס ל-DOM רק דרך `textContent`.
-  - אין `innerHTML` עם מידע מהשירות.
+  - טקסט נכנס ל-DOM רק דרך `textContent`. אין `innerHTML` בכלל.
+  - **כל טקסט בממשק עובר ב-`t('…')`**, בליטרל אחד (או `N('…')` למחרוזת שמתורגמת מאוחר יותר). מחרוזת חדשה נכנסת גם ל-`i18n/en.js`; `test/i18n.test.js` נכשל על מפתח חסר או יתום. לא שומרים תוצאה של `t()` בזמן טעינה: השפה מתחלפת בזמן ריצה.
+  - **קריאות SDK רק דרך `responsa-runtime.js`** (חוץ מזרמי הרשת ב-`responsa-service.js`). `callSoft` לקריאות שאינן פעולה שהמשתמש ביקש; פעולה שהמשתמש ביקש מסתיימת תמיד בתוצאה או בהודעה.
+  - **מה שקורה בלי מסך** (פתיחה מהספרייה, לחיצה ימנית, קיצור) ב-`responsa-engine.js`, כי הוא רץ גם בלשונית וגם ב-`background.html`.
+  - **מפתח אחסון שמופיע ב-`when` במניפסט** מוגדר ב-`ResponsaSettings.KEYS`; `test/manifest.test.js` בודק שהם תואמים.
+  - **מחלקת CSS חדשה** צריכה עיצוב, ועיצוב צריך שימוש: `test/ui-contract.test.js`. אייקון חדש נוסף ל-`tools/icon/build_icons.py` ונבנה מחדש, לא נערך ידנית.
+  - **יומן:** `this.log.debug/info/warn/error` (`responsa-log.js`), לא `console` ישירות. info ומעלה מועתק ל-console, ואוצריא כותבת אותו ליומן שלה; `debug` נשאר בזיכרון, ולכן הוא לדברים תכופים (כל בקשה לשירות). טקסט שיוצא מהמחשב (העתקה, דיווח) עובר `scrub()`.
+  - **כתובת חיצונית רק ב-`Domain.Links`.** `store` מצביע על `https://otzaria.org/plugins` עד הפרסום הראשון, ואחריו על `https://otzaria.org/plugins/<id>`.
+- **ההבהרה על רישיון בר אילן היא כלל מוצר, לא עיצוב.** כך נקבע בפורום אוצריא (`Domain.Links.forum`): בפתיחה הראשונה מזהירים שהתוסף נועד למי שרכש רישיון כדין. היא ראשונה במסך הפתיחה (`Panels.welcomeDialog`) ומופיעה גם ב"אודות". אין להסיר, לקצר, להזיז למטה או להסתיר אותה מאחורי לחיצה.
+- **שני מסלולי מניפסט:** ב-`main` היעד הוא אוצריא 0.9.97, בלי חיפוש הספרייה. הגרסה עם `library.books.provide` ו-`startup.libraryBooks` (`minAppVersion` 0.9.98) ממתינה ל-PR המארח. הקוד משותף: בלי ההרשאה (`Domain.hostSupportsLibrary`) הממשק מסתיר כל מה שקשור לספרייה, ו-`manifest.test.js` בודק את הספק רק כשהוא מוצהר. לא מוסיפים ל-`main` את ה-API של 0.9.98.
+- **סמל התוסף** (`plugin/icon/icon.png`, `installer/icon.ico`) הוא ציור מקורי מ-`tools/icon/icon.html` (`node tools/icon/build_app_icon.mjs`). **לא מעתיקים מ-`otzaria_icons`:** GPL-3.0, ולמאגר הזה אין רישיון. אייקון הלשונית במניפסט הוא שם של אייקון אוצריא, והמארח מצייר אותו.
 - **גרסה:** `plugin/manifest.json` ו-`HelperService.serverVersion` זהים תמיד.
 - **טקסט בממשק:** שינוי טקסט בממשק או בהודעות השירות מחייב עדכון של טבלת פתרון הבעיות ב-`docs/USER_GUIDE.md`, ושל צילומי המסך (`node tools/preview/screenshots.mjs`, העתקה ל-`docs/images`).
 - **טווח הפורטים (39700–39709):** מוגדר בשני מקומות. `bin/responsa_helper.dart` ו-`responsa-domain.js` משתנים יחד.
@@ -27,8 +37,10 @@
   - `dart format`;
   - `dart analyze --fatal-infos`;
   - `dart test`;
+  - `node --check` לכל קובץ ב-`plugin/js/` וב-`plugin/i18n/`;
   - `node --test plugin/test/*.test.js`;
-  - הוולידטור הרשמי, דרך `installer/build.ps1` או CI.
+  - `node tools/preview/smoke.mjs` (כל מסך בדפדפן אמיתי; נכשל על שגיאת קונסול);
+  - הוולידטור הרשמי: `node build/validator/src/cli.js plugin --app-version 0.9.97 --fail-on-warnings --publish false`, או `installer/build.ps1`.
 
 ## מלכודות Win32 (מבר אילן)
 
@@ -61,6 +73,19 @@
 - **כתיבה ל-stdout/stderr רק אחרי בדיקת `hasStdout`/`_hasStderr`** (`log.dart`). בתוכנת GUI, `try/catch` אינו תופס את הכשל, כי הוא אסינכרוני.
 - **PowerShell 5.1 עם `$ErrorActionPreference='Stop'`:** כל שורת stderr של פקודה חיצונית הופכת לחריגה. סביב פקודות כאלה עוברים ל-`Continue`, ומכריעים לפי `$LASTEXITCODE`.
 - **בדיקה חיה מ-shell מוגבה אינה בדיקה של משתמש רגיל.** מפעילים דרך `explorer.exe`, או בודקים ב-`whoami /groups`.
+- **ה-shell משבש לוכסנים הפוכים ב-heredoc** (`\b`, `\\`, נתיבי Windows ו-RegExp). סקריפט תיקון נכתב לקובץ ומורץ ממנו, לא מודבק לשורת הפקודה.
+
+## מלכודות אוצריא
+
+- **`app.startup_contributions` מוצעת כבויה בחלון ההתקנה** (למרות שהתיעוד אומר "דלוקה"). בלעדיה אין פריט בתפריט, אין קיצורים ואין ספק ספרים. התוסף מזהה זאת (`Domain.lacksStartupPermission`) ומסביר.
+- **לחיצה על פריט תפריט שולחת שני אירועים:** `contextMenu.itemClicked` וגם `reader.context_menu_item_clicked`. מטפלים רק בראשון, אחרת החיפוש רץ פעמיים.
+- **`library.setProviderBooks` ו-`libraryBooks`** קיימים מאוצריא 0.9.98 בלבד. במניפסט עם `minAppVersion` נמוך יותר הוולידטור חוסם; ולכן הם במסלול הנפרד (ראו "שני מסלולי מניפסט").
+- **בלי `app.startup_contributions` אוצריא אינה רושמת את ספק `libraryBooks`,** ו-`library.setProviderBooks` נדחה ב-`error.not_found`. לכן `Engine.syncLibrary` אינו מנסה כשההרשאה כבויה. אחרי כשל הוא ממתין עשר דקות, ושינוי הרשאות (`Engine.setPermissions`) מבטל את ההמתנה.
+- **`I18n.language` הוא getter.** `const { language } = I18n` מקפיא את הערך של רגע הטעינה. קוראים `I18n.language` בכל שימוש.
+- **הכותרת בתפריט הלחיצה הימנית** מגיעה מהמניפסט בעברית. הלשונית מעדכנת אותה בכל מעבר שפה, ומנוע הרקע קורא את השפה מחדש לפני כל אירוע ומעדכן אותה אם השתנתה (`engine.patchContextMenuTitle`).
+- **תצוגה מקדימה:** `tools/preview/build-preview.mjs` משכתב נתיבי `js/`, `css/` ו-`i18n/`. תיקייה חדשה ב-`plugin/` צריכה שורה שם, אחרת הקובץ לא נטען בתצוגה ואין שגיאה.
+  - **פרמטרים של `stub.js`:** `scenario`, `mode=dark`, `lang=en`, `library=1`, `query`, `sheet`, `tab`, `welcome=1`, `details=<key>`, `offline=1`. בלי `welcome=1` מסך הפתיחה מסומן כ"כבר הוצג". פירוט ב-`CONTRIBUTING.md`.
+  - **`smoke.mjs` מתעלם משורות `[responsa] …`:** היומן רושם כשלים צפויים בכוונה (שירות שלא עונה הוא תרחיש). רק `[responsa] event … failed` נחשב שגיאה.
 
 ## בדיקה חיה של הממשק
 
