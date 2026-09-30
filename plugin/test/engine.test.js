@@ -156,8 +156,8 @@ test('חיפוש הספרייה: נשלח לאוצריא רק כשהמארח ת�
   const sent = runtime.calls.find((c) => c.method === 'library.setProviderBooks').payload;
   assert.equal(sent.provider, 'responsa');
   assert.deepEqual(sent.books, [
-    { id: 7008, title: 'אבני נזר', author: 'רבי אברהם בורנשטיין', category: 'בר אילן › שו"ת' },
-    { id: 31, title: 'חידושי אגדות', category: 'בר אילן › מפרשים ופוסקים על הבבלי › מהרש"א' },
+    { id: 7008, title: 'אבני נזר', author: 'רבי אברהם בורנשטיין', categoryPath: '/בר אילן/שו"ת' },
+    { id: 31, title: 'חידושי אגדות', categoryPath: '/בר אילן/מפרשים ופוסקים על הבבלי/מהרש"א' },
   ]);
   const marker = runtime.calls.find((c) => c.method === 'storage.set').payload;
   assert.deepEqual(marker, {

@@ -84,7 +84,7 @@
               ok: true,
               service: 'otzaria-responsa',
               apiVersion: scenario === 'serviceOutdated' ? 2 : 1,
-              serverVersion: '0.2.0',
+              serverVersion: '0.2.1',
               capabilities: ['catalog', 'open', 'icon', 'searchText', 'export'],
             };
       case '/status':
@@ -137,7 +137,7 @@
 
   window.addEventListener('load', () => {
     const payload = {
-      plugin: { id: 'com.otzaria-responsa', version: '0.2.0' },
+      plugin: { id: 'com.otzaria-responsa', version: '0.2.1' },
       app: {
         version: '0.9.97',
         platform: scenario === 'unsupported' ? 'linux' : 'windows',

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "com.otzaria-responsa",
   "name": "בר אילן",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "חיפוש ספרי פרויקט השו\"ת של בר אילן המותקן במחשב, לפי שם הספר או המחבר, ופתיחתם בבר אילן. כולל חיפוש טקסט מסומן בבר אילן בלחיצה ימנית.",
   "author": "מיכאלוש",
   "homepage": "https://github.com/mmichaelush/otzaria-responsa-plugin",

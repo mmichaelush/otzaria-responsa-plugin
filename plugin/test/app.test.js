@@ -525,7 +525,7 @@ test('רשימה מוכנה ומארח שתומך: נשלחת לחיפוש הס�
   await app.boot({ ...windows, permissions: ['network.localhost', 'library.books.provide', 'app.startup_contributions'] });
   await until(() => bridge.calls.some((c) => c.method === 'library.setProviderBooks'));
   const sent = bridge.calls.find((c) => c.method === 'library.setProviderBooks').payload;
-  assert.deepEqual(sent.books, [{ id: 7, title: 'אבני נזר', category: 'בר אילן' }]);
+  assert.deepEqual(sent.books, [{ id: 7, title: 'אבני נזר', categoryPath: '/בר אילן' }]);
   app.suspend();
 });
 

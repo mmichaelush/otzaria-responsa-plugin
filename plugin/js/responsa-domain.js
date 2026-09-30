@@ -509,12 +509,13 @@
       if (!Number.isSafeInteger(id) || id <= 0 || typeof title !== 'string' || !title.trim()) {
         continue;
       }
-      const context = contextLabel(contextPath);
+      const segments = typeof contextPath === 'string' ? contextPath.split('/').filter(Boolean) : [];
       const book = {
         id,
         title: title.trim().slice(0, 300),
-        // "בר אילן" בשורת הקטגוריה: כך הכרטיס בספרייה אומר מאיפה הספר.
-        category: ('בר אילן' + (context ? ' › ' + context : '')).slice(0, 300),
+        // נתיב שמתחיל ב"בר אילן": כך הכרטיס בספרייה אומר מאיפה הספר
+        // ("בר אילן, שו"ת"). הנתיב בצורה של library.getTree.
+        categoryPath: ('/' + ['בר אילן', ...segments].join('/')).slice(0, 300),
       };
       if (typeof author === 'string' && author.trim()) book.author = author.trim().slice(0, 200);
       books.push(book);

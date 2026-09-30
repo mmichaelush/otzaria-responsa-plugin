@@ -189,6 +189,9 @@
       'The search is too general for Bar-Ilan. Select a longer or more exact passage and search again.',
     'חלון בר אילן לא עולה לחזית': 'The Bar-Ilan window does not come to the front',
     'בלחיצה ימנית נפתחת לשונית התוסף': 'Right-click search opens the plugin tab',
+    'האם התוסף רץ ברקע כל הזמן?': 'Does the plugin run in the background all the time?',
+    'לא. אוצריא מעירה את התוסף רק כשצריך אותו: בלחיצה ימנית על "חיפוש בבר אילן", בקיצור המקלדת, או בבחירת ספר של בר אילן בספרייה. אחרי שלוש דקות בלי פעילות היא מכבה אותו. מה שפועל תמיד הוא "שירות בר אילן לאוצריא": תהליך קטן (כ-16MB) שממתין לבקשות ואינו צורך מעבד בינתיים.':
+      'No. Otzaria wakes the plugin only when it is needed: a right-click on "חיפוש בבר אילן" (Search in Bar-Ilan), the keyboard shortcut, or choosing a Bar-Ilan book in the library. After three idle minutes Otzaria shuts it down. What always runs is the "Bar-Ilan service for Otzaria": a small process (about 16MB) that waits for requests and uses no CPU meanwhile.',
     'ספרי בר אילן לא מופיעים בחיפוש הספרייה': 'Bar-Ilan books do not appear in library search',
     'בר אילן הופעל "כמנהל" ולא מגיב לתוסף': 'Bar-Ilan runs "as administrator" and ignores the plugin',
     'כש-Windows מריץ את בר אילן בהרשאות מנהל, תוכנות רגילות לא יכולות לשלוט בו. סוגרים אותו ופותחים שוב כרגיל.':

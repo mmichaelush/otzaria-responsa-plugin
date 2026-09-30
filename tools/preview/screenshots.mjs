@@ -1,5 +1,5 @@
 // מצלם כל מסך של התוסף בתצוגה המקדימה, בהיר וכהה, עם Edge או Chrome.
-//   node tools/preview/screenshots.mjs [out-dir]
+//   node tools/preview/screenshots.mjs [out-dir]   (SHOTS=a,b לחלק מהמסכים)
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -64,7 +64,10 @@ const shots = [
   ['wide-results', 'scenario=ready&query=' + encodeURIComponent('מהרש"א'), '1600,900'],
 ];
 
+// SHOTS=help-about,ready-empty מצלם רק את המסכים האלה.
+const only = process.env.SHOTS ? process.env.SHOTS.split(',') : null;
 for (const [name, query, size] of shots) {
+  if (only && !only.includes(name)) continue;
   for (const mode of ['light', 'dark']) {
     const file = join(outDir, `${name}-${mode}.png`);
     const [width, height] = (size || '1000,720').split(',').map(Number);

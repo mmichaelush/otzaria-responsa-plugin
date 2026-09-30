@@ -362,6 +362,16 @@ textarea {
   color: var(--color-on-surface-variant);
 }
 
+/* השדה ב-dir="auto" כדי ששם עברי יוצג נכון גם בממשק באנגלית. שדה ריק
+   מקבל את כיוון הממשק: אחרת הטקסט המנחה והסמן היו נצמדים לשמאל. */
+.search-input:placeholder-shown {
+  direction: rtl;
+}
+
+[dir='ltr'] .search-input:placeholder-shown {
+  direction: ltr;
+}
+
 .search-input::-webkit-search-cancel-button {
   display: none;
 }
@@ -449,8 +459,6 @@ textarea {
 .result-details dd {
   margin: 0;
   overflow-wrap: anywhere;
-  /* ערך עברי בדף אנגלי (dir=auto) צמוד לתווית שלו, ולא לקצה השני של השורה. */
-  text-align: match-parent;
 }
 
 .result-title {
@@ -474,6 +482,15 @@ textarea {
   color: var(--color-on-surface-variant);
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* dir=auto שומר את שלוש הנקודות בסוף הנתיב העברי; היישור הולך לפי הממשק. */
+.result-context {
+  text-align: right;
+}
+
+[dir='ltr'] .result-context {
+  text-align: left;
 }
 
 .load-more {
@@ -1075,6 +1092,31 @@ textarea {
   height: 100%;
 }
 
+/* עזרה ותמיכה במסך מלא (Full-screen dialog של Material 3): הלשונית כולה,
+   והתוכן בעמודה ברוחב קריא באמצע. */
+.help-dialog[data-sheet='help'] {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  transform: translateY(12px);
+}
+
+.help-dialog[data-sheet='help'].is-open {
+  transform: none;
+}
+
+.help-dialog[data-sheet='help'] .tabs {
+  justify-content: center;
+  padding-inline: max(0px, calc((100% - 880px) / 2));
+}
+
+.help-dialog[data-sheet='help'] .dialog-body {
+  padding-inline: max(var(--space-5), calc((100% - 880px) / 2));
+}
+
 .tabs {
   display: flex;
   flex-shrink: 0;
@@ -1124,8 +1166,9 @@ textarea {
 }
 
 .tab:focus-visible {
-  outline: 3px solid var(--color-secondary);
-  outline-offset: -3px;
+  outline: 2px solid var(--color-primary);
+  outline-offset: -4px;
+  border-radius: var(--radius-sm);
 }
 
 @media (max-width: 560px) {
@@ -1141,9 +1184,8 @@ textarea {
   padding: var(--space-4) var(--space-5) var(--space-5);
 }
 
-.dialog-body:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
+.dialog-body:focus {
+  outline: none;
 }
 
 .help-lead {
@@ -1342,14 +1384,11 @@ textarea {
 
 /* ---------- מסך הפתיחה ---------- */
 
-/* הפוקוס עובר לגוף הטקסט בפתיחה (קורא מסך מתחיל מההסבר), בלי מסגרת. */
-.welcome-body:focus {
-  outline: none;
-}
-
+/* הפוקוס עובר לגוף הטקסט בפתיחה (קורא מסך מתחיל מההסבר), בלי מסגרת:
+   זה אזור גלילה ולא פקד, והמסגרת הופיעה בכל פתיחה ראשונה. */
+.welcome-body:focus,
 .welcome-body:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
+  outline: none;
 }
 
 .welcome-features {

@@ -538,8 +538,8 @@
           'div',
           { class: 'result-body' },
           // שמות מהקטלוג בעברית, גם כשהדף באנגלית: הכיוון לפי הטקסט עצמו.
-          el('h3', { class: 'result-title', dir: 'auto' }, book.title),
-          meta ? el('div', { class: 'result-meta', dir: 'auto' }, meta) : null,
+          el('h3', { class: 'result-title' }, el('bdi', {}, book.title)),
+          meta ? el('div', { class: 'result-meta' }, el('bdi', {}, meta)) : null,
           context
             ? el('div', { class: 'result-context', title: context, dir: 'auto' }, context)
             : null,
@@ -574,7 +574,9 @@
       { class: 'result-details', id, 'aria-label': t('פרטי הספר') },
       Domain.bookDetails(book).map(({ label, value }) => [
         el('dt', {}, label),
-        el('dd', { dir: 'auto' }, value),
+        // <bdi> מבודד את כיוון הערך (שם עברי בממשק באנגלית, או מספר בעברית),
+        // והשורה עצמה נשארת מיושרת לצד של התווית.
+        el('dd', {}, el('bdi', {}, value)),
       ]),
     );
   }

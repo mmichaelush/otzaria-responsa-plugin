@@ -208,6 +208,8 @@
       if (wanted !== null) {
         const container = target;
         container.setAttribute('aria-labelledby', SHEET_TITLES[wanted]);
+        // העזרה ממלאת את הלשונית; מסך הפתיחה נשאר דיאלוג במרכז.
+        container.dataset.sheet = wanted;
         const next =
           wanted === 'settings'
             ? Panels.settingsSheet(model, actions)
