@@ -85,7 +85,8 @@ $iscc = @(
   'C:/Program Files/Inno Setup 6/ISCC.exe'
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw 'ISCC.exe לא נמצא. יש להתקין Inno Setup 6.' }
-& $iscc "/DAppVersion=$version" (Join-Path $installer 'OtzariaResponsa.iss')
+# המתקין בודק את גרסת התוסף שבאוצריא מול AppVersion, בתיקייה שנקראת לפי ה-id.
+& $iscc "/DAppVersion=$version" "/DPluginId=$($manifest.id)" (Join-Path $installer 'OtzariaResponsa.iss')
 if ($LASTEXITCODE -ne 0) { throw 'ISCC נכשל' }
 
 $setup = Join-Path $installer "output/OtzariaResponsa-Setup-$version.exe"

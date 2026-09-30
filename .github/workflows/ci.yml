@@ -30,14 +30,17 @@ jobs:
         with:
           node-version: '22'
       - name: Syntax check
-        run: for file in plugin/js/*.js; do node --check "$file"; done
+        run: for file in plugin/js/*.js plugin/i18n/*.js; do node --check "$file"; done
       - name: Unit tests
         run: node --test plugin/test/*.test.js
+      # כל מופע: גם שלב הפרסום בחנות מריץ את הוולידטור.
       - name: app-version matches minAppVersion
         run: |
           want=$(node -p "require('./plugin/manifest.json').minAppVersion")
-          grep -qF "app-version: $want" .github/workflows/ci.yml || {
-            echo "::error::app-version בוולידטור שונה מ-minAppVersion ($want)"; exit 1; }
+          all=$(grep -E '^\s+app-version:' .github/workflows/ci.yml)
+          if [ -z "$all" ] || echo "$all" | grep -vqF "app-version: $want"; then
+            echo "::error::app-version בוולידטור שונה מ-minAppVersion ($want)"; exit 1
+          fi
       # אותן בדיקות שהחנות מריצה, כולל בדיקת העיצוב. `app-version` שווה
       # ל-minAppVersion שבמניפסט; מעלים את שניהם יחד.
       - name: Official validator
@@ -89,3 +92,81 @@ jobs:
             dist/staging/*.otzplugin
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  # אחרי ה-Release ולא לפניו: תקלה בחנות (סיסמה, אתר) לא מעכבת את המתקין.
+  store:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # בשביל צילום המסך בלבד; התוסף עצמו נלקח מה-Release.
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: dist
+      # הוולידטור מפרסם רק מתיקייה, ולכן פורסים את הקובץ שב-Release. כך
+      # החנות מקבלת אותם קבצים בדיוק, ולא בנייה נוספת מהמקור.
+      - name: Unpack the released plugin
+        run: |
+          mkdir -p build/store-plugin
+          unzip -q dist/staging/OtzariaResponsa.otzplugin -d build/store-plugin
+      - name: Store credentials
+        id: creds
+        env:
+          OTZARIA_USER: ${{ secrets.OTZARIA_USER }}
+          OTZARIA_PASSWORD: ${{ secrets.OTZARIA_PASSWORD }}
+        run: |
+          if [ -n "$OTZARIA_USER" ] && [ -n "$OTZARIA_PASSWORD" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::חסרים הסודות OTZARIA_USER / OTZARIA_PASSWORD, ולכן התוסף לא פורסם בחנות."
+          {
+            echo "### חנות אוצריא: לא פורסם"
+            echo
+            echo "חסרים הסודות \`OTZARIA_USER\` ו-\`OTZARIA_PASSWORD\`. מוסיפים אותם ב-Settings ← Secrets and variables ← Actions,"
+            echo "או \`gh secret set OTZARIA_USER -R ${{ github.repository }}\` (וכך גם הסיסמה), ומריצים שוב את ה-job הזה."
+          } >> "$GITHUB_STEP_SUMMARY"
+      # בלי סודות `auto` רק מאמת. OTZARIA_PLUGIN_ID ריק עד הפרסום הראשון, ואז
+      # הוולידטור מזהה את התוסף לפי ה-id שבמניפסט.
+      - name: Publish to the Otzaria store
+        id: store
+        uses: Otzaria/otzaria-plugin-validator@v1
+        with:
+          path: build/store-plugin
+          app-version: 0.9.97
+          fail-on-warnings: true
+          publish: auto
+          otzaria-user: ${{ secrets.OTZARIA_USER }}
+          otzaria-password: ${{ secrets.OTZARIA_PASSWORD }}
+          otzaria-plugin-id: ${{ vars.OTZARIA_PLUGIN_ID }}
+          # נדרש רק ביצירת התוסף בחנות (הפרסום הראשון).
+          screenshots: docs/images/plugin-search.png
+      - name: Store result
+        if: always() && steps.creds.outputs.configured == 'true'
+        env:
+          OUTCOME: ${{ steps.store.outcome }}
+          PUBLISHED: ${{ steps.store.outputs.published }}
+          PENDING: ${{ steps.store.outputs.pending-approval }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          {
+            echo "### חנות אוצריא"
+            echo
+            if [ "$OUTCOME" != "success" ]; then
+              echo "הפרסום נכשל. הסיבה בלוג של השלב \"Publish to the Otzaria store\". ה-Release עצמו כבר פורסם."
+            elif [ "$PENDING" = "true" ]; then
+              echo "$VERSION נשלח וממתין לאישור מנהל (פרסום ראשון). מזהה התוסף בחנות מופיע בלוג (\"מזהה התוסף החדש בחנות\");"
+              echo "הגדירו אותו כמשתנה המאגר \`OTZARIA_PLUGIN_ID\`."
+            elif [ "$PUBLISHED" = "true" ]; then
+              echo "$VERSION עלה לחנות."
+            else
+              echo "לא פורסם: הגרסה $VERSION כבר קיימת בחנות."
+            fi
+            echo
+            echo "\`published=$PUBLISHED\` · \`pending-approval=$PENDING\`"
+          } >> "$GITHUB_STEP_SUMMARY"
