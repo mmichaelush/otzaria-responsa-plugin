@@ -60,6 +60,12 @@ const shots = [
   ['browse-books', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי/מהרש"א')],
   ['browse-search', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי') + '&query=' + encodeURIComponent('מהרש"א')],
   ['old-service', 'scenario=ready&oldservice=1&noicons=1'],
+  ['advanced', 'scenario=ready&sheet=advanced&adv=words', '1000,1400'],
+  ['advanced-scope', 'scenario=ready&sheet=advanced&adv=scope', '1000,1500'],
+  ['advanced-manual', 'scenario=ready&sheet=advanced&adv=manual&run=1'],
+  ['advanced-guide', 'scenario=ready&sheet=advanced&adv=words&guide=1'],
+  ['english-advanced', 'scenario=ready&lang=en&sheet=advanced&adv=words', '1000,1400'],
+  ['narrow-advanced', 'scenario=ready&sheet=advanced&adv=words', '380,1200'],
   ['fluent-icons', 'scenario=ready&noicons=1&query=' + encodeURIComponent('מהרש"א')],
   // גדלי מסך: חלון צר (טלפון, או אוצריא בחצי מסך) וחלון רחב.
   ['narrow-browse', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי'), '380,820'],

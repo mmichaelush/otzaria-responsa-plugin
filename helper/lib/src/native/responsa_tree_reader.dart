@@ -42,13 +42,15 @@ class ResponsaTreeReadException implements Exception {
 }
 
 /// המקור היחיד לרשימת הספרים (אין בהתקנה קובץ קריא שמכיל אותה). העץ נטען
-/// עצלנית, ו-`RESPONSA.exe` הוא 32-ביט - ראה [_TreeSession.itemSize32].
+/// עצלנית, ו-`RESPONSA.exe` הוא 32-ביט - ראה [ResponsaTreeSession.itemSize32].
 class ResponsaTreeReader {
   ResponsaTreeReader._();
 
   static const int tvFirst = 0x1100;
   static const int tvmExpand = tvFirst + 2;
+  static const int tvmGetItemRect = tvFirst + 4;
   static const int tvmGetNextItem = tvFirst + 10;
+  static const int tvmEnsureVisible = tvFirst + 20;
   static const int tvmGetItemW = tvFirst + 62;
 
   static const int tvgnRoot = 0x0000;
@@ -72,7 +74,7 @@ class ResponsaTreeReader {
     int progressEvery = 500,
     int maxNodes = 3000000,
   }) {
-    final session = _TreeSession.open(pid, treeHandle);
+    final session = ResponsaTreeSession.open(pid, treeHandle);
     if (session == null) {
       throw const ResponsaTreeReadException(
         'אין גישה לבר אילן, כנראה כי הוא פועל כמנהל מערכת. '
@@ -122,8 +124,10 @@ class ResponsaTreeReader {
   }
 }
 
-/// החוצץ בתהליך היעד מוקצה פעם אחת לסשן: סריקה מלאה קוראת מעל מיליון צמתים.
-class _TreeSession {
+/// גישה ל-TreeView בתהליך של בר אילן. החוצץ בתהליך היעד מוקצה פעם אחת
+/// לסשן: סריקה מלאה קוראת מעל מיליון צמתים. משמש גם את עץ המאגרים של
+/// החיפוש ([ResponsaSearchScope]).
+class ResponsaTreeSession {
   final int treeHandle;
   final HANDLE process;
   final Pointer remoteItem;
@@ -160,10 +164,12 @@ class _TreeSession {
   static const int _offItem = 4;
   static const int _offText = 16;
   static const int _offTextMax = 20;
+  static const int _offImage = 24;
   static const int _offChildren = 32;
   static const int _offParam = 36;
 
   static const int _tvifText = 0x0001;
+  static const int _tvifImage = 0x0002;
   static const int _tvifParam = 0x0004;
   static const int _tvifChildren = 0x0040;
 
@@ -179,14 +185,14 @@ class _TreeSession {
   static const int _memRelease = 0x8000;
   static const int _pageReadWrite = 0x04;
 
-  _TreeSession._({
+  ResponsaTreeSession._({
     required this.treeHandle,
     required this.process,
     required this.remoteItem,
     required this.remoteText,
   });
 
-  static _TreeSession? open(int pid, int treeHandle) {
+  static ResponsaTreeSession? open(int pid, int treeHandle) {
     final process = OpenProcess(
       PROCESS_ACCESS_RIGHTS(
         _processVmOperation |
@@ -218,7 +224,7 @@ class _TreeSession {
       CloseHandle(process);
       return null;
     }
-    return _TreeSession._(
+    return ResponsaTreeSession._(
       treeHandle: treeHandle,
       process: process,
       remoteItem: remoteItem,
@@ -274,14 +280,42 @@ class _TreeSession {
     }
   }
 
-  ({String name, int param, int children}) readItem(int item) {
+  /// `TVM_ENSUREVISIBLE`: גולל אל [item] ופורש את אבותיו.
+  void ensureVisible(int item) =>
+      _read(ResponsaTreeReader.tvmEnsureVisible, lParam: item);
+
+  /// המלבן של הטקסט של [item], בקואורדינטות הלקוח של העץ (בעץ מימין
+  /// לשמאל — הלוגיות, כמו בהודעות העכבר). `null` כשהפריט אינו מוצג.
+  ({int left, int top, int right, int bottom})? itemRect(int item) {
+    final local = calloc<Uint32>(4);
+    final read = calloc<IntPtr>();
+    try {
+      // `TVM_GETITEMRECT` קורא את הפריט מתחילת המלבן עצמו.
+      local[0] = item;
+      WriteProcessMemory(process, remoteItem, local, 16, read);
+      final ok = _read(
+        ResponsaTreeReader.tvmGetItemRect,
+        wParam: 1,
+        lParam: remoteItem.address,
+      );
+      if (ok == 0) return null;
+      ReadProcessMemory(process, remoteItem, local, 16, read);
+      final view = local.cast<Int32>();
+      return (left: view[0], top: view[1], right: view[2], bottom: view[3]);
+    } finally {
+      calloc.free(local);
+      calloc.free(read);
+    }
+  }
+
+  ({String name, int param, int children, int image}) readItem(int item) {
     // בונים `TVITEMW` בפריסת 32-ביט ומעתיקים אותו לזיכרון היעד.
     final local = calloc<Uint8>(itemSize32);
     try {
       final bytes = local.asTypedList(itemSize32).buffer.asByteData();
       bytes.setUint32(
         _offMask,
-        _tvifText | _tvifParam | _tvifChildren,
+        _tvifText | _tvifParam | _tvifChildren | _tvifImage,
         Endian.little,
       );
       bytes.setUint32(_offItem, item, Endian.little);
@@ -300,7 +334,7 @@ class _TreeSession {
         lParam: remoteItem.address,
         timeoutMs: 8000,
       );
-      if (ok == 0) return (name: '', param: 0, children: 0);
+      if (ok == 0) return (name: '', param: 0, children: 0, image: -1);
 
       final readBack = calloc<Uint8>(itemSize32);
       final textBuffer = calloc<Uint16>(_textChars);
@@ -319,6 +353,7 @@ class _TreeSession {
           name: _utf16At(textBuffer, _textChars),
           param: view.getUint32(_offParam, Endian.little),
           children: view.getInt32(_offChildren, Endian.little),
+          image: view.getInt32(_offImage, Endian.little),
         );
       } finally {
         calloc.free(readBack);
@@ -339,7 +374,7 @@ class _TreeSession {
 
 /// מצב סריקה אחת: הצמתים שנאספו והקולבקים.
 class _Walk {
-  final _TreeSession session;
+  final ResponsaTreeSession session;
   final void Function(int)? onProgress;
   final bool Function()? shouldStop;
   final int progressEvery;

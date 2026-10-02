@@ -49,9 +49,9 @@ class ResponsaQuery {
     '\u05F2': 'יי',
   };
 
-  /// `null` כשלא נשארה אף מילה עברית.
-  static ResponsaQuery? parse(String? input) {
-    if (input == null || input.isEmpty) return null;
+  /// בלי ניקוד, טעמים ותווים בלתי-נראים, ועם גרש וגרשיים פשוטים: כך בר אילן
+  /// מחפש. משותף לשאילתה מטקסט מסומן ולשאילתה המתקדמת.
+  static String normalize(String input) {
     var value = input
         .replaceAll(_invisible, '')
         .replaceAll(_hebrewSeparators, ' ')
@@ -60,6 +60,13 @@ class ResponsaQuery {
     for (final entry in _replacements.entries) {
       value = value.replaceAll(entry.key, entry.value);
     }
+    return value;
+  }
+
+  /// `null` כשלא נשארה אף מילה עברית.
+  static ResponsaQuery? parse(String? input) {
+    if (input == null || input.isEmpty) return null;
+    final value = normalize(input);
 
     final words = [
       for (final match in _word.allMatches(value))

@@ -11,6 +11,7 @@ function loadPlugin() {
   globalThis.ResponsaI18n = require(js('responsa-i18n.js'));
   require(plugin('i18n', 'en.js'));
   globalThis.ResponsaDomain = require(js('responsa-domain.js'));
+  globalThis.ResponsaAdvanced = require(js('responsa-advanced.js'));
   globalThis.ResponsaTheme = require(js('responsa-theme.js'));
   globalThis.ResponsaLog = require(js('responsa-log.js'));
   // היומן המשותף לא כותב ל-console בבדיקות; הבדיקות קוראות אותו ישירות.
@@ -26,6 +27,7 @@ function loadPlugin() {
   return {
     I18n: globalThis.ResponsaI18n,
     Domain: globalThis.ResponsaDomain,
+    Advanced: globalThis.ResponsaAdvanced,
     Log: globalThis.ResponsaLog,
     Runtime: globalThis.ResponsaRuntime,
     Settings: globalThis.ResponsaSettings,

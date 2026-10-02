@@ -128,6 +128,19 @@
       return this.request('POST', '/text/search', { q: text }, MAX_STREAM_MS);
     }
 
+    /**
+     * חיפוש מתקדם: [body] מ-`ResponsaAdvanced.toRequest` (`q` בתחביר של בר
+     * אילן, `options`, `scope`). בחירת קטגוריות בבר אילן מאריכה אותו.
+     */
+    advancedSearch(body) {
+      return this.request('POST', '/text/search', body, MAX_STREAM_MS);
+    }
+
+    /** "פתיחת בר אילן": מפעיל אותו אם צריך ומביא אותו לחזית. */
+    showResponsa() {
+      return this.request('POST', '/responsa/show', {}, MAX_STREAM_MS);
+    }
+
     /** כל הרשימה, כשורות `[key, title, author, contextPath]`. */
     exportCatalog() {
       return this.request('GET', '/catalog/export', undefined, 30000);

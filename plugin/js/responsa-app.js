@@ -5,6 +5,7 @@
   'use strict';
 
   const Domain = root.ResponsaDomain;
+  const Advanced = root.ResponsaAdvanced;
   const I18n = root.ResponsaI18n;
   const { ServiceClient } = root.ResponsaService;
   const { applyTheme } = root.ResponsaTheme;
@@ -19,6 +20,9 @@
 
   /** כמה זמן לחכות להקלדה לפני חיפוש. */
   const SEARCH_DEBOUNCE_MS = 250;
+
+  /** החיפוש המתקדם נשמר אחרי הפסקה קצרה בהקלדה, ולא בכל אות. */
+  const ADVANCED_SAVE_MS = 600;
 
   /** בדיקה חוזרת כשמשהו חסר, כדי שהמסך יתעדכן מעצמו אחרי התקנה. */
   const POLL_MS = {
@@ -84,6 +88,20 @@
         browse: { path: '', level: null, loading: false, error: null },
         /** הסמל של בר אילן מההתקנה שבמחשב (data URL), או `null`. */
         responsaIcon: null,
+        /**
+         * דיאלוג החיפוש המתקדם. `query` — ResponsaAdvanced; `picker` — הרמה
+         * בעץ שבבורר התחום; `problem` — מה שהבדיקה מצאה אחרי ניסיון חיפוש;
+         * `status` — התשובה של בר אילן או הכשל.
+         */
+        advanced: {
+          query: Advanced.emptyQuery(),
+          picker: { path: '', level: null, loading: false, error: null },
+          running: false,
+          problem: null,
+          status: null,
+        },
+        /** "פתיחת בר אילן" רצה. */
+        showing: false,
         /** בנייה רצה, בכל מסך. */
         buildActive: false,
         progress: null,
@@ -109,6 +127,8 @@
       this.suspended = false;
       this.logRender = null;
       this.browseSeq = 0;
+      this.pickerSeq = 0;
+      this.advancedSaveTimer = null;
       /** הרשימה שהעץ המוצג נבנה ממנה: רשימה שנקראה מחדש בונה אותו מחדש. */
       this.browseCatalog = null;
       /** אייקוני אוצריא והסמל של בר אילן: לכל גרסת שירות, עד שלושה ניסיונות. */
@@ -148,6 +168,7 @@
       if (Array.isArray(info.permissions)) this._setPermissions(info.permissions);
       this.model.settings = await this.settings.load();
       this.model.browse = { ...this.model.browse, path: this.model.settings.browsePath };
+      this.model.advanced.query = Advanced.normalize(this.model.settings.advancedQuery || Advanced.emptyQuery());
       this._applyLanguage({ boot: true });
       this.log.info(
         'הפעלה: תוסף ' + this.model.pluginVersion + ', אוצריא ' + this.model.appVersion +
@@ -604,6 +625,234 @@
       this.view.update(this.model, this.actions);
     }
 
+    // ---------------------------------------------------- חיפוש מתקדם
+
+    openAdvanced() {
+      this.view.rememberFocus();
+      this.openSheet('advanced');
+      this._ensurePicker();
+    }
+
+    /** בורר התחום צריך רמה בעץ כשבוחרים "קטגוריות וספרים שאבחר". */
+    _ensurePicker() {
+      const state = this.model.advanced;
+      if (state.query.scope.mode !== Advanced.Scope.pick) return;
+      if (state.picker.level || state.picker.loading) return;
+      if (!Domain.serviceCan(this.model.health, 'browse')) return;
+      this.advancedBrowse(state.picker.path);
+    }
+
+    /** [focus] — המשתמש עבר רמה בבורר: הפוקוס לשורת הנתיב, כי הכפתור שנלחץ נעלם. */
+    async advancedBrowse(path, options) {
+      const focus = Boolean(options && options.focus);
+      const state = this.model.advanced;
+      const seq = ++this.pickerSeq;
+      state.picker = { ...state.picker, path: path || '', loading: true, error: null };
+      this._renderSheet();
+      try {
+        const level = await this.service.browse(path || '');
+        if (seq !== this.pickerSeq) return;
+        state.picker = { path: level.path || '', level, loading: false, error: null };
+      } catch (error) {
+        if (seq !== this.pickerSeq) return;
+        // הקטגוריה נעלמה (הרשימה נקראה מחדש): חוזרים לשורש.
+        if (error.code === 'notFound' && path) {
+          this.advancedBrowse('', options);
+          return;
+        }
+        state.picker = { ...state.picker, loading: false, error: Domain.errorMessage(error) };
+      }
+      this._renderSheet();
+      if (focus) this.view.focusInSheet('adv-crumb-' + state.picker.path);
+    }
+
+    /**
+     * כל שינוי בחיפוש: נשמר באיחור קצר ומצויר. [light] — הקלדה: רק התצוגה
+     * המקדימה מתעדכנת, כדי שהשדה לא ייבנה מחדש באמצע מילה.
+     */
+    _editAdvanced(query, options) {
+      const state = this.model.advanced;
+      state.query = query;
+      state.status = null;
+      // אחרי ניסיון שנכשל, ההערה מתעדכנת תוך כדי תיקון.
+      if (state.problem) state.problem = Advanced.validate(query);
+      this._saveAdvancedSoon();
+      if (options && options.light) this.view.updateAdvanced(this.model);
+      else this._renderSheet();
+    }
+
+    _saveAdvancedSoon() {
+      clearTimeout(this.advancedSaveTimer);
+      this.advancedSaveTimer = setTimeout(() => {
+        this.advancedSaveTimer = null;
+        this.settings.set('advancedQuery', this.model.advanced.query).then(
+          (values) => {
+            this.model.settings = values;
+          },
+          (error) => this.log.warn('שמירת החיפוש המתקדם נכשלה', error),
+        );
+      }, ADVANCED_SAVE_MS);
+    }
+
+    advancedSet(patch, options) {
+      const query = this.model.advanced.query;
+      const next = { ...query, ...patch };
+      // מעבר ראשון לכתיבה חופשית מתחיל מהשאילתה שבבונה.
+      if (patch.manual === true && !query.manual && patch.manualText === undefined && !query.manualText.trim()) {
+        next.manualText = Advanced.buildQuery(query);
+      }
+      this._editAdvanced(Advanced.normalize(next), options);
+    }
+
+    advancedWord(index, alternative, value) {
+      this._editAdvanced(Advanced.setWord(this.model.advanced.query, index, alternative, value), { light: true });
+    }
+
+    advancedTerm(index, patch) {
+      this._editAdvanced(Advanced.updateTerm(this.model.advanced.query, index, patch));
+    }
+
+    advancedAddTerm() {
+      const query = Advanced.addTerm(this.model.advanced.query);
+      this._editAdvanced(query);
+      this.view.focusInSheet('adv-word-' + (query.terms.length - 1) + '-0');
+    }
+
+    advancedRemoveTerm(index) {
+      this._editAdvanced(Advanced.removeTerm(this.model.advanced.query, index));
+      this.view.focusInSheet('adv-word-' + Math.max(0, index - 1) + '-0');
+    }
+
+    advancedAddAlternative(index) {
+      const query = Advanced.addAlternative(this.model.advanced.query, index);
+      this._editAdvanced(query);
+      this.view.focusInSheet('adv-word-' + index + '-' + (query.terms[index].words.length - 1));
+    }
+
+    advancedRemoveAlternative(index, alternative) {
+      this._editAdvanced(Advanced.removeAlternative(this.model.advanced.query, index, alternative));
+      this.view.focusInSheet('adv-word-' + index + '-' + Math.max(0, alternative - 1));
+    }
+
+    advancedGap(index, patch) {
+      this._editAdvanced(Advanced.updateGap(this.model.advanced.query, index, patch));
+    }
+
+    advancedScopeMode(mode) {
+      const query = this.model.advanced.query;
+      this._editAdvanced({ ...query, scope: { ...query.scope, mode } });
+      this._ensurePicker();
+    }
+
+    advancedToggleScope(item) {
+      const query = this.model.advanced.query;
+      const next = Advanced.toggleScopeItem(query, item);
+      if (next === query) {
+        this.model.advanced.status = {
+          kind: 'error',
+          text: t('אפשר לבחור עד {max} קטגוריות וספרים. כדאי לבחור קטגוריה שמעליהם.', {
+            max: Advanced.MAX_SCOPE_ITEMS,
+          }),
+        };
+        this._renderSheet();
+        return;
+      }
+      this._editAdvanced(next);
+    }
+
+    advancedExample(id) {
+      this._editAdvanced(Advanced.applyExample(this.model.advanced.query, id));
+      this.view.focusInSheet('adv-word-0-0');
+    }
+
+    /** "ניקוי": המילים מתאפסות; התחום והאפשרויות נשארים. */
+    advancedClear() {
+      const query = this.model.advanced.query;
+      this.model.advanced.problem = null;
+      this._editAdvanced({ ...Advanced.emptyQuery(), scope: query.scope, options: query.options });
+      this.view.focusInSheet('adv-word-0-0');
+    }
+
+    async runAdvanced() {
+      const state = this.model.advanced;
+      if (state.running || !Domain.serviceCan(this.model.health, 'advancedSearch')) return;
+      const problem = Advanced.validate(state.query);
+      state.problem = problem;
+      if (problem) {
+        state.status = null;
+        this._renderSheet();
+        this.view.focusAdvancedProblem(problem);
+        this.view.announce(problem.message);
+        return;
+      }
+      const body = Advanced.toRequest(state.query);
+      state.running = true;
+      state.status = null;
+      this._renderSheet();
+      this.log.info('חיפוש מתקדם: ' + body.q, {
+        scope: state.query.scope.mode,
+        items: state.query.scope.items.length,
+      });
+      try {
+        const result = await this.service.advancedSearch(body);
+        this.log.info('תוצאת החיפוש המתקדם: ' + (result && result.outcome), { count: result && result.count });
+        state.status = {
+          kind: Domain.searchSucceeded(result) ? 'success' : 'error',
+          text: Domain.searchOutcomeMessage(result),
+        };
+      } catch (error) {
+        state.status = { kind: 'error', text: Domain.errorMessage(error) };
+      } finally {
+        state.running = false;
+        this._renderSheet();
+        if (state.status) this.view.announce(state.status.text);
+      }
+    }
+
+    /** "פתיחת בר אילן", מהמסך הראשי או מהדיאלוג. */
+    async showResponsa() {
+      if (this.model.showing) return;
+      this.model.showing = true;
+      this._renderShowing();
+      const inDialog = () => this.model.sheet === 'advanced';
+      try {
+        const result = await this.service.showResponsa();
+        this.log.info('בר אילן נפתח' + (result && result.broughtToFront ? '' : ' (לא עבר לחזית)'));
+        if (inDialog()) {
+          this.model.advanced.status = {
+            kind: 'success',
+            text:
+              result && result.broughtToFront
+                ? t('בר אילן נפתח.')
+                : t('בר אילן פתוח. אם הוא לא הופיע מעל אוצריא, עוברים אליו בשורת המשימות.'),
+          };
+        }
+      } catch (error) {
+        const text = Domain.errorMessage(error);
+        if (inDialog()) this.model.advanced.status = { kind: 'error', text };
+        else await this.runtime.notify.error(text);
+      } finally {
+        this.model.showing = false;
+        this._renderShowing();
+      }
+    }
+
+    _renderShowing() {
+      this.view.update(this.model, this.actions);
+      this._renderSheet();
+    }
+
+    async copyAdvancedQuery() {
+      const text = Advanced.buildQuery(this.model.advanced.query);
+      if (!text) return;
+      try {
+        await root.navigator.clipboard.writeText(text);
+        await this.runtime.notify.success(t('השאילתה הועתקה.'));
+      } catch (_) {
+        await this.runtime.notify.error(t('ההעתקה לא הצליחה. אפשר לסמן את השאילתה ולהעתיק ידנית.'));
+      }
+    }
+
     // ---------------------------------------------------- הגדרות
 
     openSheet(sheet, helpTab) {
@@ -813,6 +1062,23 @@
         browseTo: (path) => this.browseTo(path),
         searchEverywhere: () => this.searchEverywhere(),
         loadMore: () => this.loadMore(),
+        openAdvanced: () => this.openAdvanced(),
+        advancedBrowse: (path) => this.advancedBrowse(path, { focus: true }),
+        advancedSet: (patch, options) => this.advancedSet(patch, options),
+        advancedWord: (index, alternative, value) => this.advancedWord(index, alternative, value),
+        advancedTerm: (index, patch) => this.advancedTerm(index, patch),
+        advancedAddTerm: () => this.advancedAddTerm(),
+        advancedRemoveTerm: (index) => this.advancedRemoveTerm(index),
+        advancedAddAlternative: (index) => this.advancedAddAlternative(index),
+        advancedRemoveAlternative: (index, alternative) => this.advancedRemoveAlternative(index, alternative),
+        advancedGap: (index, patch) => this.advancedGap(index, patch),
+        advancedScopeMode: (mode) => this.advancedScopeMode(mode),
+        advancedToggleScope: (item) => this.advancedToggleScope(item),
+        advancedExample: (id) => this.advancedExample(id),
+        advancedClear: () => this.advancedClear(),
+        runAdvanced: () => this.runAdvanced(),
+        showResponsa: () => this.showResponsa(),
+        copyAdvancedQuery: () => this.copyAdvancedQuery(),
         open: (book) => this.open(book),
         openSettings: () => this.openSheet('settings'),
         openHelp: (tab) => this.openSheet('help', tab),

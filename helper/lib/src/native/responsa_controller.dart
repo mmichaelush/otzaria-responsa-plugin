@@ -11,6 +11,7 @@ import 'package:responsa_helper/src/native/responsa_instance.dart';
 import 'package:responsa_helper/src/native/responsa_launcher.dart';
 import 'package:responsa_helper/src/native/responsa_profile.dart';
 import 'package:responsa_helper/src/native/responsa_search_automation.dart';
+import 'package:responsa_helper/src/native/responsa_win32.dart';
 
 /// מצב פרויקט השו"ת כפי שאוצריא רואה אותו.
 class ResponsaStatus {
@@ -90,6 +91,23 @@ class ResponsaSearchReport {
     this.message,
     this.outcome,
     this.openedWindows = const [],
+  });
+}
+
+/// "פתיחת בר אילן": החלון הראשי הובא לחזית (מופעל קודם, כשצריך).
+class ResponsaShowReport {
+  final bool ok;
+  final ResponsaFailure? failure;
+  final String? message;
+
+  /// Windows עשוי לסרב להעביר את החזית; אז החלון רק משוחזר מהמזעור.
+  final bool broughtToFront;
+
+  const ResponsaShowReport({
+    required this.ok,
+    this.failure,
+    this.message,
+    this.broughtToFront = false,
   });
 }
 
@@ -211,6 +229,7 @@ class ResponsaController {
   Future<ResponsaSearchReport> searchText(
     String query, {
     String? installPath,
+    ResponsaSearchSetup setup = ResponsaSearchSetup.none,
   }) async {
     if (!Platform.isWindows) {
       return const ResponsaSearchReport(
@@ -240,6 +259,7 @@ class ResponsaController {
         query: query,
         installPath: installPath,
         openedWindows: List.of(_openedWindows),
+        setup: setup,
       );
       final ResponsaSearchReport report;
       try {
@@ -256,6 +276,37 @@ class ResponsaController {
       return report;
     } finally {
       _busy = false;
+    }
+  }
+
+  /// מפעיל את בר אילן (גם כש"הפעלה אוטומטית" כבויה: המשתמש ביקש זאת
+  /// במפורש) ומביא אותו לחזית. אינו נוגע בחלונות שבו, ולכן אינו תופס את
+  /// [_busy]: אפשר להביא לחזית גם בזמן חיפוש.
+  Future<ResponsaShowReport> show({String? installPath}) async {
+    if (!Platform.isWindows) {
+      return const ResponsaShowReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: 'בר אילן נתמך ב-Windows בלבד.',
+      );
+    }
+    if (await _launchFailure(installPath, allowLaunch: true)
+        case final message?) {
+      return ResponsaShowReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: message,
+      );
+    }
+    try {
+      return await Isolate.run(() => _showInIsolate(installPath));
+    } catch (error, stackTrace) {
+      logLine('ResponsaController: isolate failed: $error\n$stackTrace');
+      return ResponsaShowReport(
+        ok: false,
+        failure: ResponsaFailure.unexpected,
+        message: 'הבאת בר אילן לחזית נכשלה באופן בלתי צפוי: $error',
+      );
     }
   }
 
@@ -282,10 +333,13 @@ class ResponsaController {
 
   /// `null` כשהכול תקין; אחרת ההודעה למשתמש. הכשל הוא `responsaNotRunning`
   /// ולא `timeout`, שהיה מציג בטעות "התוכנה אינה מגיבה".
-  Future<String?> _launchFailure(String? installPath) async {
+  Future<String?> _launchFailure(
+    String? installPath, {
+    bool? allowLaunch,
+  }) async {
     final result = await ResponsaLauncher.ensureRunning(
       installPath: installPath,
-      allowLaunch: autoStart,
+      allowLaunch: allowLaunch ?? autoStart,
       timeout: launchTimeout,
     );
     if (result.running) return null;
@@ -374,6 +428,21 @@ class ResponsaController {
     }
   }
 
+  static ResponsaShowReport _showInIsolate(String? installPath) {
+    final (:automation, :message) = _attach(installPath, const []);
+    if (automation == null) {
+      return ResponsaShowReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: message,
+      );
+    }
+    return ResponsaShowReport(
+      ok: true,
+      broughtToFront: ResponsaWin32.bringToFront(automation.mainWindow),
+    );
+  }
+
   static Future<ResponsaSearchReport> _searchInIsolate(
     _SearchRequest request,
   ) async {
@@ -390,9 +459,11 @@ class ResponsaController {
     }
 
     try {
-      final outcome = ResponsaSearchAutomation(
-        automation,
-      ).search(request.query, ResponsaDeadline(searchBudget));
+      final outcome = ResponsaSearchAutomation(automation).search(
+        request.query,
+        ResponsaDeadline(searchBudget),
+        setup: request.setup,
+      );
       return ResponsaSearchReport(
         ok: true,
         outcome: outcome,
@@ -429,10 +500,12 @@ class _SearchRequest {
   final String query;
   final String? installPath;
   final List<String> openedWindows;
+  final ResponsaSearchSetup setup;
 
   const _SearchRequest({
     required this.query,
     this.installPath,
     this.openedWindows = const [],
+    this.setup = ResponsaSearchSetup.none,
   });
 }

@@ -94,6 +94,40 @@ class ResponsaWin32 {
     );
   }
 
+  /// הודעה בלי לחכות לה, לפעולה שעשויה לפתוח מודאל.
+  static void post(int hwnd, int message, {int wParam = 0, int lParam = 0}) {
+    PostMessage(
+      HWND(Pointer.fromAddress(hwnd)),
+      message,
+      WPARAM(wParam),
+      LPARAM(lParam),
+    );
+  }
+
+  /// לחיצה בעכבר בנקודה [x],[y] בקואורדינטות הלקוח של [hwnd], בהודעות
+  /// בלבד: הסמן של המשתמש אינו זז, והחלון יכול להיות מחוץ למסך.
+  static void postMouseClick(int hwnd, int x, int y) {
+    final point = ((y & 0xFFFF) << 16) | (x & 0xFFFF);
+    post(hwnd, wmLButtonDown, wParam: _mkLButton, lParam: point);
+    post(hwnd, wmLButtonUp, lParam: point);
+  }
+
+  static const int wmLButtonDown = 0x0201;
+  static const int wmLButtonUp = 0x0202;
+  static const int _mkLButton = 0x0001;
+
+  static const int bmGetCheck = 0x00F0;
+
+  /// מצב תיבת סימון, או `null` כשהחלון לא ענה.
+  static bool? isChecked(int hwnd) =>
+      switch (send(hwnd, bmGetCheck, timeoutMs: scanTimeoutMs)) {
+        null => null,
+        final state => state == 1,
+      };
+
+  static bool isEnabled(int hwnd) =>
+      IsWindowEnabled(HWND(Pointer.fromAddress(hwnd)));
+
   /// `WM_NULL`: האם התור של החלון מתרוקן עכשיו, כלומר התוכנה אינה באמצע
   /// פעולה חוסמת.
   static bool responds(int hwnd, {int timeoutMs = 500}) =>

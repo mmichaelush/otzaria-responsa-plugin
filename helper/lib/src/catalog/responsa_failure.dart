@@ -7,6 +7,15 @@ enum ResponsaFailure {
   busy,
   citationDialogNotFound,
   searchDialogNotFound,
+
+  /// חלון "המאגרים המשתתפים" לא נפתח, או שהבחירה בו לא הצליחה.
+  databasesDialogNotFound,
+
+  /// קטגוריה או ספר שנבחרו לחיפוש אינם בעץ המאגרים של בר אילן.
+  searchScopeNotFound,
+
+  /// בר אילן דחה את השאילתה ("שגיאה בהגדרת השאילתה"). ההודעה שלו בהודעה.
+  queryInvalid,
   resultsNotCleared,
   referenceNotParsed,
   openedWrongBook,

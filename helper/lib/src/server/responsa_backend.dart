@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:responsa_helper/src/catalog/responsa_icon.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
 import 'package:responsa_helper/src/native/responsa_controller.dart';
+import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 
 /// כל מה שהשירות צריך מבר אילן. מופרד מהשירות כדי שהלוגיקה שלו (חיפוש,
 /// תיאום בנייה, HTTP) תיבדק בלי Windows ובלי התוכנה.
@@ -21,8 +22,16 @@ abstract interface class ResponsaBackend {
     String? installPath,
   });
 
-  /// מפעיל את בר אילן אם צריך. [query] כבר מנוקה (`ResponsaQuery`).
-  Future<ResponsaSearchReport> searchText(String query, {String? installPath});
+  /// מפעיל את בר אילן אם צריך. [query] כבר מנוקה (`ResponsaQuery`, או
+  /// `ResponsaAdvancedQuery` עם [setup] של חיפוש מתקדם).
+  Future<ResponsaSearchReport> searchText(
+    String query, {
+    String? installPath,
+    ResponsaSearchSetup setup = ResponsaSearchSetup.none,
+  });
+
+  /// מפעיל את בר אילן אם צריך ומביא אותו לחזית.
+  Future<ResponsaShowReport> show({String? installPath});
 
   Future<Uint8List?> icon({
     required String? installPath,
@@ -60,7 +69,12 @@ class NativeResponsaBackend implements ResponsaBackend {
   Future<ResponsaSearchReport> searchText(
     String query, {
     String? installPath,
-  }) => _controller.searchText(query, installPath: installPath);
+    ResponsaSearchSetup setup = ResponsaSearchSetup.none,
+  }) => _controller.searchText(query, installPath: installPath, setup: setup);
+
+  @override
+  Future<ResponsaShowReport> show({String? installPath}) =>
+      _controller.show(installPath: installPath);
 
   @override
   Future<Uint8List?> icon({

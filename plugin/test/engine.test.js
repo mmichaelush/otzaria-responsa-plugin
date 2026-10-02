@@ -201,9 +201,12 @@ test('חיפוש הספרייה: שתי בקשות חופפות שולחות פ�
 test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לברירת המחדל', async () => {
   const runtime = fakeRuntime({
     'storage.get': ({ key }) =>
-      ({ responsa_language: 'klingon', responsa_library_books: false, responsa_welcome_seen: 'yes' })[
-        key
-      ] ?? null,
+      ({
+        responsa_language: 'klingon',
+        responsa_library_books: false,
+        responsa_welcome_seen: 'yes',
+        responsa_advanced_query: ['not', 'an', 'object'],
+      })[key] ?? null,
   });
   const store = new Settings.SettingsStore(runtime);
   assert.deepEqual(await store.load(), {
@@ -213,6 +216,7 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
+    advancedQuery: null,
   });
 });
 

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
 import 'package:responsa_helper/src/native/responsa_controller.dart';
+import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/helper_service.dart';
 import 'package:responsa_helper/src/server/http_api.dart';
@@ -88,6 +89,9 @@ void main() {
 
   String? errorCode(Object? json) =>
       ((json as Map)['error'] as Map?)?['code'] as String?;
+
+  String? errorMessage(Object? json) =>
+      ((json as Map)['error'] as Map?)?['message'] as String?;
 
   group('אבטחה', () {
     setUp(() => start());
@@ -408,6 +412,210 @@ void main() {
       expect(errorCode(search.json), 'busy');
       gate.complete(const ResponsaOpenReport(ok: true, usedRef: 'x'));
       expect((await opening).status, 200);
+    });
+  });
+
+  group('חיפוש מתקדם', () {
+    setUp(() => start());
+
+    Future<({int status, Object? json})> advanced(Map<String, Object?> body) =>
+        call('POST', '/text/search', body: {'advanced': true, ...body});
+
+    test('health מכריז על היכולות', () async {
+      final json = (await call('GET', '/health')).json as Map;
+      expect(
+        json['capabilities'],
+        containsAll(['advancedSearch', 'showResponsa']),
+      );
+    });
+
+    test('התחביר עובר כמות שהוא, עם האפשרויות', () async {
+      final result = await advanced({
+        'q': '#!אהרון [1:4] הכהן',
+        'options': {'allDatabases': true, 'abbreviations': false},
+      });
+      expect(result.status, 200);
+      expect(result.json, containsPair('advanced', true));
+      expect((result.json as Map)['query'], '#!אהרון [1:4] הכהן');
+      final setup = backend.searchCalls.single.setup;
+      expect(backend.searchCalls.single.query, '#!אהרון [1:4] הכהן');
+      expect(setup.advanced, isTrue);
+      expect(setup.allDatabases, isTrue);
+      expect(setup.abbreviations, isFalse);
+      expect(setup.showForms, isNull);
+      expect(setup.scope, isNull);
+    });
+
+    test('חיפוש רגיל אינו נוגע בהגדרות של בר אילן', () async {
+      await call(
+        'POST',
+        '/text/search',
+        body: {
+          'q': 'שבת',
+          'options': {'abbreviations': true},
+        },
+      );
+      final setup = backend.searchCalls.single.setup;
+      expect(setup.advanced, isFalse);
+      expect(setup.checks, isEmpty);
+    });
+
+    test(
+      'תחום: קטגוריות וספרים הופכים לנתיבים בעץ, וגוברים על "כל המאגרים"',
+      () async {
+        final result = await advanced({
+          'q': 'שבת',
+          'options': {'allDatabases': true},
+          'scope': {
+            'paths': ['/מפרשים ופוסקים על הבבלי/מהרש"א/'],
+            'books': ['90'],
+          },
+        });
+        expect(result.status, 200);
+        final setup = backend.searchCalls.single.setup;
+        expect(setup.allDatabases, isFalse);
+        expect(setup.scope, [
+          ['מפרשים ופוסקים על הבבלי', 'מהרש"א'],
+          ['שו"ת', 'שו"ת אבני נזר'],
+        ]);
+      },
+    );
+
+    test('תחום שגוי', () async {
+      for (final (scope, code) in [
+        (<String, Object?>{}, 'badRequest'),
+        ({'paths': 'x'}, 'badRequest'),
+        (
+          {
+            'paths': [''],
+          },
+          'badRequest',
+        ),
+        (
+          {
+            'paths': ['אין כזו'],
+          },
+          'notFound',
+        ),
+        (
+          {
+            'books': ['999999'],
+          },
+          'unknownBook',
+        ),
+        (
+          {'paths': List.filled(HelperService.maxScopeItems + 1, 'שו"ת')},
+          'badRequest',
+        ),
+      ]) {
+        final result = await advanced({'q': 'שבת', 'scope': scope});
+        expect(errorCode(result.json), code, reason: '$scope');
+      }
+      expect(backend.searchCalls, isEmpty);
+    });
+
+    test('תחביר שאסור שיגיע לבר אילן: queryInvalid עם הסבר', () async {
+      for (final q in ['(עץ/אילן', 'נר & שבת', 'English']) {
+        final result = await advanced({'q': q});
+        expect(result.status, 400, reason: q);
+        expect(errorCode(result.json), 'queryInvalid', reason: q);
+      }
+      expect(backend.searchCalls, isEmpty);
+    });
+
+    test('בר אילן דחה את השאילתה: ההודעה שלו', () async {
+      backend.onSearch = (_) async => const ResponsaSearchReport(
+        ok: true,
+        outcome: ResponsaSearchOutcome(
+          ResponsaSearchState.invalid,
+          message: 'אין משפחה בשם זה.',
+        ),
+      );
+      final result = await advanced({'q': '<שבט>'});
+      expect(result.status, 400);
+      expect(errorCode(result.json), 'queryInvalid');
+      expect(errorMessage(result.json), contains('אין משפחה בשם זה.'));
+    });
+
+    test('ניהול הצורות: הודעה מה לעשות בבר אילן', () async {
+      backend.onSearch = (_) async => const ResponsaSearchReport(
+        ok: true,
+        outcome: ResponsaSearchOutcome(ResponsaSearchState.forms),
+      );
+      final result = await advanced({
+        'q': '#נר',
+        'options': {'showForms': true},
+      });
+      expect(result.status, 200);
+      expect((result.json as Map)['outcome'], 'forms');
+      expect((result.json as Map)['message'], contains('ניהול הצורות'));
+    });
+
+    test('קטגוריה שלא נמצאה בעץ המאגרים', () async {
+      backend.onSearch = (_) async => const ResponsaSearchReport(
+        ok: false,
+        failure: ResponsaFailure.searchScopeNotFound,
+        message: 'לא נמצאו בעץ המאגרים של בר אילן: שו"ת',
+      );
+      final result = await advanced({
+        'q': 'שבת',
+        'scope': {
+          'paths': ['שו"ת'],
+        },
+      });
+      expect(result.status, 404);
+      expect(errorCode(result.json), 'scopeNotFound');
+      expect(errorMessage(result.json), contains('שו"ת'));
+    });
+
+    test('options שגוי', () async {
+      for (final body in [
+        {'q': 'שבת', 'advanced': true, 'options': 'x'},
+        {
+          'q': 'שבת',
+          'advanced': true,
+          'options': {'abbreviations': 'yes'},
+        },
+        {'q': 'שבת', 'advanced': 'yes'},
+      ]) {
+        final result = await call('POST', '/text/search', body: body);
+        expect(errorCode(result.json), 'badRequest', reason: '$body');
+      }
+    });
+  });
+
+  group('פתיחת בר אילן', () {
+    setUp(() => start());
+
+    test('מביא לחזית', () async {
+      final result = await call('POST', '/responsa/show', body: {});
+      expect(result.status, 200);
+      expect(result.json, {'ok': true, 'broughtToFront': true});
+      expect(backend.showCalls, 1);
+    });
+
+    test('לא מותקן', () async {
+      backend
+        ..installed = false
+        ..showReport = const ResponsaShowReport(
+          ok: false,
+          failure: ResponsaFailure.responsaNotRunning,
+          message: 'x',
+        );
+      final result = await call('POST', '/responsa/show', body: {});
+      expect(errorCode(result.json), 'notInstalled');
+    });
+
+    test('לא הופעל', () async {
+      backend.showReport = const ResponsaShowReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: 'בר אילן לא עלה',
+      );
+      final result = await call('POST', '/responsa/show', body: {});
+      expect(result.status, 409);
+      expect(errorCode(result.json), 'notRunning');
+      expect(errorMessage(result.json), 'בר אילן לא עלה');
     });
   });
 

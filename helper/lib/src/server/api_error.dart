@@ -48,9 +48,22 @@ class ApiError implements Exception {
       ResponsaFailure.busy => ApiError('busy', 409, message, details),
       ResponsaFailure.citationDialogNotFound ||
       ResponsaFailure.searchDialogNotFound ||
+      ResponsaFailure.databasesDialogNotFound ||
       ResponsaFailure.resultsNotCleared => ApiError(
         'dialogNotFound',
         502,
+        message,
+        details,
+      ),
+      ResponsaFailure.searchScopeNotFound => ApiError(
+        'scopeNotFound',
+        404,
+        message,
+        details,
+      ),
+      ResponsaFailure.queryInvalid => ApiError(
+        'queryInvalid',
+        400,
         message,
         details,
       ),

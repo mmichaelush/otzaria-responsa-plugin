@@ -129,10 +129,20 @@
               ok: true,
               service: 'otzaria-responsa',
               apiVersion: scenario === 'serviceOutdated' ? 2 : 1,
-              serverVersion: '0.3.0',
+              serverVersion: '0.4.0',
               capabilities: params.get('oldservice')
                 ? ['catalog', 'open', 'icon', 'searchText', 'export']
-                : ['catalog', 'open', 'icon', 'searchText', 'export', 'browse', 'otzariaIcons'],
+                : [
+                    'catalog',
+                    'open',
+                    'icon',
+                    'searchText',
+                    'export',
+                    'browse',
+                    'otzariaIcons',
+                    'advancedSearch',
+                    'showResponsa',
+                  ],
             };
       case '/status':
         return status();
@@ -145,7 +155,10 @@
       case '/icon':
         return window.__RESPONSA_APP_ICON__ ? { png: window.__RESPONSA_APP_ICON__ } : null;
       case '/book/open':
+      case '/responsa/show':
         return { ok: true, broughtToFront: true };
+      case '/text/search':
+        return { ok: true, outcome: 'found', count: 191, query: body.q, advanced: body.advanced, broughtToFront: true };
       default:
         return { ok: true };
     }
@@ -180,6 +193,31 @@
   // מסך הפתיחה מוצג רק כשמבקשים (`welcome=1`), כדי שלא יכסה כל מסך אחר.
   const storage = params.get('welcome') ? {} : { responsa_welcome_seen: true };
   if (params.get('browse')) storage.responsa_browse_path = params.get('browse');
+  // `adv=<name>`: חיפוש מתקדם שמור, כמו אחרי עבודה בדיאלוג.
+  const advanced = {
+    words: {
+      terms: [
+        { words: ['קוצץ', 'עוקר', 'משחית'], form: 'exact', exclude: false },
+        { words: ['אילן'], form: 'prefixes', exclude: false },
+        { words: ['פירות'], form: 'spelling', exclude: false },
+      ],
+      gaps: [{ kind: 'after', distance: 3 }, { kind: 'around', distance: 5 }],
+      options: { abbreviations: true, showForms: false },
+    },
+    scope: {
+      terms: [{ words: ['נר'], form: 'exact', exclude: false }, { words: ['שבת'], form: 'exact', exclude: false }],
+      gaps: [{ kind: 'after', distance: 4 }],
+      scope: {
+        mode: 'pick',
+        items: [
+          { type: 'category', path: 'מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי', name: 'אחרונים על הבבלי' },
+          { type: 'book', key: '90', name: 'שו"ת אבני נזר', path: 'ספרי שאלות ותשובות (שו"ת)/ספרי שאלות ותשובות - אחרונים' },
+        ],
+      },
+    },
+    manual: { manual: true, manualText: '8: ($שומר/%מצא) #(אכל/גנב/מכר) *(פקדון/אבידה)*' },
+  }[params.get('adv')];
+  if (advanced) storage.responsa_advanced_query = advanced;
   window.Otzaria = {
     call(method, payload) {
       if (method === 'network.fetchStream') return fetchStream(payload);
@@ -242,7 +280,21 @@
       }, 300);
     }
     const sheet = params.get('sheet');
-    if (sheet) {
+    if (sheet === 'advanced') {
+      setTimeout(() => {
+        document.querySelector('[data-focus-key="open-advanced"]').click();
+        // `run=1`: אחרי "חיפוש בבר אילן", עם התשובה בשורת המצב.
+        if (params.get('run')) setTimeout(() => document.querySelector('[data-focus-key="adv-run"]').click(), 200);
+        if (params.get('guide')) {
+          setTimeout(() => {
+            const guide = document.querySelector('.advanced-guide');
+            guide.open = true;
+            const body = document.querySelector('.advanced-body');
+            body.scrollTop = guide.offsetTop - body.offsetTop - 16;
+          }, 200);
+        }
+      }, 400);
+    } else if (sheet) {
       setTimeout(() => {
         document.querySelector(sheet === 'help' ? '.help-toggle' : '.settings-toggle').click();
         const tab = params.get('tab');

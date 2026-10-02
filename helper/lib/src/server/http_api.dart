@@ -50,6 +50,7 @@ class HttpApi {
       '/catalog/books': _service.books,
       '/book/open': _service.open,
       '/text/search': _service.searchText,
+      '/responsa/show': _service.showResponsa,
     };
   }
 

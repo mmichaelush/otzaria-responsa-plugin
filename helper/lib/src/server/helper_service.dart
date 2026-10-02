@@ -12,6 +12,7 @@ import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
+import 'package:responsa_helper/src/text/responsa_advanced_query.dart';
 import 'package:responsa_helper/src/text/responsa_query.dart';
 
 /// הלוגיקה של השירות, בלי HTTP: כל נקודת קצה ב-docs/PROTOCOL.md היא מתודה
@@ -31,7 +32,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.3.0';
+  static const String serverVersion = '0.4.0';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -41,6 +42,8 @@ class HelperService {
     'export',
     'browse',
     'otzariaIcons',
+    'advancedSearch',
+    'showResponsa',
   ];
 
   static const int maxPageSize = 200;
@@ -48,6 +51,10 @@ class HelperService {
 
   /// בחירה ארוכה נחתכת ב-[ResponsaQuery], ולא נדחית.
   static const int maxSelectionLength = 10000;
+
+  /// קטגוריות וספרים בתחום של חיפוש מתקדם אחד. כל אחד הוא הליכה בעץ
+  /// המאגרים של בר אילן, ותחום רחב יותר נבחר טוב יותר כקטגוריה שמעליהם.
+  static const int maxScopeItems = 40;
 
   final ResponsaBackend _backend;
   final Map<String, String> _environment;
@@ -158,12 +165,14 @@ class HelperService {
     if (value is! String || value.length > 1000) {
       throw const ApiError.badRequest('path חייב להיות נתיב קטגוריה.');
     }
-    return value
-        .split('/')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .join('/');
+    return _normalizePath(value);
   }
+
+  static String _normalizePath(String value) => value
+      .split('/')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .join('/');
 
   Future<Map<String, Object?>> books(Map<String, Object?> body) async {
     final keys = body['keys'];
@@ -314,51 +323,172 @@ class HelperService {
     });
   }
 
-  /// מריץ חיפוש בבר אילן ומשאיר את התשובה שלו על המסך. אינו תלוי בקטלוג.
+  /// מריץ חיפוש בבר אילן ומשאיר את התשובה שלו על המסך. טקסט מסומן אינו
+  /// תלוי בקטלוג. חיפוש מתקדם (`advanced: true`) שולח את התחביר של בר
+  /// אילן כמות שהוא, עם `options` ו-`scope` (docs/PROTOCOL.md); התחום
+  /// נשען על הקטלוג כדי למצוא את הקטגוריות בעץ המאגרים.
   Future<Map<String, Object?>> searchText(Map<String, Object?> body) async {
-    final query = ResponsaQuery.parse(
-      _string(body, 'q', maxLength: maxSelectionLength, truncate: true),
-    );
-    if (query == null) {
-      throw const ApiError.badRequest(
-        'בטקסט שנבחר אין מילים בעברית לחיפוש בבר אילן. יש לסמן מילה או משפט '
-        'בעברית ולנסות שוב.',
+    final advanced = _bool(body, 'advanced') ?? false;
+    final String text;
+    var truncated = false;
+    var setup = ResponsaSearchSetup.none;
+    if (advanced) {
+      try {
+        text = ResponsaAdvancedQuery.parse(
+          _string(body, 'q', maxLength: ResponsaAdvancedQuery.maxLength * 2),
+        ).text;
+      } on FormatException catch (error) {
+        throw ApiError.fromAutomationFailure(
+          ResponsaFailure.queryInvalid,
+          error.message,
+        );
+      }
+      setup = await _searchSetup(body);
+    } else {
+      final query = ResponsaQuery.parse(
+        _string(body, 'q', maxLength: maxSelectionLength, truncate: true),
       );
+      if (query == null) {
+        throw const ApiError.badRequest(
+          'בטקסט שנבחר אין מילים בעברית לחיפוש בבר אילן. יש לסמן מילה או '
+          'משפט בעברית ולנסות שוב.',
+        );
+      }
+      text = query.text;
+      truncated = query.truncated;
     }
     return _exclusive(_Automation.search, () async {
       final report = await _backend.searchText(
-        query.text,
+        text,
         installPath: await store.repository.sourceInstallPath(),
+        setup: setup,
       );
       final outcome = report.outcome;
       if (report.ok &&
           outcome != null &&
           outcome.state != ResponsaSearchState.pending) {
         logLine(
-          'search "${query.text}": ${outcome.state.name}'
+          'search${advanced ? ' (advanced)' : ''} "$text": '
+          '${outcome.state.name}'
           '${outcome.count == null ? '' : ' ${outcome.count}'}'
           '${outcome.broughtToFront ? '' : ' (not brought to front)'}',
         );
+        if (outcome.state == ResponsaSearchState.invalid) {
+          throw ApiError.fromAutomationFailure(
+            ResponsaFailure.queryInvalid,
+            outcome.message == null
+                ? 'בר אילן לא קיבל את השאילתה. יש לבדוק את התחביר.'
+                : 'בר אילן לא קיבל את השאילתה: ${outcome.message}',
+          );
+        }
         return {
           'ok': true,
           'outcome': outcome.state.name,
           'count': ?outcome.count,
           'message': ?_searchMessage(outcome),
-          'query': query.text,
-          'truncated': query.truncated,
+          'query': text,
+          'truncated': truncated,
+          if (advanced) 'advanced': true,
           'broughtToFront': outcome.broughtToFront,
         };
       }
       final failure = report.failure ?? ResponsaFailure.timeout;
-      logLine(
-        'search "${query.text}" failed: ${failure.name} ${report.message}',
-      );
+      logLine('search "$text" failed: ${failure.name} ${report.message}');
       await _rejectIfNotInstalled(failure);
       throw ApiError.fromAutomationFailure(
         failure,
         searchFailureMessage(failure, detail: report.message),
       );
     });
+  }
+
+  /// `options` ו-`scope` של חיפוש מתקדם. תחום גובר על "חיפוש בכל המאגרים",
+  /// שבבר אילן מבטל כל בחירה.
+  Future<ResponsaSearchSetup> _searchSetup(Map<String, Object?> body) async {
+    final options = body['options'];
+    if (options != null && options is! Map) {
+      throw const ApiError.badRequest('options חייב להיות אובייקט.');
+    }
+    bool? option(String name) {
+      final value = (options as Map?)?[name];
+      if (value == null || value is bool) return value as bool?;
+      throw ApiError.badRequest('options.$name חייב להיות true או false.');
+    }
+
+    final scope = await _scope(body['scope']);
+    return ResponsaSearchSetup(
+      advanced: true,
+      allDatabases: scope != null ? false : option('allDatabases'),
+      abbreviations: option('abbreviations'),
+      showForms: option('showForms'),
+      scope: scope,
+    );
+  }
+
+  /// `{paths: [נתיב קטגוריה], books: [key]}` ← נתיבי שמות מהשורש, כפי
+  /// שהם בעץ המאגרים של בר אילן (ספר: הנתיב שלו ואחריו שמו).
+  Future<List<List<String>>?> _scope(Object? value) async {
+    if (value == null) return null;
+    if (value is! Map) {
+      throw const ApiError.badRequest('scope חייב להיות אובייקט.');
+    }
+    final paths = _strings(value['paths'], 'scope.paths');
+    final keys = _strings(value['books'], 'scope.books');
+    if (paths.isEmpty && keys.isEmpty) {
+      throw const ApiError.badRequest(
+        'בתחום החיפוש צריך לבחור לפחות קטגוריה או ספר אחד.',
+      );
+    }
+    if (paths.length + keys.length > maxScopeItems) {
+      throw const ApiError.badRequest(
+        'אפשר לבחור עד $maxScopeItems קטגוריות וספרים לחיפוש אחד.',
+      );
+    }
+    final index = await _requireIndex();
+    final scope = <List<String>>[];
+    for (final raw in paths) {
+      final path = _normalizePath(raw);
+      // השורש הוא "כל הספרים": `options.allDatabases`, לא תחום.
+      if (path.isEmpty) {
+        throw const ApiError.badRequest('נתיב ריק בתחום החיפוש.');
+      }
+      if (!index.browse(path).exists) {
+        throw ApiError(
+          'notFound',
+          404,
+          'הקטגוריה "${path.replaceAll('/', ', ')}" לא נמצאה ברשימת '
+              'הספרים. ייתכן שהרשימה נקראה מחדש.',
+        );
+      }
+      scope.add(path.split('/'));
+    }
+    for (final key in keys) {
+      final book = index.byKey(key);
+      if (book == null) throw const ApiError.unknownBook();
+      scope.add([
+        ...book.contextPath.split('/').where((part) => part.isNotEmpty),
+        book.title,
+      ]);
+    }
+    return scope;
+  }
+
+  /// "פתיחת בר אילן": מפעיל אותו אם צריך ומביא אותו לחזית.
+  Future<Map<String, Object?>> showResponsa(Map<String, Object?> body) async {
+    final report = await _backend.show(
+      installPath: await store.repository.sourceInstallPath(),
+    );
+    if (report.ok) {
+      logLine('show${report.broughtToFront ? '' : ' (not brought to front)'}');
+      return {'ok': true, 'broughtToFront': report.broughtToFront};
+    }
+    final failure = report.failure ?? ResponsaFailure.unexpected;
+    logLine('show failed: ${failure.name} ${report.message}');
+    await _rejectIfNotInstalled(failure);
+    throw ApiError.fromAutomationFailure(
+      failure,
+      report.message ?? 'לא ניתן היה לפתוח את בר אילן.',
+    );
   }
 
   /// הטקסט של בר אילן כשיש; בלעדיו הסבר משלנו, כי "שאל" או "סירב" בלי
@@ -373,7 +503,12 @@ class HelperService {
           outcome.message ??
               'בר אילן לא ביצע את החיפוש, והסיבה מוצגת בחלון שפתח. יש לעבור '
                   'לבר אילן, לקרוא אותה ולשנות את החיפוש.',
-        ResponsaSearchState.found || ResponsaSearchState.pending => null,
+        ResponsaSearchState.forms =>
+          'בר אילן פתח את "ניהול הצורות". בוחרים בו את הצורות שרוצים ולוחצים '
+              '"אישור", ואז יוצגו התוצאות.',
+        ResponsaSearchState.found ||
+        ResponsaSearchState.invalid ||
+        ResponsaSearchState.pending => null,
       };
 
   /// הבקר מבחין בין "אינו מותקן" ל"לא עלה בזמן" רק בהודעה; הקוד נקבע כאן.
@@ -443,7 +578,10 @@ class HelperService {
       ResponsaFailure.busy =>
         detail ?? 'פעולה אחרת בבר אילן כבר מתבצעת. יש להמתין לסיומה.',
       // חיפוש בלבד; כאן רק לשלמות.
-      ResponsaFailure.searchDialogNotFound =>
+      ResponsaFailure.searchDialogNotFound ||
+      ResponsaFailure.databasesDialogNotFound ||
+      ResponsaFailure.searchScopeNotFound ||
+      ResponsaFailure.queryInvalid =>
         detail ?? 'פתיחת $book בבר אילן נכשלה. אפשר לנסות שוב.',
       ResponsaFailure.unexpected =>
         detail ?? 'פתיחת $book בבר אילן נכשלה באופן בלתי צפוי.',
@@ -462,6 +600,15 @@ class HelperService {
     ResponsaFailure.searchDialogNotFound =>
       'בר אילן לא פתח את חלון החיפוש. ייתכן שחלון אחר פתוח בבר אילן '
           'וממתין לתשובה. יש לסגור אותו ולנסות שוב.',
+    ResponsaFailure.databasesDialogNotFound =>
+      'בחירת הקטגוריות בבר אילן ("המאגרים המשתתפים") לא הצליחה. ייתכן '
+          'שחלון אחר פתוח בבר אילן וממתין לתשובה. יש לסגור אותו ולנסות שוב.',
+    // ההודעות של שני אלה נבנות במקום שבו הכשל ידוע (מה לא נמצא, מה בר
+    // אילן השיב), ומגיעות ב-[detail].
+    ResponsaFailure.searchScopeNotFound =>
+      detail ?? 'חלק מהקטגוריות שנבחרו לא נמצאו בבר אילן.',
+    ResponsaFailure.queryInvalid =>
+      detail ?? 'בר אילן לא קיבל את השאילתה. יש לבדוק את התחביר.',
     ResponsaFailure.mdiWindowLimitReached =>
       'בבר אילן פתוחים כבר חלונות רבים והוא מפסיק לפתוח חדשים, ולכן '
           'התוצאות לא הוצגו. יש לסגור בו כמה חלונות ולנסות שוב.',
@@ -496,6 +643,22 @@ class HelperService {
       return value.substring(0, maxLength).trim();
     }
     return value.trim();
+  }
+
+  static bool? _bool(Map<String, Object?> body, String name) {
+    final value = body[name];
+    if (value == null || value is bool) return value as bool?;
+    throw ApiError.badRequest('$name חייב להיות true או false.');
+  }
+
+  /// רשימת מחרוזות (או חסר = ריקה), כל אחת עד 1000 תווים.
+  static List<String> _strings(Object? value, String name) {
+    if (value == null) return const [];
+    if (value is! List ||
+        value.any((item) => item is! String || item.length > 1000)) {
+      throw ApiError.badRequest('$name חייב להיות רשימת מחרוזות.');
+    }
+    return value.cast<String>();
   }
 
   static int _int(

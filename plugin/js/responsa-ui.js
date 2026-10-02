@@ -422,8 +422,29 @@
           'data-role': 'search-spinner',
         }),
       ),
+      el('div', { class: 'tools-host' }, searchTools(model, actions)),
       el('div', { class: 'activity-host' }, activityView(model)),
       el('div', { class: 'results-host' }, resultsBlock(model, actions)),
+    );
+  }
+
+  /** מתחת לתיבת החיפוש: חיפוש מתקדם בטקסט, ופתיחת בר אילן עצמו. */
+  function searchTools(model, actions) {
+    return el(
+      'div',
+      { class: 'search-tools' },
+      button('tonal', t('חיפוש מתקדם בטקסט'), actions.openAdvanced, {
+        icon: 'database_search_24_regular',
+        key: 'open-advanced',
+      }),
+      Domain.serviceCan(model.health, 'showResponsa')
+        ? button('text', t('פתיחת בר אילן'), actions.showResponsa, {
+            icon: 'open_24_regular',
+            key: 'show-responsa',
+            busy: model.showing,
+            busyLabel: t('פותח…'),
+          })
+        : null,
     );
   }
 
@@ -782,6 +803,7 @@
     searchLabel,
     noticeView,
     activityView,
+    searchTools,
     rebuildBanner,
     updateProgress,
   };

@@ -48,6 +48,16 @@ class FakeView {
     this.redraws = (this.redraws || 0) + 1;
     this.renders.push(model.screen);
   }
+  rememberFocus() {}
+  focusInSheet(key) {
+    this.sheetFocus = key;
+  }
+  focusAdvancedProblem(problem) {
+    this.problemFocus = problem;
+  }
+  updateAdvanced() {
+    this.advancedUpdates = (this.advancedUpdates || 0) + 1;
+  }
 }
 
 const health = reply(200, { ok: true, service: 'otzaria-responsa', apiVersion: 1 });
@@ -765,5 +775,143 @@ test('עיון: רשימה שנקראה מחדש בונה את העץ מחדש',
   builtAt = '2026-10-02T10:00:00';
   await app.refresh();
   await until(() => requests(bridge, '/catalog/browse').length === 2);
+  app.suspend();
+});
+
+// ------------------------------------------------------ חיפוש מתקדם
+
+const advancedHealth = reply(200, {
+  ok: true,
+  service: 'otzaria-responsa',
+  apiVersion: 1,
+  capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'advancedSearch', 'showResponsa'],
+});
+
+async function bootAdvanced(routes) {
+  const context = setup(Object.assign({ '/health': advancedHealth, '/status': reply(200, ready) }, routes));
+  await context.app.boot(windows);
+  return context;
+}
+
+test('חיפוש מתקדם: נבנה מהבונה ונשלח עם האפשרויות, והתשובה מוצגת', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 191, query: 'נר [1:4] שבת', advanced: true }),
+  });
+  app.openAdvanced();
+  assert.equal(app.model.sheet, 'advanced');
+  app.advancedWord(0, 0, 'נר');
+  app.advancedAddTerm();
+  assert.equal(view.sheetFocus, 'adv-word-1-0');
+  app.advancedWord(1, 0, 'שבת');
+  app.advancedGap(0, { kind: 'after', distance: 4 });
+  app.advancedSet({ options: { abbreviations: true, showForms: false } });
+  await app.runAdvanced();
+  const sent = requests(bridge, '/text/search')[0].body;
+  assert.deepEqual(sent, {
+    q: 'נר [1:4] שבת',
+    advanced: true,
+    options: { abbreviations: true, showForms: false, allDatabases: true },
+  });
+  assert.equal(app.model.advanced.status.kind, 'success');
+  assert.equal(app.model.advanced.status.text, 'בר אילן מצא 191 תוצאות. הן פתוחות בחלון של בר אילן.');
+  assert.match(view.announced.at(-1), /191/);
+  app.suspend();
+});
+
+test('חיפוש מתקדם: בלי מילה — אין בקשה, ההערה והפוקוס על הבעיה', async () => {
+  const { app, bridge, view } = await bootAdvanced({});
+  app.openAdvanced();
+  await app.runAdvanced();
+  assert.equal(requests(bridge, '/text/search').length, 0);
+  assert.match(app.model.advanced.problem.message, /לפחות מילה אחת/);
+  assert.equal(view.problemFocus, app.model.advanced.problem);
+  // תיקון: ההערה מתעדכנת בהקלדה, בלי לבנות את השדה מחדש.
+  const sheets = view.sheets.length;
+  app.advancedWord(0, 0, 'נר');
+  assert.equal(app.model.advanced.problem, null);
+  assert.equal(view.sheets.length, sheets);
+  assert.ok(view.advancedUpdates >= 1);
+  app.suspend();
+});
+
+test('חיפוש מתקדם: בר אילן דחה את השאילתה — ההודעה שלו', async () => {
+  const { app } = await bootAdvanced({
+    '/text/search': reply(400, {
+      error: { code: 'queryInvalid', message: 'בר אילן לא קיבל את השאילתה: אין משפחה בשם זה.' },
+    }),
+  });
+  app.advancedSet({ manual: true, manualText: '<שבט>' });
+  await app.runAdvanced();
+  assert.equal(app.model.advanced.status.kind, 'error');
+  assert.match(app.model.advanced.status.text, /אין משפחה בשם זה/);
+  assert.equal(app.model.advanced.running, false);
+  app.suspend();
+});
+
+test('חיפוש מתקדם: תחום — הבורר נטען, בחירה נשלחת כנתיבים וספרים', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/catalog/browse': (params) => reply(200, JSON.parse(params.body).path ? innerLevel : rootLevel),
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 8, query: 'נר', advanced: true }),
+  });
+  app.openAdvanced();
+  app.advancedScopeMode('pick');
+  await until(() => app.model.advanced.picker.level !== null);
+  assert.equal(view.sheetFocus, undefined);
+  app.advancedWord(0, 0, 'נר');
+  assert.deepEqual(app.model.advanced.picker.level, rootLevel);
+  app.advancedToggleScope({ type: 'category', path: 'שו"ת', name: 'שו"ת' });
+  await app.advancedBrowse('שו"ת');
+  app.advancedToggleScope({ type: 'book', key: book.key, name: book.title, path: 'שו"ת' });
+  // הספר בתוך קטגוריה שכבר נבחרה: הבחירה שלו מוחלפת בקטגוריה.
+  assert.equal(app.model.advanced.query.scope.items.length, 2);
+  await app.runAdvanced();
+  const sent = requests(bridge, '/text/search')[0].body;
+  assert.deepEqual(sent.scope, { paths: ['שו"ת'], books: [book.key] });
+  assert.equal('allDatabases' in sent.options, false);
+  app.suspend();
+});
+
+test('חיפוש מתקדם: נשמר אחרי הפסקה בהקלדה, ונטען בפתיחה הבאה', async () => {
+  const stored = {};
+  const first = await bootAdvanced({});
+  first.bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
+  first.app.advancedWord(0, 0, 'שבת');
+  first.app.advancedSet({ options: { abbreviations: true, showForms: false } });
+  await until(() => stored.responsa_advanced_query);
+  first.app.suspend();
+
+  const second = setup({ '/health': advancedHealth, '/status': reply(200, ready) });
+  second.bridge.methods['storage.get'] = ({ key }) => stored[key] ?? null;
+  await second.app.boot(windows);
+  assert.deepEqual(second.app.model.advanced.query.terms[0].words, ['שבת']);
+  assert.equal(second.app.model.advanced.query.options.abbreviations, true);
+  second.app.suspend();
+});
+
+test('פתיחת בר אילן: מהדיאלוג — הודעה בו; מהמסך הראשי — כשל כהודעה של אוצריא', async () => {
+  let fail = false;
+  const { app, bridge } = await bootAdvanced({
+    '/responsa/show': () =>
+      fail
+        ? reply(409, { error: { code: 'notRunning', message: 'בר אילן לא עלה' } })
+        : reply(200, { ok: true, broughtToFront: true }),
+  });
+  app.openAdvanced();
+  await app.showResponsa();
+  assert.equal(app.model.showing, false);
+  assert.deepEqual(app.model.advanced.status, { kind: 'success', text: 'בר אילן נפתח.' });
+  app.closeSheet();
+  fail = true;
+  await app.showResponsa();
+  assert.deepEqual(bridge.notifications('ui.showError'), ['בר אילן לא עלה']);
+  app.suspend();
+});
+
+test('חיפוש מתקדם: שירות ישן — אין בקשה', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  app.advancedWord(0, 0, 'נר');
+  await app.runAdvanced();
+  assert.equal(requests(bridge, '/text/search').length, 0);
   app.suspend();
 });

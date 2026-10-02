@@ -189,4 +189,40 @@ void main() {
       );
     });
   });
+
+  group('חיפוש מתקדם', () {
+    test('שגיאה בשאילתה: ההודעה של בר אילן', () {
+      final outcome = classify(const [
+        ResponsaDialogSnapshot(
+          title: 'שגיאה בהגדרת השאילתה',
+          buttons: [(id: 1, text: 'אישור')],
+          message: 'המרחק המקסימלי קטן\nמהמרחק המינימלי.',
+        ),
+      ]);
+      expect(outcome.state, ResponsaSearchState.invalid);
+      expect(outcome.message, 'המרחק המקסימלי קטן מהמרחק המינימלי.');
+    });
+
+    test('ניהול הצורות נפתח: בר אילן ממתין למשתמש', () {
+      final outcome = classify(const [
+        ResponsaDialogSnapshot(title: '  ניהול הצורות'),
+      ]);
+      expect(outcome.state, ResponsaSearchState.forms);
+    });
+
+    test('ההגדרות שלא נקבעו אינן נוגעות בתיבות', () {
+      expect(ResponsaSearchSetup.none.checks, isEmpty);
+      expect(
+        const ResponsaSearchSetup(
+          advanced: true,
+          allDatabases: false,
+          abbreviations: true,
+        ).checks,
+        {
+          ResponsaSearchSetup.allDatabasesId: false,
+          ResponsaSearchSetup.abbreviationsId: true,
+        },
+      );
+    });
+  });
 }

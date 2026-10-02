@@ -18,6 +18,7 @@
     settings: 'settings-title',
     help: 'help-title',
     welcome: 'welcome-title',
+    advanced: 'advanced-title',
   });
   /** אזורים נגללים בתוך לוח, שמקום הגלילה בהם נשמר כשהלוח נבנה מחדש. */
   const SCROLLERS = '.dialog-body, .sheet-body, .log-list';
@@ -27,6 +28,8 @@
     settings: '.sheet-close',
     help: '[role="tab"][aria-selected="true"]',
     welcome: '.welcome-body',
+    // החיפוש המתקדם — ישר לשדה הראשון, כדי להתחיל להקליד.
+    advanced: '[data-focus-key="adv-word-0-0"], .manual-input, .sheet-close',
   });
 
   class View {
@@ -149,6 +152,7 @@
         else if (banner) this._preservingFocus(() => bannerHost.replaceChildren());
       }
       this._replaceIfChanged('.notice-host', Ui.noticeView(model, actions));
+      this._replaceIfChanged('.tools-host', Ui.searchTools(model, actions));
       this._replaceIfChanged('.activity-host', Ui.activityView(model));
     }
 
@@ -241,7 +245,9 @@
             ? Panels.settingsSheet(model, actions)
             : wanted === 'welcome'
               ? Panels.welcomeDialog(model, actions)
-              : Panels.helpDialog(model, actions);
+              : wanted === 'advanced'
+                ? root.ResponsaAdvancedUi.advancedDialog(model, actions)
+                : Panels.helpDialog(model, actions);
         // רענון תקופתי שלא שינה דבר אינו בונה מחדש: אחרת שאלה שנפתחה בפתרון
         // בעיות הייתה נסגרת, והגלילה הייתה חוזרת לראש הלוח.
         const markup = next.outerHTML;
@@ -271,6 +277,54 @@
         this.returnFocus = null;
         if (target) target.focus();
       }
+    }
+
+    /** הכפתור שפותח לוח מתוך הדף: אליו חוזר הפוקוס כשהלוח נסגר. */
+    rememberFocus() {
+      const active = this.doc.activeElement;
+      if (active && active !== this.doc.body) this.returnFocus = active;
+    }
+
+    /** אחרי שהלוח נבנה מחדש: פוקוס לפקד עם [key], כשהוא קיים. */
+    focusInSheet(key) {
+      const container = this.openSheet === 'settings' ? this.sheet : this.dialog;
+      const target = container.querySelector('[data-focus-key="' + CSS.escape(key) + '"]');
+      if (target && !target.disabled) target.focus();
+    }
+
+    /** הבדיקה מצאה בעיה: הפוקוס לשדה שלה, או להודעה. */
+    focusAdvancedProblem(problem) {
+      if (typeof problem.term === 'number') {
+        this.focusInSheet('adv-word-' + problem.term + '-0');
+        return;
+      }
+      const manual = this.dialog.querySelector('.manual-input');
+      if (manual) manual.focus();
+    }
+
+    /**
+     * הקלדה בחיפוש המתקדם: רק התצוגה המקדימה וההערה מתעדכנות, והשדה עצמו
+     * לא נבנה מחדש באמצע מילה.
+     */
+    updateAdvanced(model) {
+      const state = model.advanced;
+      const Advanced = root.ResponsaAdvanced;
+      const text = Advanced.buildQuery(state.query);
+      const preview = this.dialog.querySelector('[data-role="adv-preview"]');
+      if (preview) {
+        preview.textContent = text ? Advanced.displayQuery(text) : t('השאילתה תופיע כאן');
+        preview.classList.toggle('is-empty', !text);
+      }
+      const problem = this.dialog.querySelector('[data-role="adv-problem"]');
+      if (problem) {
+        problem.hidden = !state.problem;
+        problem.textContent = state.problem ? state.problem.message : '';
+      }
+      const status = this.dialog.querySelector('[data-role="adv-status"]');
+      if (status) status.hidden = !state.status;
+      this.dialog.querySelectorAll('.term-card').forEach((card, index) => {
+        card.classList.toggle('is-error', Boolean(state.problem && state.problem.term === index));
+      });
     }
 
     /** מקליד בתיבת הדיווח: רק מצב כפתור השליחה משתנה, לא התיבה. */

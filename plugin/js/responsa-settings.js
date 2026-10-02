@@ -17,6 +17,8 @@
     welcomeSeen: 'responsa_welcome_seen',
     /** הקטגוריה האחרונה בעיון, כדי שהלשונית תיפתח בה שוב. */
     browsePath: 'responsa_browse_path',
+    /** החיפוש המתקדם האחרון (ResponsaAdvanced.normalize בודק אותו בטעינה). */
+    advancedQuery: 'responsa_advanced_query',
   });
 
   const LANGUAGES = Object.freeze(['auto', 'he', 'en']);
@@ -28,6 +30,7 @@
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
+    advancedQuery: null,
   });
 
   /** ערך לא מוכר (או אחסון פגום) חוזר לברירת המחדל ולא מפיל את התוסף. */
@@ -43,6 +46,10 @@
       welcomeSeen: value.welcomeSeen === true,
       browsePath:
         typeof value.browsePath === 'string' && value.browsePath.length <= 1000 ? value.browsePath : '',
+      advancedQuery:
+        value.advancedQuery && typeof value.advancedQuery === 'object' && !Array.isArray(value.advancedQuery)
+          ? value.advancedQuery
+          : null,
     };
   }
 
@@ -62,7 +69,15 @@
           return undefined;
         }
       };
-      const names = ['language', 'libraryBooks', 'contextMenu', 'startupNotice', 'welcomeSeen', 'browsePath'];
+      const names = [
+        'language',
+        'libraryBooks',
+        'contextMenu',
+        'startupNotice',
+        'welcomeSeen',
+        'browsePath',
+        'advancedQuery',
+      ];
       const values = await Promise.all(names.map((name) => read(KEYS[name])));
       this.values = normalize(Object.fromEntries(names.map((name, i) => [name, values[i]])));
       return this.values;

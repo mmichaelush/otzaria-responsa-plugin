@@ -3,6 +3,7 @@ import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_automation.dart';
 import 'package:responsa_helper/src/native/responsa_discovery.dart';
 import 'package:responsa_helper/src/native/responsa_profile.dart';
+import 'package:responsa_helper/src/native/responsa_search_scope.dart';
 import 'package:responsa_helper/src/native/responsa_win32.dart';
 
 /// מה בר אילן עשה עם החיפוש. בכל המצבים חלון התשובה שלו נשאר פתוח: הוא
@@ -16,6 +17,14 @@ enum ResponsaSearchState {
 
   /// בר אילן סירב, למשל כי יש יותר מדי תוצאות.
   refused,
+
+  /// בר אילן דחה את השאילתה ("שגיאה בהגדרת השאילתה"); ההסבר שלו ב-
+  /// [ResponsaSearchOutcome.message]. החלון שלו כבר נסגר.
+  invalid,
+
+  /// נפתח "ניהול הצורות" (המשתמש ביקש אותו): בר אילן ממתין שהמשתמש יבחר
+  /// בו צורות, ורק אז יציג תוצאות.
+  forms,
 
   /// עוד אין תשובה.
   pending,
@@ -59,6 +68,48 @@ class ResponsaSearchOutcome {
   );
 }
 
+/// מה לקבוע בחלון החיפוש לפני החיפוש. `null` = כפי שהמשתמש השאיר בבר אילן.
+/// תיבות הסימון חוזרות אחרי החיפוש למצבן הקודם, כדי שחיפוש רגיל (מטקסט
+/// מסומן) לא ירוץ בהגדרות שנשארו מחיפוש מתקדם. בחירת הקטגוריות נשמרת:
+/// כך היא פועלת גם בבר אילן עצמו.
+class ResponsaSearchSetup {
+  /// מעבר ל"חיפוש מתקדם": רק בו התחביר (`#נר`, `[1:4]`) מתפרש.
+  final bool advanced;
+
+  /// "חיפוש בכל המאגרים".
+  final bool? allDatabases;
+
+  /// "כולל ראשי תיבות".
+  final bool? abbreviations;
+
+  /// "הצג חלון ניהול הצורות".
+  final bool? showForms;
+
+  /// הקטגוריות והספרים לחיפוש, כנתיבי שמות תצוגה מהשורש.
+  final List<List<String>>? scope;
+
+  const ResponsaSearchSetup({
+    this.advanced = false,
+    this.allDatabases,
+    this.abbreviations,
+    this.showForms,
+    this.scope,
+  });
+
+  static const ResponsaSearchSetup none = ResponsaSearchSetup();
+
+  /// מזהי תיבות הסימון בחלון "חיפוש מתקדם" (גרסה 25).
+  static const int allDatabasesId = 1024;
+  static const int showFormsId = 1173;
+  static const int abbreviationsId = 1025;
+
+  Map<int, bool> get checks => {
+    allDatabasesId: ?allDatabases,
+    abbreviationsId: ?abbreviations,
+    showFormsId: ?showForms,
+  };
+}
+
 /// מה שנקרא מדיאלוג עליון נראה, כדי שהסיווג יהיה פונקציה טהורה.
 class ResponsaDialogSnapshot {
   final String title;
@@ -98,7 +149,28 @@ class ResponsaSearchAutomation {
   /// מודאל הסיכום עולה כחצי שנייה אחרי חלון התוצאות.
   static const Duration _summaryGrace = Duration(seconds: 3);
 
-  ResponsaSearchOutcome search(String query, ResponsaDeadline deadline) {
+  /// הכפתור שעובר ל"חיפוש מתקדם", והפקד שקיים רק בו ("תרגום לארמית").
+  static const int _advancedModeButtonId = 1209;
+  static const int _advancedOnlyId = 1065;
+
+  /// "שגיאה בהגדרת השאילתה".
+  static const DialogHints queryErrorHints = DialogHints(
+    role: 'query_error',
+    windowClass: '#32770',
+    titleContains: {'שגיאה', 'Error', 'Erreur'},
+  );
+
+  static const DialogHints formsHints = DialogHints(
+    role: 'forms',
+    windowClass: '#32770',
+    titleContains: {'ניהול הצורות', 'Forms', 'formes'},
+  );
+
+  ResponsaSearchOutcome search(
+    String query,
+    ResponsaDeadline deadline, {
+    ResponsaSearchSetup setup = ResponsaSearchSetup.none,
+  }) {
     final main = _automation.mainWindow;
     // מודאל פתוח משבית את החלון הראשי, ושאלה שנשארה פתוחה חוסמת גם פתיחת
     // ספרים. הסיכום נסגר קודם: הוא מעל כל השאר.
@@ -112,7 +184,42 @@ class ResponsaSearchAutomation {
         : ResponsaWin32.directChildren(client).toSet();
     final atLimit = before.length >= _profile.mdiSoftLimit;
 
-    final dialog = ensureSearchDialog(deadline);
+    var dialog = ensureSearchDialog(deadline);
+    if (setup.advanced) dialog = _ensureAdvanced(dialog, deadline);
+    if (setup.scope case final scope?) {
+      final missing = ResponsaSearchScope(
+        _automation,
+      ).select(dialog.hwnd, scope, deadline);
+      if (missing.isNotEmpty) {
+        throw ResponsaAutomationException(
+          ResponsaFailure.searchScopeNotFound,
+          'לא נמצאו בעץ המאגרים של בר אילן: ${missing.join('; ')}',
+          {'missing': missing},
+        );
+      }
+      // אחרי "אישור" בר אילן עשוי להחזיר חלון חיפוש אחר.
+      dialog = ensureSearchDialog(deadline);
+      if (setup.advanced) dialog = _ensureAdvanced(dialog, deadline);
+    }
+    final restore = _applyChecks(dialog.hwnd, setup.checks);
+    try {
+      return _run(query, dialog, deadline, main, client, before, atLimit);
+    } finally {
+      // חלון החיפוש עשוי להיות מושבת מתחת למודאל התוצאות; לחיצה על תיבת
+      // סימון עדיין מגיעה אליה.
+      _applyChecks(dialog.hwnd, restore);
+    }
+  }
+
+  ResponsaSearchOutcome _run(
+    String query,
+    DiscoveredDialog dialog,
+    ResponsaDeadline deadline,
+    int main,
+    int? client,
+    Set<int> before,
+    bool atLimit,
+  ) {
     final edit = dialog.handle('query_edit')!;
     final button = dialog.handle('run_button')!;
     ResponsaWin32.setWindowText(edit, query);
@@ -149,8 +256,85 @@ class ResponsaSearchAutomation {
     }
 
     if (outcome.window case final title?) _automation.adoptWindow(title);
+    if (outcome.state == ResponsaSearchState.invalid) {
+      // ההודעה עוברת לתוסף; חלון פתוח היה חוסם את החיפוש הבא.
+      _closeQueryErrors();
+      return outcome;
+    }
     // המודאלים שייכים לחלון הראשי ועולים איתו.
     return outcome.withFront(ResponsaWin32.bringToFront(main));
+  }
+
+  /// חלון החיפוש במצב "חיפוש מתקדם". בר אילן זוכר את הסוג האחרון שנבחר,
+  /// וב"חיפוש קל" התחביר היה נקרא כמילים.
+  DiscoveredDialog _ensureAdvanced(
+    DiscoveredDialog dialog,
+    ResponsaDeadline deadline,
+  ) {
+    if (_hasChild(dialog.hwnd, _advancedOnlyId)) return dialog;
+    final button = _childById(dialog.hwnd, _advancedModeButtonId);
+    if (button == null) {
+      throw const ResponsaAutomationException(
+        ResponsaFailure.searchDialogNotFound,
+        'בחלון החיפוש של בר אילן אין מעבר ל"חיפוש מתקדם"',
+      );
+    }
+    ResponsaWin32.postClick(button);
+    final own = deadline.within(ResponsaAutomation.dialogBudget);
+    while (!own.expired) {
+      _automation.pause(ResponsaAutomation.poll, deadline);
+      final found = findSearchDialog();
+      if (found != null && _hasChild(found.hwnd, _advancedOnlyId)) {
+        return found;
+      }
+    }
+    throw const ResponsaAutomationException(
+      ResponsaFailure.searchDialogNotFound,
+      'בר אילן לא עבר ל"חיפוש מתקדם" בזמן',
+    );
+  }
+
+  /// מסמן או מנקה תיבות לפי [wanted], ומחזיר את אלה ששונו עם מצבן הקודם.
+  /// בלחיצה ולא ב-`BM_SETCHECK`: בר אילן קורא את ההגדרה מהלחיצה, ותיבה
+  /// שסומנה בהודעה בלבד אינה משפיעה על החיפוש (נמדד).
+  Map<int, bool> _applyChecks(int dialog, Map<int, bool> wanted) {
+    final changed = <int, bool>{};
+    for (final MapEntry(key: id, value: on) in wanted.entries) {
+      final box = _childById(dialog, id);
+      if (box == null) continue;
+      final current = ResponsaWin32.isChecked(box);
+      if (current == null || current == on) continue;
+      if (ResponsaWin32.click(box, timeoutMs: ResponsaWin32.scanTimeoutMs)) {
+        changed[id] = current;
+      }
+    }
+    return changed;
+  }
+
+  void _closeQueryErrors() {
+    for (final hwnd in _visibleDialogHandles()) {
+      if (!ResponsaDiscovery.titleMatches(
+        ResponsaWin32.windowText(hwnd),
+        queryErrorHints,
+      )) {
+        continue;
+      }
+      for (final child in ResponsaWin32.children(hwnd)) {
+        if (ResponsaWin32.className(child) == 'Button') {
+          ResponsaWin32.postClick(child);
+          break;
+        }
+      }
+    }
+  }
+
+  static bool _hasChild(int dialog, int id) => _childById(dialog, id) != null;
+
+  static int? _childById(int dialog, int id) {
+    for (final child in ResponsaWin32.children(dialog)) {
+      if (ResponsaWin32.controlId(child) == id) return child;
+    }
+    return null;
   }
 
   /// נראה תחילה: זה מצב החיפוש שהמשתמש בחר. מוסתר מתאים גם הוא - לחיצה
@@ -222,7 +406,10 @@ class ResponsaSearchAutomation {
         newMdiTitles: _newMdiTitles(mdiClient, mdiBefore),
       );
       switch (outcome.state) {
-        case ResponsaSearchState.asked || ResponsaSearchState.refused:
+        case ResponsaSearchState.asked ||
+            ResponsaSearchState.refused ||
+            ResponsaSearchState.invalid ||
+            ResponsaSearchState.forms:
           return outcome;
         case ResponsaSearchState.found:
           if (outcome.summaryShown) return outcome;
@@ -280,6 +467,8 @@ class ResponsaSearchAutomation {
       _profile.infoModalHints,
       _profile.searchSummaryHints,
       _profile.searchProgressHints,
+      queryErrorHints,
+      formsHints,
     ];
     return [
       for (final hwnd in _visibleDialogHandles())
@@ -293,6 +482,8 @@ class ResponsaSearchAutomation {
   static ResponsaDialogSnapshot _snapshot(int hwnd, String title) {
     final buttons = <({int id, String text})>[];
     String? message;
+    // בחלון השגיאה ההודעה אינה ב-65535; שם — הטקסט הארוך שבחלון.
+    String? longest;
     for (final child in ResponsaWin32.children(hwnd)) {
       switch (ResponsaWin32.className(child)) {
         case 'Button':
@@ -300,16 +491,19 @@ class ResponsaSearchAutomation {
             id: ResponsaWin32.controlId(child),
             text: ResponsaWin32.windowText(child),
           ));
-        case 'Static' when message == null:
+        case 'Static':
+          final text = ResponsaWin32.windowText(child).trim();
           if (ResponsaWin32.controlId(child) == _messageId) {
-            message = ResponsaWin32.windowText(child);
+            message ??= text;
+          } else if (text.length > (longest?.length ?? 0)) {
+            longest = text;
           }
       }
     }
     return ResponsaDialogSnapshot(
       title: title,
       buttons: buttons,
-      message: message,
+      message: message ?? longest,
     );
   }
 
@@ -362,6 +556,19 @@ class ResponsaSearchAutomation {
         window: window,
         summaryShown: true,
       );
+    }
+
+    for (final dialog in dialogs) {
+      if (ResponsaDiscovery.titleMatches(dialog.title, queryErrorHints)) {
+        final message = dialog.message?.replaceAll(_whitespace, ' ').trim();
+        return ResponsaSearchOutcome(
+          ResponsaSearchState.invalid,
+          message: message == null || message.isEmpty ? null : message,
+        );
+      }
+      if (ResponsaDiscovery.titleMatches(dialog.title, formsHints)) {
+        return const ResponsaSearchOutcome(ResponsaSearchState.forms);
+      }
     }
 
     for (final dialog in dialogs) {

@@ -17,6 +17,7 @@ from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.ttLib import TTFont
 
 ICONS = [
+    'add_24_regular',
     'apps_list_24_regular',
     'arrow_download_24_regular',
     'arrow_sync_24_regular',
@@ -31,6 +32,8 @@ ICONS = [
     'code_24_regular',
     'copy_24_regular',
     'desktop_24_regular',
+    'database_search_24_regular',
+    'delete_24_regular',
     'dismiss_24_regular',
     'dismiss_circle_24_regular',
     'document_bullet_list_24_regular',
@@ -121,6 +124,7 @@ __SHAPES__
   const PREFERRED = Object.freeze({
     document_search_24_regular: 'search_in_the_library_24_regular',
     search_info_24_regular: 'search_not_found_24_regular',
+    database_search_24_regular: 'search_in_the_settings_24_regular',
     text_quote_24_regular: 'search_in_the_text_24_regular',
     library_24_regular: 'bookshelf_24_regular',
     folder_24_regular: 'books_stacked_low_24_regular',

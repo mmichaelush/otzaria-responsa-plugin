@@ -150,7 +150,7 @@ jobs:
             docs/images/plugin-search.png
             docs/images/browse.png
             docs/images/browse-search.png
-            docs/images/book-details.png
+            docs/images/advanced.png
             docs/images/context-menu.png
           update-screenshots: true
           # דיווחי באגים מהמשתמשים נשלחים למייל של חשבון החנות; החנות דורשת

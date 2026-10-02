@@ -19,6 +19,10 @@ const browser = [
 if (!browser) throw new Error('לא נמצא Edge או Chrome');
 
 const scenarios = [
+  'scenario=ready&sheet=advanced&adv=words',
+  'scenario=ready&sheet=advanced&adv=scope',
+  'scenario=ready&sheet=advanced&adv=manual&run=1',
+  'scenario=ready&sheet=advanced&oldservice=1',
   'scenario=serviceMissing',
   'scenario=needsCatalog',
   'scenario=building',

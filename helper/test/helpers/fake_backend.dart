@@ -26,7 +26,15 @@ class FakeBackend implements ResponsaBackend {
 
   /// מה ש-[searchText] מחזיר. ברירת מחדל: נמצאו 7 תוצאות.
   Future<ResponsaSearchReport> Function(String query)? onSearch;
-  final List<({String query, String? installPath})> searchCalls = [];
+  final List<({String query, String? installPath, ResponsaSearchSetup setup})>
+  searchCalls = [];
+
+  /// מה ש-[show] מחזיר. ברירת מחדל: הובא לחזית.
+  ResponsaShowReport showReport = const ResponsaShowReport(
+    ok: true,
+    broughtToFront: true,
+  );
+  int showCalls = 0;
 
   Uint8List? iconBytes;
 
@@ -100,8 +108,12 @@ class FakeBackend implements ResponsaBackend {
   }
 
   @override
-  Future<ResponsaSearchReport> searchText(String query, {String? installPath}) {
-    searchCalls.add((query: query, installPath: installPath));
+  Future<ResponsaSearchReport> searchText(
+    String query, {
+    String? installPath,
+    ResponsaSearchSetup setup = ResponsaSearchSetup.none,
+  }) {
+    searchCalls.add((query: query, installPath: installPath, setup: setup));
     final handler = onSearch;
     if (handler != null) return handler(query);
     return Future.value(
@@ -115,6 +127,12 @@ class FakeBackend implements ResponsaBackend {
         ),
       ),
     );
+  }
+
+  @override
+  Future<ResponsaShowReport> show({String? installPath}) async {
+    showCalls++;
+    return showReport;
   }
 
   @override
