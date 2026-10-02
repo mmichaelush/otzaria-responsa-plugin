@@ -877,7 +877,10 @@ test('חיפוש מתקדם: נשמר אחרי הפסקה בהקלדה, ונטע
   first.bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
   first.app.advancedWord(0, 0, 'שבת');
   first.app.advancedSet({ options: { abbreviations: true, showForms: false } });
-  await until(() => stored.responsa_advanced_query);
+  // השמירה ממתינה להפסקה בהקלדה (600ms): המתנה בזמן אמיתי, לא בתורות.
+  assert.equal(stored.responsa_advanced_query, undefined);
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  assert.ok(stored.responsa_advanced_query);
   first.app.suspend();
 
   const second = setup({ '/health': advancedHealth, '/status': reply(200, ready) });
