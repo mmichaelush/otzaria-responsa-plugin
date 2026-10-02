@@ -20,6 +20,11 @@ test('גרסת התוסף זהה לגרסת השירות (AGENTS.md)', () => {
   assert.equal(manifest.version, version);
 });
 
+// הוולידטור הרשמי חוסם תיאור ארוך מזה, ושם זה מתגלה רק ב-CI.
+test('תיאור קצר: עד 150 תווים', () => {
+  assert.ok(manifest.description.length <= 150, String(manifest.description.length));
+});
+
 test('פריט התפריט, הקיצור שלו והמתג שמסתיר אותו מתאימים לקוד', () => {
   const item = startup.contextMenuItems.find((i) => i.id === Domain.CONTEXT_MENU_ITEM);
   assert.ok(item, 'פריט "חיפוש בבר אילן" במניפסט');
