@@ -10,6 +10,7 @@ import 'package:responsa_helper/src/native/responsa_controller.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/helper_service.dart';
 import 'package:responsa_helper/src/server/http_api.dart';
+import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
 import 'package:test/test.dart';
 
 import 'helpers/catalog_fixture.dart';
@@ -27,15 +28,22 @@ void main() {
   Future<void> start({
     bool withCatalog = true,
     int? Function(int clientPort)? clientSession,
+    String? Function(int clientPort)? clientExe,
   }) async {
     if (withCatalog) writeCatalog(dir);
-    service = HelperService(backend: backend, paths: HelperPaths(dir.path));
+    // בלי משתני סביבה: אחרת אוצריא שמותקנת במחשב הייתה נמצאת בבדיקה.
+    service = HelperService(
+      backend: backend,
+      paths: HelperPaths(dir.path),
+      environment: const {},
+    );
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final api = HttpApi(
       service,
       port: server.port,
       heartbeat: const Duration(milliseconds: 50),
       clientSession: clientSession,
+      clientExe: clientExe ?? (_) => null,
       ownSession: clientSession == null ? null : 1,
     );
     server.listen(api.handle);
@@ -734,6 +742,92 @@ void main() {
     test('session שלא ניתן לזהות אינו חוסם', () async {
       await start(clientSession: (_) => null);
       expect((await call('GET', '/health')).status, 200);
+    });
+  });
+
+  group('עיון בקטגוריות', () {
+    setUp(() => start());
+
+    test('שורש העץ: קטגוריות עם מספר ספרים, וספרים שבשורש', () async {
+      final json =
+          (await call('POST', '/catalog/browse', body: {})).json as Map;
+      expect(json['path'], '');
+      expect(
+        json['categories'],
+        contains(
+          equals({
+            'name': 'מפרשים ופוסקים על הבבלי',
+            'path': 'מפרשים ופוסקים על הבבלי',
+            'bookCount': 3,
+          }),
+        ),
+      );
+      expect([
+        for (final b in json['books'] as List) (b as Map)['key'],
+      ], contains('7'));
+    });
+
+    test('רמה פנימית ונתיב לא קיים', () async {
+      final json =
+          (await call(
+                'POST',
+                '/catalog/browse',
+                body: {'path': ' מפרשים ופוסקים על הבבלי/ '},
+              )).json
+              as Map;
+      expect([
+        for (final c in json['categories'] as List) (c as Map)['name'],
+      ], unorderedEquals(['רא"ש', 'מהרש"א']));
+      final missing = await call(
+        'POST',
+        '/catalog/browse',
+        body: {'path': 'אין כזה'},
+      );
+      expect(missing.status, 404);
+      final bad = await call('POST', '/catalog/browse', body: {'path': 3});
+      expect(bad.status, 400);
+    });
+
+    test('חיפוש מצומצם לקטגוריה', () async {
+      Future<int> total(String path) async =>
+          ((await call(
+                    'POST',
+                    '/catalog/search',
+                    body: {'q': 'יבמות', 'path': path},
+                  )).json
+                  as Map)['total']
+              as int;
+      expect(await total(''), 1);
+      expect(await total('מפרשים ופוסקים על הבבלי'), 1);
+      expect(await total('מפרשים ופוסקים על הבבלי/מהרש"א'), 0);
+    });
+  });
+
+  group('אייקוני אוצריא', () {
+    test('הגופן מתיקיית האוצריא שפנתה לשירות', () async {
+      final otzaria = Directory(p.join(dir.path, 'otzaria'));
+      final font = File(
+        p.joinAll([otzaria.path, ...OtzariaIconFont.relativePath]),
+      )..createSync(recursive: true);
+      final bytes = File('test/fixtures/icons_cff.otf').readAsBytesSync();
+      font.writeAsBytesSync(bytes);
+      await start(clientExe: (_) => p.join(otzaria.path, 'otzaria.exe'));
+
+      final result = await call('GET', '/otzaria/icons');
+      expect(result.status, 200);
+      final json = result.json as Map;
+      expect(json['glyphs'], {
+        'book_24_regular': 0xE000,
+        'search_in_the_library_24_regular': 0xE001,
+      });
+      expect(base64Decode(json['font'] as String), bytes);
+    });
+
+    test('בלי אוצריא מוכרת: 404', () async {
+      await start(clientExe: (_) => p.join(dir.path, 'other.exe'));
+      final result = await call('GET', '/otzaria/icons');
+      expect(result.status, 404);
+      expect(errorCode(result.json), 'notFound');
     });
   });
 

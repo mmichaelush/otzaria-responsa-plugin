@@ -288,6 +288,29 @@
     'ביטול': 'Cancel',
     'קורא מחדש את רשימת הספרים. בינתיים החיפוש עובד על הרשימה הקיימת, ופתיחת ספרים תתאפשר בסיום.':
       'Reading the book list again. Meanwhile search uses the current list, and opening books will be possible when it finishes.',
+    // ---- עיון בקטגוריות (0.3.0)
+    'עיון בקטגוריות': 'Browsing categories',
+    'כשתיבת החיפוש ריקה, הלשונית מציגה את הקטגוריות של בר אילן, ולצד כל אחת מספר הספרים שבה.':
+      'When the search box is empty, the tab shows the Bar-Ilan categories, each with its number of books.',
+    'לוחצים על קטגוריה כדי להיכנס אליה. השורה שמעל השם מראה איפה אתם בעץ, ולחיצה על כל רמה בה חוזרת אליה.':
+      'Click a category to open it. The line above the name shows where you are in the tree; click any level in it to go back there.',
+    'חיפוש בתוך קטגוריה מחפש רק בה ובמה שתחתיה. "חיפוש בכל הספרים" יוצא ממנה.':
+      'Searching inside a category searches only it and what is under it. "Search all books" leaves it.',
+    'הלשונית נפתחת בקטגוריה האחרונה שבה הייתם.': 'The tab reopens in the last category you were in.',
+    'חיפוש בתוך "{name}"': 'Search in "{name}"',
+    '{found} בתוך "{name}"': '{found} in "{name}"',
+    'חיפוש בכל הספרים': 'Search all books',
+    'כל הספרים': 'All books',
+    'מיקום בעץ של בר אילן': 'Location in the Bar-Ilan tree',
+    'הספרייה של בר אילן': 'The Bar-Ilan library',
+    'בוחרים קטגוריה, או מחפשים לפי שם הספר, שם המחבר, או שניהם יחד. למשל: אבני נזר, מהרש"א, רא"ש יבמות.':
+      'Pick a category, or search by book title, author, or both. For example: אבני נזר, מהרש"א, רא"ש יבמות.',
+    'קטגוריות': 'Categories',
+    'ספרים בקטגוריה': 'Books in this category',
+    'שירות בר אילן שבמחשב ישן, ולכן אין כאן עיון בקטגוריות. כדאי להוריד את הגרסה החדשה.':
+      'The Bar-Ilan service on this computer is old, so category browsing is not available. Download the new version.',
+    'בגרסה הזו של אוצריא עדיין אין אפשרות כזו (היא מתוכננת לגרסה 0.9.98). אפשר לבחור כבר עכשיו, והבחירה תחול כשהיא תגיע.':
+      'This version of Otzaria does not have this option yet (it is planned for version 0.9.98). You can choose now, and the choice will apply when it arrives.',
     'חיפוש ספר או מחבר בבר אילן': 'Search for a book or author in Bar-Ilan',
     'מחפש בבר אילן: "{title}"…': 'Searching Bar-Ilan: "{title}"…',
     'פותח בבר אילן: "{title}"…': 'Opening in Bar-Ilan: "{title}"…',

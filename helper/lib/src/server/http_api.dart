@@ -6,6 +6,7 @@ import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/server/api_error.dart';
 import 'package:responsa_helper/src/server/build_coordinator.dart';
 import 'package:responsa_helper/src/server/helper_service.dart';
+import 'package:responsa_helper/src/native/responsa_win32.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
 
 typedef _JsonHandler =
@@ -19,8 +20,10 @@ class HttpApi {
     required this.port,
     this.heartbeat = const Duration(seconds: 10),
     int? Function(int clientPort)? clientSession,
+    String? Function(int clientPort)? clientExe,
     int? ownSession,
-  }) : _clientSession =
+  }) : _clientExe = clientExe ?? _defaultClientExe(port),
+       _clientSession =
            clientSession ??
            ((clientPort) =>
                PeerSession.ofClient(clientPort: clientPort, serverPort: port)),
@@ -30,6 +33,12 @@ class HttpApi {
       '/status': (_) => _service.status(),
       '/icon': (_) => _service.icon(),
       '/catalog/export': (_) => _service.export(),
+      '/otzaria/icons': (request) => _service.otzariaIcons(
+        clientExe: switch (request['clientPort']) {
+          final int clientPort => _clientExe(clientPort),
+          _ => null,
+        },
+      ),
     };
     _post = {
       '/catalog/cancel': (_) async => {
@@ -37,6 +46,7 @@ class HttpApi {
         'wasRunning': _service.builds.cancel(),
       },
       '/catalog/search': _service.search,
+      '/catalog/browse': _service.browse,
       '/catalog/books': _service.books,
       '/book/open': _service.open,
       '/text/search': _service.searchText,
@@ -47,6 +57,12 @@ class HttpApi {
   final int port;
   final Duration heartbeat;
   final int? Function(int clientPort) _clientSession;
+  final String? Function(int clientPort) _clientExe;
+
+  static String? Function(int) _defaultClientExe(int port) => (clientPort) {
+    final pid = PeerSession.clientPid(clientPort: clientPort, serverPort: port);
+    return pid == null ? null : ResponsaWin32.processImagePath(pid);
+  };
   final int? _ownSession;
 
   static const int maxBodyBytes = 64 * 1024;
@@ -77,7 +93,12 @@ class HttpApi {
         );
       } else if (_get[path] case final handler?) {
         _requireMethod(request, 'GET');
-        await _sendJson(response, 200, await handler(const {}));
+        final clientPort = request.connectionInfo?.remotePort;
+        await _sendJson(
+          response,
+          200,
+          await handler({'clientPort': ?clientPort}),
+        );
       } else if (_post[path] case final handler?) {
         _requireMethod(request, 'POST');
         await _sendJson(response, 200, await handler(await _readJson(request)));

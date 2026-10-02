@@ -212,6 +212,7 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     contextMenu: true,
     startupNotice: false,
     welcomeSeen: false,
+    browsePath: '',
   });
 });
 

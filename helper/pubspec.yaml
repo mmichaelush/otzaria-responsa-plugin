@@ -3,7 +3,7 @@ description: >-
   שירות מקומי שמחבר את אוצריא לפרויקט השו"ת (בר אילן): בונה קטלוג מהתוכנה
   המותקנת ופותח בה ספרים. Windows בלבד.
 publish_to: none
-version: 0.2.2
+version: 0.3.0
 
 environment:
   sdk: ">=3.12.0 <4.0.0"

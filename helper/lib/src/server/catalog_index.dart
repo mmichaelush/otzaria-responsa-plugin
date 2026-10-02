@@ -27,13 +27,14 @@ class CatalogIndex {
   ResponsaCatalogBook? byKey(String key) => _byKey[key];
 
   /// כל ההתאמות, מהטובה ביותר. שאילתה ריקה אינה מחזירה דבר, כדי לא להציף
-  /// את המסך באלפי ספרים.
-  List<ResponsaCatalogBook> search(String query) {
+  /// את המסך באלפי ספרים. [path] מצמצם לקטגוריה ולכל מה שתחתיה.
+  List<ResponsaCatalogBook> search(String query, {String path = ''}) {
     final tokens = ResponsaHebrew.tokens(query);
     if (tokens.isEmpty) return const [];
     final whole = tokens.join(' ');
     final hits = <({_Entry entry, int rank})>[];
     for (final entry in _entries) {
+      if (!within(entry.book.contextPath, path)) continue;
       final rank = entry.rank(tokens, whole);
       if (rank != null) hits.add((entry: entry, rank: rank));
     }
@@ -46,6 +47,61 @@ class CatalogIndex {
     });
     return [for (final hit in hits) hit.entry.book];
   }
+
+  /// האם [contextPath] הוא [path] או קטגוריה שתחתיו. נתיב ריק = הכול.
+  static bool within(String contextPath, String path) =>
+      path.isEmpty || contextPath == path || contextPath.startsWith('$path/');
+
+  /// רמה אחת בעץ: תתי-הקטגוריות של [path] (עם מספר הספרים בכל אחת, כולל
+  /// תתי-קטגוריות) והספרים שיושבים בו עצמו, בסדר העץ של בר אילן.
+  CatalogLevel browse(String path) {
+    final counts = <String, int>{};
+    final firstOrder = <String, int>{};
+    final books = <ResponsaCatalogBook>[];
+    final prefix = path.isEmpty ? '' : '$path/';
+    for (final entry in _entries) {
+      final book = entry.book;
+      final context = book.contextPath;
+      if (context == path) {
+        books.add(book);
+      } else if (context.startsWith(prefix)) {
+        final rest = context.substring(prefix.length);
+        final slash = rest.indexOf('/');
+        final name = slash < 0 ? rest : rest.substring(0, slash);
+        if (name.isEmpty) continue;
+        counts[name] = (counts[name] ?? 0) + 1;
+        final order = firstOrder[name];
+        if (order == null || book.treeOrder < order) {
+          firstOrder[name] = book.treeOrder;
+        }
+      }
+    }
+    final names = counts.keys.toList()
+      ..sort((a, b) => firstOrder[a]!.compareTo(firstOrder[b]!));
+    books.sort((a, b) => a.treeOrder.compareTo(b.treeOrder));
+    return CatalogLevel(
+      path: path,
+      categories: [
+        for (final name in names)
+          (name: name, path: '$prefix$name', bookCount: counts[name]!),
+      ],
+      books: books,
+    );
+  }
+}
+
+class CatalogLevel {
+  const CatalogLevel({
+    required this.path,
+    required this.categories,
+    required this.books,
+  });
+
+  final String path;
+  final List<({String name, String path, int bookCount})> categories;
+  final List<ResponsaCatalogBook> books;
+
+  bool get exists => path.isEmpty || categories.isNotEmpty || books.isNotEmpty;
 }
 
 class _Entry {

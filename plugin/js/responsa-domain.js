@@ -465,11 +465,37 @@
    * המסך הראשי עובד, אבל הלחיצה הימנית לא תעבוד. `null` כשהכול תקין.
    */
   function serviceNotice(health) {
-    if (!health || serviceCan(health, 'searchText')) return null;
-    return {
-      kind: 'serviceOld',
-      text: t('שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית לא יעבוד. כדאי להוריד את הגרסה החדשה.'),
-    };
+    if (!health) return null;
+    if (!serviceCan(health, 'searchText')) {
+      return {
+        kind: 'serviceOld',
+        text: t('שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית לא יעבוד. כדאי להוריד את הגרסה החדשה.'),
+      };
+    }
+    if (!serviceCan(health, 'browse')) {
+      return {
+        kind: 'serviceOld',
+        text: t('שירות בר אילן שבמחשב ישן, ולכן אין כאן עיון בקטגוריות. כדאי להוריד את הגרסה החדשה.'),
+      };
+    }
+    return null;
+  }
+
+  /** שורת הנתיב בעיון: "כל הספרים" ואחריו כל רמה, עם הנתיב שלה. */
+  function breadcrumbs(path) {
+    const crumbs = [{ name: t('כל הספרים'), path: '' }];
+    let current = '';
+    for (const part of String(path || '').split('/').filter(Boolean)) {
+      current = current ? current + '/' + part : part;
+      crumbs.push({ name: part, path: current });
+    }
+    return crumbs;
+  }
+
+  /** שם הקטגוריה האחרונה בנתיב, או ריק בשורש. */
+  function scopeName(path) {
+    const parts = String(path || '').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
   }
 
   /** קיצור לתצוגה בשורה אחת. */
@@ -584,6 +610,8 @@
     Screen,
     formatCount,
     booksLabel,
+    breadcrumbs,
+    scopeName,
     foundLabel,
     bookMeta,
     bookContext,

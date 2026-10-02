@@ -24,6 +24,12 @@ abstract final class PeerSession {
     return pid == null ? null : _sessionOf(pid);
   }
 
+  /// התהליך שמחובר מ-[clientPort] אל [serverPort] ב-loopback, או `null`.
+  static int? clientPid({required int clientPort, required int serverPort}) {
+    if (!Platform.isWindows) return null;
+    return _clientPid(clientPort, serverPort);
+  }
+
   static int? _sessionOf(int pid) {
     final session = calloc<Uint32>();
     try {

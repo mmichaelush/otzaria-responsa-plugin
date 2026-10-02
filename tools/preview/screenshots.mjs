@@ -56,7 +56,13 @@ const shots = [
   ['book-details', 'scenario=ready&details=3232&query=' + encodeURIComponent('מהרש"א')],
   ['help-about-offline', 'scenario=ready&sheet=help&tab=about&offline=1'],
   ['service-missing-offline', 'scenario=serviceMissing&offline=1'],
+  ['browse-inner', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי')],
+  ['browse-books', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי/מהרש"א')],
+  ['browse-search', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי') + '&query=' + encodeURIComponent('מהרש"א')],
+  ['old-service', 'scenario=ready&oldservice=1&noicons=1'],
+  ['fluent-icons', 'scenario=ready&noicons=1&query=' + encodeURIComponent('מהרש"א')],
   // גדלי מסך: חלון צר (טלפון, או אוצריא בחצי מסך) וחלון רחב.
+  ['narrow-browse', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי'), '380,820'],
   ['narrow-results', 'scenario=ready&details=3232&query=' + encodeURIComponent('מהרש"א'), '380,820'],
   ['narrow-welcome', 'scenario=ready&welcome=1', '380,820'],
   ['narrow-settings', 'scenario=ready&sheet=settings&library=1', '380,820'],

@@ -170,8 +170,34 @@
       this._preservingFocus(() => {
         host.replaceChildren(...[Ui.resultsBlock(model, actions)].filter(Boolean));
       });
+      const input = this.content.querySelector('.search-input');
+      if (input) {
+        const label = Ui.searchLabel(model);
+        input.placeholder = label;
+        input.setAttribute('aria-label', label);
+      }
       const spinner = this.content.querySelector('[data-role="search-spinner"]');
       if (spinner) spinner.hidden = !model.searching;
+    }
+
+    /** אייקוני אוצריא נטענו: הפס העליון והמסך מצוירים מחדש, והפוקוס נשמר. */
+    redraw(model, actions) {
+      this.helpButton.replaceChildren(icon('question_circle_24_regular'));
+      this.settingsButton.replaceChildren(icon('settings_24_regular'));
+      this._preservingFocus(() => this.render(model, actions));
+    }
+
+    /**
+     * אחרי מעבר קטגוריה הכפתור שנלחץ כבר אינו קיים: הפוקוס עובר לכותרת
+     * הקטגוריה, כדי שקורא מסך יכריז עליה וטאב ימשיך ממנה.
+     */
+    focusBrowse() {
+      if (this.openSheet) return;
+      const active = this.doc.activeElement;
+      if (active && active !== this.doc.body && this.doc.contains(active)) return;
+      const target =
+        this.content.querySelector('.browse-heading') || this.content.querySelector('.search-input');
+      if (target) target.focus();
     }
 
     focusSearch() {

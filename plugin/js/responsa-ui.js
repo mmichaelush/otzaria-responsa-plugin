@@ -367,8 +367,23 @@
 
   // ------------------------------------------------------------- חיפוש
 
+  /** תווית שדה החיפוש: בתוך קטגוריה החיפוש מצומצם אליה. */
+  function searchLabel(model) {
+    const name = canBrowse(model) ? Domain.scopeName(model.browse.path) : '';
+    return name ? t('חיפוש בתוך "{name}"', { name: isolate(name) }) : t('חיפוש ספר או מחבר בבר אילן');
+  }
+
+  /** שם עברי בתוך משפט באנגלית (ולהפך): FSI…PDI שומרים על סדר המילים. */
+  function isolate(text) {
+    return '\u2068' + text + '\u2069';
+  }
+
+  function canBrowse(model) {
+    return Domain.serviceCan(model.health, 'browse');
+  }
+
   function readyView(model, actions) {
-    const label = t('חיפוש ספר או מחבר בבר אילן');
+    const label = searchLabel(model);
     const input = el('input', {
       class: 'search-input',
       type: 'search',
@@ -475,6 +490,7 @@
   }
 
   function resultsBlock(model, actions) {
+    if (!model.query.trim() && canBrowse(model)) return browseView(model, actions);
     if (!model.query.trim()) {
       return el(
         'div',
@@ -497,12 +513,29 @@
         { class: 'empty' },
         icon('search_info_24_regular'),
         el('p', {}, t('לא נמצאו ספרים. אפשר לנסות מילה אחרת, או רק חלק מהשם.')),
+        canBrowse(model) && model.browse.path
+          ? button('tonal', t('חיפוש בכל הספרים'), actions.searchEverywhere, { key: 'search-everywhere' })
+          : null,
       );
     }
+    const scope = canBrowse(model) ? Domain.scopeName(model.browse.path) : '';
     return el(
       'div',
       {},
-      el('div', { class: 'results-header' }, el('span', {}, Domain.foundLabel(model.total))),
+      el(
+        'div',
+        { class: 'results-header' },
+        el(
+          'span',
+          {},
+          scope
+            ? t('{found} בתוך "{name}"', { found: Domain.foundLabel(model.total), name: isolate(scope) })
+            : Domain.foundLabel(model.total),
+        ),
+        scope
+          ? button('text', t('חיפוש בכל הספרים'), actions.searchEverywhere, { key: 'search-everywhere' })
+          : null,
+      ),
       el(
         'ul',
         { class: 'results', 'aria-label': t('תוצאות החיפוש') },
@@ -522,6 +555,130 @@
     );
   }
 
+  /** הסמל של בר אילן מההתקנה שבמחשב: "הספר הזה ייפתח בבר אילן". */
+  function responsaIcon(model) {
+    if (!model.responsaIcon) return null;
+    return el('img', { class: 'responsa-icon', src: model.responsaIcon, alt: '', 'aria-hidden': 'true' });
+  }
+
+  // ------------------------------------------------------------- עיון
+
+  /**
+   * עיון בעץ של בר אילן: שורת הנתיב, תתי-הקטגוריות (עם מספר הספרים) והספרים
+   * שבקטגוריה. הקטגוריה היא גם תחום החיפוש שבשדה למעלה.
+   */
+  function browseView(model, actions) {
+    const browse = model.browse;
+    const level = browse.level && browse.level.path === browse.path ? browse.level : null;
+    const name = Domain.scopeName(browse.path);
+    const crumbs = Domain.breadcrumbs(browse.path);
+    return el(
+      'section',
+      { class: 'browse', 'aria-labelledby': 'browse-heading' },
+      browse.path
+        ? el(
+            'nav',
+            { class: 'breadcrumbs', 'aria-label': t('מיקום בעץ של בר אילן') },
+            el(
+              'ol',
+              {},
+              crumbs.map((crumb, index) =>
+                el(
+                  'li',
+                  {},
+                  index > 0 ? icon('chevron_left_24_regular', 'breadcrumb-separator') : null,
+                  index === crumbs.length - 1
+                    ? el('span', { class: 'breadcrumb', 'aria-current': 'location' }, el('bdi', {}, crumb.name))
+                    : el(
+                        'button',
+                        {
+                          type: 'button',
+                          class: 'breadcrumb',
+                          onclick: () => actions.browseTo(crumb.path),
+                          dataset: { focusKey: 'crumb-' + index },
+                        },
+                        index === 0 ? icon('home_24_regular') : null,
+                        el('bdi', {}, crumb.name),
+                      ),
+                ),
+              ),
+            ),
+          )
+        : null,
+      el(
+        'div',
+        { class: 'browse-title' },
+        el(
+          'h2',
+          { class: 'browse-heading', id: 'browse-heading', tabindex: '-1' },
+          el('bdi', {}, name || t('הספרייה של בר אילן')),
+        ),
+        browse.loading ? el('span', { class: 'spinner', 'aria-hidden': 'true' }) : null,
+      ),
+      browse.path
+        ? null
+        : el(
+            'p',
+            { class: 'browse-hint' },
+            t('בוחרים קטגוריה, או מחפשים לפי שם הספר, שם המחבר, או שניהם יחד. למשל: אבני נזר, מהרש"א, רא"ש יבמות.'),
+          ),
+      browse.error
+        ? el(
+            'div',
+            { class: 'empty' },
+            icon('warning_24_regular'),
+            el('p', {}, browse.error),
+            button('tonal', t('ניסיון נוסף'), () => actions.browseTo(browse.path), { key: 'browse-retry' }),
+          )
+        : null,
+      level ? browseLevel(level, model, actions) : null,
+    );
+  }
+
+  function browseLevel(level, model, actions) {
+    const categories = level.categories || [];
+    const books = level.books || [];
+    return [
+      categories.length
+        ? el(
+            'ul',
+            { class: 'browse-list', 'aria-label': t('קטגוריות') },
+            categories.map((category, index) =>
+              el(
+                'li',
+                {},
+                el(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'browse-row',
+                    onclick: () => actions.browseTo(category.path),
+                    dataset: { focusKey: 'category-' + index },
+                  },
+                  icon('folder_24_regular', 'browse-row-icon'),
+                  el('span', { class: 'browse-row-name' }, el('bdi', {}, category.name)),
+                  el('span', { class: 'browse-row-count' }, Domain.booksLabel(category.bookCount)),
+                  icon('chevron_left_24_regular', 'browse-row-chevron'),
+                ),
+              ),
+            ),
+          )
+        : null,
+      books.length
+        ? el(
+            'div',
+            {},
+            el('div', { class: 'results-header' }, el('span', {}, Domain.booksLabel(books.length))),
+            el(
+              'ul',
+              { class: 'results', 'aria-label': t('ספרים בקטגוריה') },
+              books.map((book) => resultItem(book, model, actions)),
+            ),
+          )
+        : null,
+    ];
+  }
+
   function resultItem(book, model, actions) {
     const meta = Domain.bookMeta(book);
     const context = Domain.bookContext(book);
@@ -538,7 +695,7 @@
           'div',
           { class: 'result-body' },
           // שמות מהקטלוג בעברית, גם כשהדף באנגלית: הכיוון לפי הטקסט עצמו.
-          el('h3', { class: 'result-title' }, el('bdi', {}, book.title)),
+          el('h3', { class: 'result-title' }, responsaIcon(model), el('bdi', {}, book.title)),
           meta ? el('div', { class: 'result-meta' }, el('bdi', {}, meta)) : null,
           context
             ? el('div', { class: 'result-context', title: context, dir: 'auto' }, context)
@@ -622,6 +779,7 @@
     screenView,
     readyView,
     resultsBlock,
+    searchLabel,
     noticeView,
     activityView,
     rebuildBanner,

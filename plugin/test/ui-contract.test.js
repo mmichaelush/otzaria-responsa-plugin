@@ -34,6 +34,8 @@ function classesUsed() {
   // השם השני של `icon(name, 'class')` / `className: 'x'`.
   for (const m of scripts.matchAll(/icon\([^()]*?,\s*'([a-z-]+)'\)/g)) add(m[1]);
   for (const m of scripts.matchAll(/className:\s*'([a-z-]+)'/g)) add(m[1]);
+  // אלמנטים של SVG (האייקונים) מקבלים מחלקה ב-setAttribute.
+  for (const m of scripts.matchAll(/setAttribute\('class', '([a-z-]+)'\)/g)) add(m[1]);
   for (const kind of ['filled', 'tonal', 'outlined', 'text']) used.add('button-' + kind);
   used.add('button');
   used.add('icon');
@@ -65,8 +67,10 @@ test('כל אייקון שהקוד מבקש קיים בקובץ האייקוני
   const requested = new Set(
     [...scripts.matchAll(/'([a-z0-9_]+_24_regular)'/g)].map((m) => m[1]),
   );
-  // השם במניפסט הוא של אוצריא, לא של הדף.
-  const missing = [...requested].filter((name) => !available.has(name));
+  // השם במניפסט הוא של אוצריא, לא של הדף; וכך גם יעדי PREFERRED, שמגיעים
+  // רק מהגופן של האוצריא המותקנת ויש להם תמיד אייקון חלופי בקובץ.
+  const hostOnly = new Set(Object.values(require('../js/responsa-icons.js').PREFERRED));
+  const missing = [...requested].filter((name) => !available.has(name) && !hostOnly.has(name));
   assert.deepEqual(missing, []);
 });
 

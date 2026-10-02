@@ -9,6 +9,7 @@ import 'package:responsa_helper/src/server/build_coordinator.dart';
 import 'package:responsa_helper/src/server/catalog_index.dart';
 import 'package:responsa_helper/src/server/catalog_store.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
+import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 import 'package:responsa_helper/src/text/responsa_query.dart';
@@ -16,8 +17,12 @@ import 'package:responsa_helper/src/text/responsa_query.dart';
 /// הלוגיקה של השירות, בלי HTTP: כל נקודת קצה ב-docs/PROTOCOL.md היא מתודה
 /// כאן, ומחזירה JSON או זורקת [ApiError].
 class HelperService {
-  HelperService({required this._backend, required this.paths})
-    : store = CatalogStore(paths.catalog) {
+  HelperService({
+    required this._backend,
+    required this.paths,
+    Map<String, String>? environment,
+  }) : store = CatalogStore(paths.catalog),
+       _environment = environment ?? Platform.environment {
     builds = BuildCoordinator(
       backend: _backend,
       store: store,
@@ -26,7 +31,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.2.2';
+  static const String serverVersion = '0.3.0';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -34,6 +39,8 @@ class HelperService {
     'icon',
     'searchText',
     'export',
+    'browse',
+    'otzariaIcons',
   ];
 
   static const int maxPageSize = 200;
@@ -43,6 +50,7 @@ class HelperService {
   static const int maxSelectionLength = 10000;
 
   final ResponsaBackend _backend;
+  final Map<String, String> _environment;
   final HelperPaths paths;
   final CatalogStore store;
   late final BuildCoordinator builds;
@@ -86,16 +94,75 @@ class HelperService {
 
   Future<Map<String, Object?>> search(Map<String, Object?> body) async {
     final query = _string(body, 'q');
+    final path = _path(body);
     final offset = _int(body, 'offset', fallback: 0, min: 0);
     final limit = _int(body, 'limit', fallback: 50, min: 1, max: maxPageSize);
     final index = await _requireIndex();
-    final hits = index.search(query);
+    final hits = index.search(query, path: path);
     return {
       'total': hits.length,
       'results': [
         for (final book in hits.skip(offset).take(limit)) book.toJson(),
       ],
     };
+  }
+
+  /// רמה אחת בעץ הקטלוג של בר אילן, לעיון בקטגוריות מתוך התוסף.
+  Future<Map<String, Object?>> browse(Map<String, Object?> body) async {
+    final path = _path(body);
+    final index = await _requireIndex();
+    final level = index.browse(path);
+    if (!level.exists) {
+      throw const ApiError(
+        'notFound',
+        404,
+        'הקטגוריה לא נמצאה ברשימת הספרים. ייתכן שהרשימה נקראה מחדש.',
+      );
+    }
+    return {
+      'path': level.path,
+      'categories': [
+        for (final category in level.categories)
+          {
+            'name': category.name,
+            'path': category.path,
+            'bookCount': category.bookCount,
+          },
+      ],
+      'books': [for (final book in level.books) book.toJson()],
+    };
+  }
+
+  /// גופן האייקונים של האוצריא שפנתה לשירות, ושמות הגליפים שבו.
+  Future<Map<String, Object?>> otzariaIcons({String? clientExe}) async {
+    final font = await OtzariaIconFont.load(
+      OtzariaIconFont.candidates(
+        clientExe: clientExe,
+        environment: _environment,
+      ),
+    );
+    if (font == null) {
+      throw const ApiError(
+        'notFound',
+        404,
+        'לא נמצא גופן האייקונים של אוצריא.',
+      );
+    }
+    return {'font': base64Encode(font.bytes), 'glyphs': font.glyphs};
+  }
+
+  /// נתיב קטגוריה (`שו"ת/אחרונים`); ריק = שורש העץ.
+  static String _path(Map<String, Object?> body) {
+    final value = body['path'];
+    if (value == null) return '';
+    if (value is! String || value.length > 1000) {
+      throw const ApiError.badRequest('path חייב להיות נתיב קטגוריה.');
+    }
+    return value
+        .split('/')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join('/');
   }
 
   Future<Map<String, Object?>> books(Map<String, Object?> body) async {

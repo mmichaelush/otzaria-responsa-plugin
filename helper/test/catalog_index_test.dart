@@ -27,6 +27,71 @@ void main() {
     for (final hit in index.search(query)) hit.key,
   ];
 
+  test('חיפוש בתוך קטגוריה כולל את תתי-הקטגוריות בלבד', () {
+    List<String> inPath(String query, String path) => [
+      for (final hit in index.search(query, path: path)) hit.key,
+    ];
+    expect(inPath('אגדות', 'מפרשים ופוסקים על הבבלי'), ['1']);
+    expect(inPath('אבני נזר', 'מפרשים'), ['3']);
+    // "מפרשים" אינו קידומת של "מפרשים ופוסקים על הבבלי" ברמת הקטגוריה.
+    expect(inPath('אגדות', 'מפרשים'), isEmpty);
+  });
+
+  test('רמה בעץ: תתי-קטגוריות עם ספירה, וספרים שבה', () {
+    final root = index.browse('');
+    expect(root.categories, [
+      (
+        name: 'מפרשים ופוסקים על הבבלי',
+        path: 'מפרשים ופוסקים על הבבלי',
+        bookCount: 1,
+      ),
+      (name: 'מפרשים', path: 'מפרשים', bookCount: 1),
+    ]);
+    expect([for (final b in root.books) b.key], ['2', '4', '5']);
+    final inner = index.browse('מפרשים ופוסקים על הבבלי');
+    expect(inner.categories.single.name, 'מהרש"א');
+    expect(inner.books, isEmpty);
+    expect(index.browse('אין כזה').exists, isFalse);
+  });
+
+  test('בעיון: קטגוריות וספרים בסדר העץ של בר אילן, לא בסדר הכותרות', () {
+    final tree = CatalogIndex([
+      // הקטלוג נטען ממוין לפי כותרת; treeOrder הוא המקום בעץ.
+      const ResponsaCatalogBook(
+        key: 'a',
+        title: 'א',
+        contextPath: 'ספרות חז"ל',
+        treeOrder: 5,
+      ),
+      const ResponsaCatalogBook(
+        key: 'b',
+        title: 'ב',
+        contextPath: 'תנ"ך',
+        treeOrder: 1,
+      ),
+      const ResponsaCatalogBook(
+        key: 'c',
+        title: 'ג',
+        contextPath: 'ספרות חז"ל',
+        treeOrder: 4,
+      ),
+      const ResponsaCatalogBook(
+        key: 'd',
+        title: 'ד',
+        contextPath: 'ספרות חז"ל/משנה',
+        treeOrder: 3,
+      ),
+    ]);
+    expect(
+      [for (final c in tree.browse('').categories) c.name],
+      ['תנ"ך', 'ספרות חז"ל'],
+    );
+    expect(
+      [for (final b in tree.browse('ספרות חז"ל').books) b.key],
+      ['c', 'a'],
+    );
+  });
+
   test('שאילתה ריקה אינה מחזירה דבר', () {
     expect(index.search(''), isEmpty);
     expect(index.search('   '), isEmpty);

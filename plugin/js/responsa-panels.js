@@ -132,9 +132,22 @@
 
   // ---------------------------------------------------------- הגדרות
 
-  /** בלי תמיכה של אוצריא אין מה להציג: מתג שלא יכול לעבוד רק מבלבל. */
+  /**
+   * גם באוצריא שעדיין אינה תומכת בזה: ההגדרה נשמרת עכשיו, וחלה ברגע
+   * שאוצריא תתמוך (המניפסט בודק את אותו מפתח ב-`when`).
+   */
   function librarySearchRow(model, actions) {
-    if (!Domain.hostSupportsLibrary(model.permissions)) return null;
+    if (!Domain.hostSupportsLibrary(model.permissions)) {
+      return switchRow({
+        iconName: 'library_24_regular',
+        title: t('ספרי בר אילן בחיפוש הספרייה'),
+        subtitle: t('ספרי בר אילן יופיעו בתוצאות "איתור ספר או מחבר" במסך הספרייה של אוצריא, ולחיצה עליהם תפתח אותם בבר אילן.'),
+        note: t('בגרסה הזו של אוצריא עדיין אין אפשרות כזו (היא מתוכננת לגרסה 0.9.98). אפשר לבחור כבר עכשיו, והבחירה תחול כשהיא תגיע.'),
+        checked: model.settings.libraryBooks,
+        key: 'setting-library',
+        onToggle: (value) => actions.setSetting('libraryBooks', value),
+      });
+    }
     const blocked = Domain.lacksStartupPermission(model.permissions);
     return switchRow({
       iconName: 'library_24_regular',
@@ -321,6 +334,18 @@
         t('בר אילן נפתח (או עולה לחזית) עם הספר, תוך שניות ספורות.'),
         t('הכפתור "פרטי הספר" שליד כל ספר מציג את המחבר, מקום ושנת ההדפסה, המהדורה ומיקום הספר בבר אילן.'),
       ]),
+      Domain.serviceCan(model.health, 'browse')
+        ? topic(
+            'folder_24_regular',
+            t('עיון בקטגוריות'),
+            [
+              t('כשתיבת החיפוש ריקה, הלשונית מציגה את הקטגוריות של בר אילן, ולצד כל אחת מספר הספרים שבה.'),
+              t('לוחצים על קטגוריה כדי להיכנס אליה. השורה שמעל השם מראה איפה אתם בעץ, ולחיצה על כל רמה בה חוזרת אליה.'),
+              t('חיפוש בתוך קטגוריה מחפש רק בה ובמה שתחתיה. "חיפוש בכל הספרים" יוצא ממנה.'),
+            ],
+            t('הלשונית נפתחת בקטגוריה האחרונה שבה הייתם.'),
+          )
+        : null,
       library
         ? topic(
             'library_24_regular',

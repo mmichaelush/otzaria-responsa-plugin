@@ -35,7 +35,10 @@ ICONS = [
     'dismiss_circle_24_regular',
     'document_bullet_list_24_regular',
     'document_search_24_regular',
+    'chevron_left_24_regular',
+    'folder_24_regular',
     'folder_open_24_regular',
+    'home_24_regular',
     'hand_wave_24_regular',
     'history_24_regular',
     'info_24_regular',
@@ -100,15 +103,47 @@ def main():
 TEMPLATE = """// נוצר מתוך FluentUI System Icons (רישיון MIT), באותה צורה שבה אוצריא
 // מציירת אותם. כל אייקון הוא path במערכת 24×24. אין לערוך ידנית: להוספת
 // אייקון — tools/icon/build_icons.py.
+//
+// כשהשירות מוצא את האוצריא המותקנת, התוסף מצייר את האייקונים של אוצריא
+// עצמה מהגופן שלה (useHostFont), כמו הכלל של אוצריא: שם שקיים בשתי
+// הספריות — של אוצריא. האייקונים שכאן נשארים לכל שם שאין לו גליף, ולפני
+// שהגופן נטען.
 (function (root) {
   'use strict';
   const shapes = {
 __SHAPES__
   };
 
-  const SVG = 'http://www.w3.org/2000/svg';
+  /**
+   * אייקון של אוצריא שמתאים יותר מהאייקון שבתוסף, כשהוא קיים בגופן של
+   * האוצריא המותקנת. שם שקיים בשתי הספריות אינו צריך כאן רשומה.
+   */
+  const PREFERRED = Object.freeze({
+    document_search_24_regular: 'search_in_the_library_24_regular',
+    search_info_24_regular: 'search_not_found_24_regular',
+    text_quote_24_regular: 'search_in_the_text_24_regular',
+    library_24_regular: 'bookshelf_24_regular',
+    folder_24_regular: 'books_stacked_low_24_regular',
+  });
 
-  /** אלמנט SVG דקורטיבי (aria-hidden). */
+  const SVG = 'http://www.w3.org/2000/svg';
+  const FAMILY = 'OtzariaIcons';
+
+  /** שם הגליף ← נקודת קוד, מהגופן של אוצריא; `null` עד שנטען. */
+  let hostGlyphs = null;
+  const listeners = [];
+
+  function hostCodepoint(name) {
+    if (!hostGlyphs) return null;
+    const preferred = PREFERRED[name];
+    if (preferred && hostGlyphs[preferred]) return hostGlyphs[preferred];
+    return hostGlyphs[name] || null;
+  }
+
+  /**
+   * אלמנט SVG דקורטיבי (aria-hidden). גליף של אוצריא מצויר כטקסט באותו
+   * 24×24, כך שכל כללי הגודל של `.icon` חלים עליו בלי שינוי.
+   */
   function icon(name, className) {
     const shape = shapes[name];
     if (!shape) throw new Error('אייקון לא מוכר: ' + name);
@@ -116,6 +151,19 @@ __SHAPES__
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('class', 'icon' + (className ? ' ' + className : ''));
+    const code = hostCodepoint(name);
+    if (code) {
+      const text = document.createElementNS(SVG, 'text');
+      text.setAttribute('class', 'icon-glyph');
+      text.setAttribute('x', '0');
+      text.setAttribute('y', '24');
+      text.setAttribute('direction', 'ltr');
+      text.setAttribute('font-size', '24');
+      text.textContent = String.fromCodePoint(code);
+      svg.appendChild(text);
+      svg.dataset.icon = 'otzaria';
+      return svg;
+    }
     const path = document.createElementNS(SVG, 'path');
     path.setAttribute('d', shape.path);
     if (shape.transform) path.setAttribute('transform', shape.transform);
@@ -123,7 +171,53 @@ __SHAPES__
     return svg;
   }
 
-  const api = { icon, names: Object.keys(shapes) };
+  /**
+   * טוען את גופן האייקונים של אוצריא (base64) ומודיע למאזינים, שמציירים
+   * מחדש. `false` כשאין תמיכה או שהגופן לא נטען: האייקונים שבתוסף נשארים.
+   */
+  async function useHostFont(fontBase64, glyphs) {
+    const doc = root.document;
+    if (typeof root.FontFace !== 'function' || !doc || !doc.fonts) return false;
+    if (typeof fontBase64 !== 'string' || !glyphs || typeof glyphs !== 'object') return false;
+    try {
+      const binary = root.atob(fontBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const face = new root.FontFace(FAMILY, bytes.buffer);
+      await face.load();
+      doc.fonts.add(face);
+    } catch (error) {
+      return false;
+    }
+    hostGlyphs = Object.create(null);
+    for (const [name, code] of Object.entries(glyphs)) {
+      if (Number.isInteger(code) && code > 0) hostGlyphs[name] = code;
+    }
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (error) {
+        // מאזין שנכשל אינו עוצר את האחרים.
+      }
+    }
+    return true;
+  }
+
+  function onChange(listener) {
+    listeners.push(listener);
+  }
+
+  const api = {
+    icon,
+    names: Object.keys(shapes),
+    PREFERRED,
+    useHostFont,
+    onChange,
+    /** האם גופן האייקונים של אוצריא נטען. */
+    get hostActive() {
+      return hostGlyphs !== null;
+    },
+  };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaIcons = api;
 })(typeof self !== 'undefined' ? self : globalThis);

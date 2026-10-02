@@ -266,3 +266,22 @@ test('Links: כתובות https בלבד, והפורום מצביע על ההב�
   for (const url of Object.values(Domain.Links)) assert.match(url, /^https:\/\//);
   assert.equal(Domain.Links.forum, 'https://otzaria.org/forum/post/40010');
 });
+
+
+test('breadcrumbs ו-scopeName', () => {
+  assert.deepEqual(Domain.breadcrumbs(''), [{ name: 'כל הספרים', path: '' }]);
+  assert.deepEqual(Domain.breadcrumbs('א/ב'), [
+    { name: 'כל הספרים', path: '' },
+    { name: 'א', path: 'א' },
+    { name: 'ב', path: 'א/ב' },
+  ]);
+  assert.equal(Domain.scopeName('א/ב'), 'ב');
+  assert.equal(Domain.scopeName(''), '');
+});
+
+test('serviceNotice: שירות בלי browse מקבל הערה משלו', () => {
+  const caps = (list) => ({ capabilities: list });
+  assert.equal(Domain.serviceNotice(caps(['searchText', 'browse'])), null);
+  assert.match(Domain.serviceNotice(caps(['searchText'])).text, /עיון בקטגוריות/);
+  assert.match(Domain.serviceNotice(caps([])).text, /לחיצה ימנית/);
+});

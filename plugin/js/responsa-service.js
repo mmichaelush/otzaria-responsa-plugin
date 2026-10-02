@@ -93,12 +93,29 @@
       return this.request('GET', '/status');
     }
 
-    search(query, offset, limit) {
+    /** [path] מצמצם לקטגוריה בעץ של בר אילן ולכל מה שתחתיה. */
+    search(query, offset, limit, path) {
       return this.request('POST', '/catalog/search', {
         q: query,
         offset: offset || 0,
         limit,
+        ...(path ? { path } : {}),
       });
+    }
+
+    /** רמה אחת בעץ: `{ path, categories: [{name, path, bookCount}], books }`. */
+    browse(path) {
+      return this.request('POST', '/catalog/browse', { path: path || '' });
+    }
+
+    /** גופן האייקונים של האוצריא המותקנת: `{ font (base64), glyphs }`. */
+    otzariaIcons() {
+      return this.request('GET', '/otzaria/icons', undefined, 15000);
+    }
+
+    /** הסמל של בר אילן מההתקנה שבמחשב: `{ png (base64) }`. */
+    responsaIcon() {
+      return this.request('GET', '/icon', undefined, 15000);
     }
 
     /** פתיחה יכולה לכלול הפעלה של בר אילן, ולכן החסם הארוך ביותר. */

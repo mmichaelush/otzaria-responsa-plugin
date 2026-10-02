@@ -13,6 +13,7 @@
   const { Engine } = root.ResponsaEngine;
   const Panels = root.ResponsaPanels;
   const Log = root.ResponsaLog;
+  const Icons = root.ResponsaIcons || {};
   const Screen = Domain.Screen;
   const t = (text, vars) => I18n.t(text, vars);
 
@@ -76,6 +77,13 @@
         openingKey: null,
         /** הספר שפרטיו פתוחים ברשימת התוצאות. */
         expandedKey: null,
+        /**
+         * עיון בעץ של בר אילן. [path] הוא גם תחום החיפוש: חיפוש בתוך קטגוריה
+         * מחפש בה ובכל מה שתחתיה. `level`: `{ path, categories, books }`.
+         */
+        browse: { path: '', level: null, loading: false, error: null },
+        /** הסמל של בר אילן מההתקנה שבמחשב (data URL), או `null`. */
+        responsaIcon: null,
         /** בנייה רצה, בכל מסך. */
         buildActive: false,
         progress: null,
@@ -100,7 +108,19 @@
       this.buildWatch = null;
       this.suspended = false;
       this.logRender = null;
+      this.browseSeq = 0;
+      /** הרשימה שהעץ המוצג נבנה ממנה: רשימה שנקראה מחדש בונה אותו מחדש. */
+      this.browseCatalog = null;
+      /** אייקוני אוצריא והסמל של בר אילן: לכל גרסת שירות, עד שלושה ניסיונות. */
+      this.icons = { version: null, attempts: 0, loaded: false };
       this.actions = this._actions();
+      // גופן האייקונים של אוצריא נטען: כל מה שעל המסך מצויר מחדש.
+      if (Icons.onChange) {
+        Icons.onChange(() => {
+          this.view.redraw(this.model, this.actions);
+          this._renderSheet();
+        });
+      }
       // רשומה חדשה מתעדכנת ב"מצב המערכת" כשהוא פתוח, פעם אחת לכל סדרה.
       this.log.subscribe((entry) => {
         if (entry.level === 'debug' || this.logRender) return;
@@ -127,6 +147,7 @@
       this.engine.pluginVersion = this.model.pluginVersion;
       if (Array.isArray(info.permissions)) this._setPermissions(info.permissions);
       this.model.settings = await this.settings.load();
+      this.model.browse = { ...this.model.browse, path: this.model.settings.browsePath };
       this._applyLanguage({ boot: true });
       this.log.info(
         'הפעלה: תוסף ' + this.model.pluginVersion + ', אוצריא ' + this.model.appVersion +
@@ -249,6 +270,16 @@
       if (screen === Screen.ready && !this.model.buildActive && Domain.serviceCan(health, 'export')) {
         this.engine.syncLibrary(status);
       }
+      if (health) this._loadIcons(health);
+      if (screen === Screen.ready && Domain.serviceCan(health, 'browse')) {
+        const catalog = (status && status.catalog) || {};
+        const identity = (catalog.builtAt || '') + '|' + (catalog.sourceVersion || '');
+        const stale = this.browseCatalog !== null && this.browseCatalog !== identity;
+        this.browseCatalog = identity;
+        if ((stale || !this.model.browse.level) && !this.model.browse.loading) {
+          this.browseTo(this.model.browse.path);
+        }
+      }
       const rerun = !options || options.rerunSearch !== false;
       if (screen === Screen.ready && rerun && this.model.query.trim()) {
         this._runSearch(this.model.query, 0);
@@ -320,7 +351,7 @@
       else this.model.searching = true;
       this._renderResults();
       try {
-        const page = await this.service.search(query, offset, Domain.PAGE_SIZE);
+        const page = await this.service.search(query, offset, Domain.PAGE_SIZE, this._scope());
         // תשובה ישנה שהגיעה אחרי הקלדה חדשה נזרקת.
         if (seq !== this.searchSeq) return;
         this.model.results = more ? this.model.results.concat(page.results) : page.results;
@@ -347,6 +378,92 @@
     loadMore() {
       if (this.model.loadingMore || !this.model.results) return;
       this._runSearch(this.model.query, this.model.results.length);
+    }
+
+    /** תחום החיפוש: הקטגוריה שבה המשתמש נמצא, כשהשירות תומך בעיון. */
+    _scope() {
+      return Domain.serviceCan(this.model.health, 'browse') ? this.model.browse.path : '';
+    }
+
+    // ---------------------------------------------------- עיון בקטגוריות
+
+    /**
+     * עובר לקטגוריה [path] (ריק = כל הספרים). חיפוש שעל המסך רץ שוב בתוכה,
+     * כי היא עכשיו תחום החיפוש.
+     */
+    async browseTo(path) {
+      const target = path || '';
+      const seq = ++this.browseSeq;
+      const changed = target !== this.model.browse.path;
+      this.model.browse = { ...this.model.browse, path: target, loading: true, error: null };
+      this.model.expandedKey = null;
+      this._renderResults();
+      if (changed && this.model.query.trim()) this._runSearch(this.model.query, 0);
+      try {
+        const level = await this.service.browse(target);
+        if (seq !== this.browseSeq) return;
+        this.model.browse = { path: target, level, loading: false, error: null };
+        this.log.debug('עיון: ' + (target || '(שורש)'));
+        if (target !== this.settings.get('browsePath')) {
+          this.settings.set('browsePath', target).catch(() => {});
+        }
+      } catch (error) {
+        if (seq !== this.browseSeq) return;
+        // קטגוריה שנעלמה (הרשימה נקראה מחדש): חוזרים לשורש.
+        if (error.code === 'notFound' && target) {
+          this.browseTo('');
+          return;
+        }
+        this.model.browse = { path: target, level: null, loading: false, error: Domain.errorMessage(error) };
+      }
+      this._renderResults();
+      // הכפתור שנלחץ (קטגוריה, נתיב, "ניסיון נוסף") כבר אינו על המסך.
+      this.view.focusBrowse();
+    }
+
+    /** "חיפוש בכל הספרים": יוצא מהקטגוריה ושומר על מה שהוקלד. */
+    searchEverywhere() {
+      return this.browseTo('');
+    }
+
+    /**
+     * אייקוני אוצריא מהגופן שבהתקנה, והסמל של בר אילן, דרך השירות. כשל אינו
+     * מורגש: נשארים האייקונים שבתוסף.
+     */
+    async _loadIcons(health) {
+      const icons = this.icons;
+      if (icons.version !== health.serverVersion) {
+        Object.assign(icons, { version: health.serverVersion, attempts: 0, loaded: false });
+      }
+      if (icons.loaded || icons.attempts >= 3 || icons.pending) return;
+      icons.attempts++;
+      icons.pending = true;
+      if (Domain.serviceCan(health, 'icon') && !this.model.responsaIcon) {
+        this.service.responsaIcon().then(
+          (icon) => {
+            if (!icon || typeof icon.png !== 'string') return;
+            // השדה נקרא `png` מסיבות היסטוריות; התוכן הוא קובץ ico.
+            this.model.responsaIcon = 'data:image/x-icon;base64,' + icon.png;
+            this._renderResults();
+          },
+          (error) => this.log.debug('אין סמל של בר אילן', error),
+        );
+      }
+      try {
+        if (!Domain.serviceCan(health, 'otzariaIcons') || !Icons.useHostFont || Icons.hostActive) {
+          icons.loaded = true;
+          return;
+        }
+        const font = await this.service.otzariaIcons();
+        icons.loaded = await Icons.useHostFont(font.font, font.glyphs);
+        this.log.info(icons.loaded ? 'אייקוני אוצריא נטענו מההתקנה' : 'גופן האייקונים של אוצריא לא נטען');
+      } catch (error) {
+        // "לא נמצא" אינו זמני: אין טעם לנסות שוב.
+        if (error.code === 'notFound') icons.loaded = true;
+        this.log.debug('אין גופן אייקונים של אוצריא', error);
+      } finally {
+        icons.pending = false;
+      }
     }
 
     // ---------------------------------------------------- פתיחה
@@ -693,6 +810,8 @@
         rebuild: () => this.startBuild(),
         cancelBuild: () => this.cancelBuild(),
         search: (query, options) => this.search(query, options),
+        browseTo: (path) => this.browseTo(path),
+        searchEverywhere: () => this.searchEverywhere(),
         loadMore: () => this.loadMore(),
         open: (book) => this.open(book),
         openSettings: () => this.openSheet('settings'),

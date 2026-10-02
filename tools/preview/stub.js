@@ -1,6 +1,6 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
 // המקומי, לפי `?scenario=...&mode=light|dark&query=...&sheet=settings|help&tab=...
-// &lang=en&library=1`. ערכות הצבעים הן
+// &lang=en&library=1&browse=<נתיב>&oldservice=1&noicons=1`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
 (function () {
   'use strict';
@@ -72,7 +72,52 @@
     const key = Object.keys(fixtures).find((q) =>
       q.replace(/["״]/g, '').includes(String(body.q).replace(/["״]/g, '').trim()),
     );
-    return key ? fixtures[key] : { total: 0, results: [] };
+    const found = key ? fixtures[key] : { total: 0, results: [] };
+    if (!body.path) return found;
+    const inPath = found.results.filter(
+      (book) => book.contextPath === body.path || book.contextPath.startsWith(body.path + '/'),
+    );
+    return { total: inPath.length, results: inPath };
+  }
+
+  // עץ לדוגמה, בשמות של הקטגוריות בבר אילן.
+  const MEFARSHIM = 'מפרשים ופוסקים על הבבלי והירושלמי';
+  const ACHARONIM = MEFARSHIM + '/אחרונים על הבבלי';
+  const tree = {
+    '': [
+      ['תנ"ך ומפרשיו', 245],
+      ['תלמוד בבלי, ירושלמי ומדרשים', 128],
+      [MEFARSHIM, 1840],
+      ['רמב"ם ונושאי כליו', 312],
+      ['טור, שולחן ערוך ונושאי כליהם', 506],
+      ['ספרי שאלות ותשובות (שו"ת)', 2150],
+      ['ספרי הלכה', 1210],
+      ['מחשבה, מוסר וחסידות', 1530],
+      ['שונות', 481],
+    ],
+    [MEFARSHIM]: [
+      ['ראשונים על הבבלי', 520],
+      ['אחרונים על הבבלי', 1320],
+    ],
+    [ACHARONIM]: [
+      ['מהרש"א', 12],
+      ['פני יהושע', 9],
+      ['רבי עקיבא איגר', 14],
+      ['חתם סופר', 21],
+    ],
+  };
+
+  function browse(body) {
+    const path = String(body.path || '');
+    const prefix = path ? path + '/' : '';
+    const books = fixtures['מהרש"א'].results.filter((book) => book.contextPath === path);
+    const children = tree[path] || [];
+    if (!children.length && !books.length && path) return null;
+    return {
+      path,
+      categories: children.map(([name, bookCount]) => ({ name, path: prefix + name, bookCount })),
+      books,
+    };
   }
 
   function respond(path, body) {
@@ -84,13 +129,21 @@
               ok: true,
               service: 'otzaria-responsa',
               apiVersion: scenario === 'serviceOutdated' ? 2 : 1,
-              serverVersion: '0.2.2',
-              capabilities: ['catalog', 'open', 'icon', 'searchText', 'export'],
+              serverVersion: '0.3.0',
+              capabilities: params.get('oldservice')
+                ? ['catalog', 'open', 'icon', 'searchText', 'export']
+                : ['catalog', 'open', 'icon', 'searchText', 'export', 'browse', 'otzariaIcons'],
             };
       case '/status':
         return status();
       case '/catalog/search':
         return search(body);
+      case '/catalog/browse':
+        return browse(body);
+      case '/otzaria/icons':
+        return window.__OTZARIA_ICON_FONT__ && !params.get('noicons') ? window.__OTZARIA_ICON_FONT__ : null;
+      case '/icon':
+        return window.__RESPONSA_APP_ICON__ ? { png: window.__RESPONSA_APP_ICON__ } : null;
       case '/book/open':
         return { ok: true, broughtToFront: true };
       default:
@@ -113,13 +166,20 @@
       yield { type: 'data', body: JSON.stringify(Object.assign({ type: 'progress' }, running)) + '\n' };
       await new Promise(() => {});
     }
+    const answer = respond(path, body);
+    if (answer === null) {
+      yield { type: 'response', status: 404, ok: false, headers: {} };
+      yield { type: 'data', body: JSON.stringify({ error: { code: 'notFound', message: 'לא נמצא' } }) };
+      return;
+    }
     yield { type: 'response', status: 200, ok: true, headers: {} };
-    yield { type: 'data', body: JSON.stringify(respond(path, body)) };
+    yield { type: 'data', body: JSON.stringify(answer) };
   }
 
   const listeners = {};
   // מסך הפתיחה מוצג רק כשמבקשים (`welcome=1`), כדי שלא יכסה כל מסך אחר.
   const storage = params.get('welcome') ? {} : { responsa_welcome_seen: true };
+  if (params.get('browse')) storage.responsa_browse_path = params.get('browse');
   window.Otzaria = {
     call(method, payload) {
       if (method === 'network.fetchStream') return fetchStream(payload);
@@ -137,7 +197,7 @@
 
   window.addEventListener('load', () => {
     const payload = {
-      plugin: { id: 'com.otzaria-responsa', version: '0.2.2' },
+      plugin: { id: 'com.otzaria-responsa', version: '0.3.0' },
       app: {
         version: '0.9.97',
         platform: scenario === 'unsupported' ? 'linux' : 'windows',

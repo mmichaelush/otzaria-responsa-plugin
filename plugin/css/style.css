@@ -38,6 +38,8 @@
   --color-scrim: #000000;
 
   --font-ui: 'Rubik', system-ui, sans-serif;
+  /* גופן האייקונים של אוצריא, שנטען מההתקנה (ResponsaIcons.useHostFont). */
+  --font-icons: OtzariaIcons, sans-serif;
   /* גודל הממשק קבוע בכוונה: typography.fontSize הוא גופן הקריאה (עד 36px). */
   --font-size-base: 15px;
 
@@ -763,6 +765,172 @@ textarea {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ---------- עיון בקטגוריות ---------- */
+
+.browse {
+  margin-top: var(--space-4);
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  padding: 0;
+  margin: 0 0 var(--space-2);
+  list-style: none;
+  font-size: 0.9em;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.breadcrumb {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  font: inherit;
+  color: var(--color-primary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+}
+
+.breadcrumb:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.breadcrumb:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.breadcrumb .icon {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+span.breadcrumb {
+  font-weight: 600;
+  color: var(--color-on-surface);
+  cursor: default;
+}
+
+.breadcrumb-separator {
+  width: 1em;
+  height: 1em;
+  color: var(--color-on-surface-variant);
+}
+
+/* חץ "פנימה": שמאלה בעברית, ימינה באנגלית. */
+[dir='ltr'] .breadcrumb-separator,
+[dir='ltr'] .browse-row-chevron {
+  transform: scaleX(-1);
+}
+
+.browse-title {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin: var(--space-2) var(--space-1);
+}
+
+.browse-heading {
+  margin: 0;
+  font-size: 1.25em;
+  font-weight: 700;
+}
+
+.browse-heading:focus {
+  outline: none;
+}
+
+.browse-hint {
+  margin: 0 var(--space-1) var(--space-3);
+  font-size: 0.9em;
+  color: var(--color-on-surface-variant);
+}
+
+.browse-list {
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+}
+
+.browse-list li + li {
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.browse-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  min-height: 3.2em;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  color: var(--color-on-surface);
+  text-align: start;
+  cursor: pointer;
+  background: var(--color-surface-container-low);
+  border: 0;
+  transition: background var(--motion);
+}
+
+.browse-row:hover {
+  background: var(--color-surface-container);
+}
+
+.browse-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.browse-row-icon {
+  color: var(--color-primary);
+}
+
+.browse-row-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.browse-row-count {
+  flex-shrink: 0;
+  font-size: 0.85em;
+  color: var(--color-on-surface-variant);
+}
+
+.browse-row-chevron {
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--color-on-surface-variant);
+}
+
+/* הסמל של בר אילן (מההתקנה שבמחשב) ליד שם הספר. */
+.responsa-icon {
+  width: 1.1em;
+  height: 1.1em;
+  margin-inline-end: var(--space-2);
+  vertical-align: -0.15em;
+}
+
+/* גליף מגופן האייקונים של אוצריא, בתוך אותו SVG של 24×24. */
+.icon-glyph {
+  font-family: var(--font-icons);
+  fill: currentColor;
+  user-select: none;
 }
 
 /* ---------- כיסוי, לוח צד ודיאלוג ---------- */

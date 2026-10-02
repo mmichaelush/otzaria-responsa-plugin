@@ -41,6 +41,13 @@ class FakeView {
   focusSearch() {
     this.focused = (this.focused || 0) + 1;
   }
+  focusBrowse() {
+    this.browseFocused = (this.browseFocused || 0) + 1;
+  }
+  redraw(model) {
+    this.redraws = (this.redraws || 0) + 1;
+    this.renders.push(model.screen);
+  }
 }
 
 const health = reply(200, { ok: true, service: 'otzaria-responsa', apiVersion: 1 });
@@ -638,5 +645,125 @@ test('דיווח: מצורף יומן הפעולות, בלי שם המשתמש �
   assert.match(details, /C:\\Users\\…\\AppData/);
   assert.doesNotMatch(details, /Moshe/);
   assert.ok(details.length <= 5000);
+  app.suspend();
+});
+
+
+// ---------------------------------------------------- עיון בקטגוריות
+
+const browseHealth = reply(200, {
+  ok: true,
+  service: 'otzaria-responsa',
+  apiVersion: 1,
+  capabilities: ['catalog', 'open', 'searchText', 'export', 'browse'],
+});
+const rootLevel = {
+  path: '',
+  categories: [{ name: 'שו"ת', path: 'שו"ת', bookCount: 2150 }],
+  books: [],
+};
+const innerLevel = { path: 'שו"ת', categories: [], books: [book] };
+
+test('עיון: השורש נטען כשהמסך מוכן, ומעבר לקטגוריה שומר אותה', async () => {
+  const { app, bridge } = setup({
+    '/health': browseHealth,
+    '/status': reply(200, ready),
+    '/catalog/browse': (params) =>
+      reply(200, JSON.parse(params.body).path ? innerLevel : rootLevel),
+  });
+  await app.boot(windows);
+  await until(() => app.model.browse.level !== null);
+  assert.deepEqual(app.model.browse.level, rootLevel);
+
+  await app.browseTo('שו"ת');
+  assert.equal(app.model.browse.path, 'שו"ת');
+  assert.deepEqual(app.model.browse.level.books, [book]);
+  await until(() =>
+    bridge.calls.some((c) => c.method === 'storage.set' && c.payload.key === 'responsa_browse_path'),
+  );
+  const saved = bridge.calls.find((c) => c.method === 'storage.set' && c.payload.key === 'responsa_browse_path');
+  assert.equal(saved.payload.value, 'שו"ת');
+  app.suspend();
+});
+
+test('עיון: חיפוש בתוך קטגוריה שולח path, ו"בכל הספרים" מבטל אותו', async () => {
+  const { app, bridge } = setup({
+    '/health': browseHealth,
+    '/status': reply(200, ready),
+    '/catalog/browse': (params) =>
+      reply(200, JSON.parse(params.body).path ? innerLevel : rootLevel),
+    '/catalog/search': reply(200, { total: 1, results: [book] }),
+  });
+  await app.boot(windows);
+  await app.browseTo('שו"ת');
+  app.search('מהרש"א', { now: true });
+  await until(() => !app.model.searching && app.model.results);
+  assert.equal(requests(bridge, '/catalog/search').at(-1).body.path, 'שו"ת');
+
+  await app.searchEverywhere();
+  await until(() => requests(bridge, '/catalog/search').length >= 2 && !app.model.searching);
+  assert.equal(app.model.browse.path, '');
+  assert.equal(requests(bridge, '/catalog/search').at(-1).body.path, undefined);
+  app.suspend();
+});
+
+test('עיון: קטגוריה שנעלמה (הרשימה נקראה מחדש) חוזרת לשורש', async () => {
+  const { app } = setup({
+    '/health': browseHealth,
+    '/status': reply(200, ready),
+    '/catalog/browse': (params) =>
+      JSON.parse(params.body).path
+        ? reply(404, { error: { code: 'notFound', message: 'x' } })
+        : reply(200, rootLevel),
+  });
+  await app.boot(windows);
+  await app.browseTo('אין כזה');
+  await until(() => app.model.browse.level && app.model.browse.path === '');
+  assert.equal(app.model.browse.error, null);
+  app.suspend();
+});
+
+test('עיון: שירות בלי browse אינו נשאל, והחיפוש בלי path', async () => {
+  const { app, bridge } = setup({
+    '/status': reply(200, ready),
+    '/catalog/search': reply(200, { total: 0, results: [] }),
+  });
+  await app.boot(windows);
+  app.model.browse.path = 'שו"ת';
+  app.search('x', { now: true });
+  await until(() => !app.model.searching && app.model.results);
+  assert.equal(requests(bridge, '/catalog/browse').length, 0);
+  assert.equal(requests(bridge, '/catalog/search')[0].body.path, undefined);
+  app.suspend();
+});
+
+test('אייקונים: הסמל של בר אילן נטען פעם אחת, כ-ico', async () => {
+  const { app, bridge } = setup({
+    '/health': reply(200, { ok: true, service: 'otzaria-responsa', apiVersion: 1, capabilities: ['icon'] }),
+    '/status': reply(200, ready),
+    '/icon': reply(200, { png: 'AAAB' }),
+  });
+  await app.boot(windows);
+  await until(() => app.model.responsaIcon !== null);
+  assert.equal(app.model.responsaIcon, 'data:image/x-icon;base64,AAAB');
+  await app.refresh();
+  assert.equal(requests(bridge, '/icon').length, 1);
+  app.suspend();
+});
+
+test('עיון: רשימה שנקראה מחדש בונה את העץ מחדש', async () => {
+  let builtAt = '2026-09-28T10:00:00';
+  const { app, bridge } = setup({
+    '/health': browseHealth,
+    '/status': () => reply(200, { ...ready, catalog: { ...ready.catalog, builtAt } }),
+    '/catalog/browse': reply(200, rootLevel),
+  });
+  await app.boot(windows);
+  await until(() => app.model.browse.level !== null);
+  await app.refresh();
+  assert.equal(requests(bridge, '/catalog/browse').length, 1, 'אותה רשימה: בלי טעינה חוזרת');
+  builtAt = '2026-10-02T10:00:00';
+  await app.refresh();
+  await until(() => requests(bridge, '/catalog/browse').length === 2);
   app.suspend();
 });

@@ -85,6 +85,10 @@ class ResponsaCatalogBook {
   /// הקטגוריה המקבילה בעץ של אוצריא (`תלמוד בבלי/אחרונים`), כשיש שיוך.
   final String? otzariaCategory;
 
+  /// המקום בעץ של בר אילן (סדר הסריקה, `book_pk`). לא נשלח לתוסף: משמש רק
+  /// לסדר הקטגוריות והספרים בעיון, כמו בבר אילן עצמו.
+  final int treeOrder;
+
   const ResponsaCatalogBook({
     required this.key,
     required this.title,
@@ -95,6 +99,7 @@ class ResponsaCatalogBook {
     this.edition,
     this.topics = '',
     this.otzariaCategory,
+    this.treeOrder = 0,
   });
 
   Map<String, Object?> toJson() => {
@@ -259,6 +264,10 @@ class ResponsaCatalogRepository {
       otzariaCategory: otzaria == null || otzaria.isEmpty
           ? null
           : otzaria.join('/'),
+      treeOrder: switch (row['book_pk']) {
+        final int value => value,
+        _ => 0,
+      },
     );
   }
 
@@ -271,9 +280,10 @@ class ResponsaCatalogRepository {
   /// הנתיב בעץ בלי שם הספר. כל רכיב עובר [ResponsaNames.displayOf] כי במאגר
   /// הוא מאוחסן בסדר חזותי, ובלי הסידור הנתיב מוצג שבור.
   static String contextPathOf(String refPath) {
+    // `/` בתוך שם של רמה היה מתפרש כמפריד רמות (בעיון ובחיפוש לפי קטגוריה).
     final parts = refPath
         .split(pathSeparator)
-        .map((part) => ResponsaNames.displayOf(part))
+        .map((part) => ResponsaNames.displayOf(part).replaceAll('/', '∕'))
         .where((part) => part.isNotEmpty)
         .toList();
     if (parts.length <= 1) return '';
