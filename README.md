@@ -33,7 +33,7 @@
 | [docs/RELEASING.md](docs/RELEASING.md) | שחרור גרסה ופרסום בחנות |
 | [CHANGELOG.md](CHANGELOG.md) | שינויים לפי גרסה |
 
-**בחנות התוספים של אוצריא:** <https://otzaria.org/plugins>.
+**בחנות התוספים של אוצריא:** <https://otzaria.org/plugins/6abfbb96f4aadb0d88fd755a> (ממתין לאישור מנהל החנות).
 
 **שני רכיבים:** התוסף (`plugin/`) רץ בתוך אוצריא, ושירות מקומי קטן (`helper/`) רץ ברקע ושולט בבר אילן. הם מדברים ב-HTTP על `127.0.0.1`. קוד השליטה בבר אילן הועבר מ-[Otzaria/otzaria#1572](https://github.com/Otzaria/otzaria/pull/1572).
 

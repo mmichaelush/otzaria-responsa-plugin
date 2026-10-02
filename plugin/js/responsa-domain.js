@@ -42,15 +42,15 @@
   const REPOSITORY_URL = 'https://github.com/mmichaelush/otzaria-responsa-plugin';
 
   /**
-   * כל הכתובות החיצוניות במקום אחד. `store` מצביע על החנות הכללית עד
-   * הפרסום הראשון; אחריו — על דף התוסף (`https://otzaria.org/plugins/<id>`).
+   * כל הכתובות החיצוניות במקום אחד. `store` — דף התוסף בחנות; המזהה הוא
+   * משתנה המאגר `OTZARIA_PLUGIN_ID` (docs/RELEASING.md).
    */
   const Links = Object.freeze({
     homepage: REPOSITORY_URL,
     releases: REPOSITORY_URL + '/releases/latest',
     guide: REPOSITORY_URL + '/blob/main/docs/USER_GUIDE.md',
     issues: REPOSITORY_URL + '/issues',
-    store: 'https://otzaria.org/plugins',
+    store: 'https://otzaria.org/plugins/6abfbb96f4aadb0d88fd755a',
     /** ההודעה בפורום אוצריא שמציגה את התוסף ומבהירה את מעמדו. */
     forum: 'https://otzaria.org/forum/post/40010',
   });
