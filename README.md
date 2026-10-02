@@ -35,3 +35,7 @@
 **בחנות התוספים של אוצריא:** <https://otzaria.org/plugins>.
 
 **שני רכיבים:** התוסף (`plugin/`) רץ בתוך אוצריא, ושירות מקומי קטן (`helper/`) רץ ברקע ושולט בבר אילן. הם מדברים ב-HTTP על `127.0.0.1`. קוד השליטה בבר אילן הועבר מ-[Otzaria/otzaria#1572](https://github.com/Otzaria/otzaria/pull/1572).
+
+## רישיון
+
+[GPL-3.0](LICENSE). אייקוני אוצריא ([otzaria_icons](https://github.com/Otzaria/otzaria_icons), גם היא GPL-3.0) אינם ארוזים בתוסף: השירות קורא אותם מאוצריא שמותקנת אצל המשתמש.
