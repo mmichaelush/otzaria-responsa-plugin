@@ -1,16 +1,18 @@
-// הבקר: מצב, אירועי מחזור חיים, טיימרים וקריאות לשירות. ה-DOM נבנה ב-
-// responsa-view.js, וההחלטות ב-responsa-domain.js; מה שאינו תלוי במסך
-// (פתיחה מהספרייה, חיפוש מסומן, שליחת הרשימה לאוצריא) ב-responsa-engine.js.
+// הבקר: מצב, לשוניות, אירועי מחזור חיים, טיימרים וקריאות לשירות. ה-DOM נבנה
+// ב-responsa-view.js, וההחלטות ב-responsa-domain.js; מה שמול אוצריא ולא מול
+// המסך (שליחת הרשימה לחיפוש הספרייה, פורט השירות) ב-responsa-engine.js.
 (function (root) {
   'use strict';
 
   const Domain = root.ResponsaDomain;
   const Advanced = root.ResponsaAdvanced;
+  const Locate = root.ResponsaLocate;
   const I18n = root.ResponsaI18n;
   const { ServiceClient } = root.ResponsaService;
   const { applyTheme } = root.ResponsaTheme;
   const { createRuntime } = root.ResponsaRuntime;
-  const { SettingsStore } = root.ResponsaSettings;
+  const Settings = root.ResponsaSettings;
+  const { SettingsStore } = Settings;
   const { Engine } = root.ResponsaEngine;
   const Panels = root.ResponsaPanels;
   const Log = root.ResponsaLog;
@@ -51,13 +53,10 @@
       this.runtime = opts.runtime || createRuntime(bridge, { logger: this.log });
       this.service = opts.service || new ServiceClient(bridge, undefined, { log: this.log });
       this.settings = opts.settings || new SettingsStore(this.runtime);
-      this.engine =
-        opts.engine ||
-        new Engine(this.runtime, this.service, {
-          log: this.log,
-          onActivity: (activity) => this._setActivity(activity),
-        });
+      this.engine = opts.engine || new Engine(this.runtime, this.service, { log: this.log });
       this.model = {
+        /** הלשונית: 'books' | 'text' | 'locate' | 'settings' | 'help'. */
+        tab: 'books',
         screen: Screen.loading,
         platform: null,
         permissions: null,
@@ -68,6 +67,8 @@
         online: null,
         health: null,
         status: null,
+        /** הפורט שבו השירות נמצא, ל"מצב המערכת". */
+        servicePort: null,
         message: null,
         /** הקוד של הכשל שעל המסך, לציטוט בפנייה לתמיכה. */
         errorCode: null,
@@ -89,7 +90,7 @@
         /** הסמל של בר אילן מההתקנה שבמחשב (data URL), או `null`. */
         responsaIcon: null,
         /**
-         * דיאלוג החיפוש המתקדם. `query` — ResponsaAdvanced; `picker` — הרמה
+         * לשונית "חיפוש בטקסט". `query` — ResponsaAdvanced; `picker` — הרמה
          * בעץ שבבורר התחום; `problem` — מה שהבדיקה מצאה אחרי ניסיון חיפוש;
          * `status` — התשובה של בר אילן או הכשל.
          */
@@ -100,6 +101,19 @@
           problem: null,
           status: null,
         },
+        /**
+         * לשונית "איתור מקום". `choices` — המקורות שבר אילן מצא לבחירה;
+         * `openingIndex` — המקור שנפתח עכשיו; `history` — המקומות האחרונים.
+         */
+        locate: {
+          text: '',
+          ref: '',
+          running: false,
+          choices: null,
+          openingIndex: null,
+          status: null,
+          history: [],
+        },
         /** "פתיחת בר אילן" רצה. */
         showing: false,
         /** בנייה רצה, בכל מסך. */
@@ -109,12 +123,10 @@
         elapsedMs: 0,
         cancelling: false,
         settings: this.settings.values,
-        /** `null` | 'settings' | 'help' | 'welcome'. */
+        /** `null` | 'welcome' — מסך הפתיחה, הדיאלוג היחיד. */
         sheet: null,
         helpTab: Panels.HelpTab.guide,
         report: { text: '', sending: false },
-        /** פעולה שהגיעה מהספרייה או מלחיצה ימנית: `{ kind, title }`. */
-        activity: null,
         /** הפעולות האחרונות, לכרטיסיית "מצב המערכת". */
         log: [],
       };
@@ -138,16 +150,16 @@
       if (Icons.onChange) {
         Icons.onChange(() => {
           this.view.redraw(this.model, this.actions);
-          this._renderSheet();
+          this._renderPage();
         });
       }
       // רשומה חדשה מתעדכנת ב"מצב המערכת" כשהוא פתוח, פעם אחת לכל סדרה.
       this.log.subscribe((entry) => {
         if (entry.level === 'debug' || this.logRender) return;
-        if (this.model.sheet !== 'help' || this.model.helpTab !== Panels.HelpTab.status) return;
+        if (this.model.tab !== 'help' || this.model.helpTab !== Panels.HelpTab.status) return;
         this.logRender = setTimeout(() => {
           this.logRender = null;
-          this._renderSheet();
+          this._renderPage();
         }, 250);
       });
     }
@@ -169,11 +181,15 @@
       this.model.settings = await this.settings.load();
       this.model.browse = { ...this.model.browse, path: this.model.settings.browsePath };
       this.model.advanced.query = Advanced.normalize(this.model.settings.advancedQuery || Advanced.emptyQuery());
+      this.model.locate.history = this.model.settings.locateHistory.slice();
+      this.model.tab = this.model.settings.tab;
       this._applyLanguage({ boot: true });
       this.log.info(
         'הפעלה: תוסף ' + this.model.pluginVersion + ', אוצריא ' + this.model.appVersion +
           ', שפה ' + I18n.language + ', אינטרנט: ' + describeOnline(this.model.online),
       );
+      // הלשוניות מיד, עוד לפני שהשירות ענה: עזרה והגדרות לא ממתינות לו.
+      this.view.render(this.model, this.actions);
       // בפעם הראשונה: מסך הפתיחה, מעל המסך שמתאים למצב המחשב.
       if (!this.model.settings.welcomeSeen) this.openSheet('welcome');
       return this.refresh();
@@ -185,7 +201,7 @@
       this.log.info('ההרשאות השתנו');
       // פריט התפריט אולי נרשם זה עתה, בכותרת העברית שבמניפסט.
       if (I18n.language !== I18n.SOURCE_LANGUAGE) this.engine.patchContextMenuTitle();
-      this._renderSheet();
+      this._renderPage();
       return this.refresh();
     }
 
@@ -200,9 +216,10 @@
     pageOpened(detail) {
       const param = detail && detail.param;
       const view = param && param.view;
-      if (view === 'settings') this.openSheet('settings');
-      else if (view === 'help') this.openSheet('help', param.tab);
+      if (view === 'settings') this.selectTab('settings');
+      else if (view === 'help') this.openHelp(param.tab);
       else if (view === 'welcome') this.openSheet('welcome');
+      else if (Settings.TABS.includes(view)) this.selectTab(view);
     }
 
     /** אוצריא מקפיאה לשונית שאינה מוצגת; הבנייה ממשיכה בשירות. */
@@ -260,6 +277,9 @@
       if (this.suspended || seq !== this.refreshSeq) return;
       this.model.health = health;
       this.model.status = status;
+      this.model.servicePort = health ? Domain.portOf(this.service.baseUrl) : null;
+      // פריט התפריט וספרי הספרייה פונים לפורט הזה דרך אוצריא, בלי התוסף.
+      if (health && health.apiVersion === Domain.API_VERSION) this.engine.syncPort(health, this.service.baseUrl);
       this.model.message = failure ? Domain.errorMessage(failure) : null;
       this.model.errorCode = failure ? failure.code || null : null;
 
@@ -284,7 +304,8 @@
         this.model.errorCode = (build.error && build.error.code) || null;
       }
       this._show(screen);
-      this._renderSheet();
+      this._renderPage();
+      this._ensurePicker();
       if (build.state === 'running' && !this.buildWatch) {
         this._watchBuild({ attachOnly: true });
       }
@@ -331,13 +352,11 @@
       if (this.model.checking) return;
       this.model.checking = true;
       this.view.update(this.model, this.actions);
-      this._renderSheet();
       try {
         await this.refresh();
       } finally {
         this.model.checking = false;
         this.view.update(this.model, this.actions);
-        this._renderSheet();
       }
     }
 
@@ -495,7 +514,7 @@
       this._renderResults();
       try {
         const result = await this.service.open(book.key);
-        await this.runtime.notify.success(root.ResponsaEngine.openedMessage(book.title, result));
+        await this.runtime.notify.success(Domain.openedMessage(book.title, result));
       } catch (error) {
         await this.runtime.notify.error(Domain.errorMessage(error));
         if (Domain.needsRefresh(error.code)) this.refresh({ rerunSearch: false });
@@ -511,10 +530,37 @@
       this._renderResults();
     }
 
-    /** אירוע מהמנוע: "פותח…"/"מחפש…" בדף, כשהאירוע הגיע ללשונית. */
-    _setActivity(activity) {
-      this.model.activity = activity;
-      if (this.model.screen === Screen.ready) this.view.update(this.model, this.actions);
+    // ---------------------------------------------------- לשוניות
+
+    /**
+     * מעבר ללשונית. [focusTab] — מעבר בחצים: הפוקוס נשאר על הלשונית; אחרת
+     * הוא עובר לשדה הראשון שבה. הלשונית נשמרת לפתיחה הבאה.
+     */
+    selectTab(tab, options) {
+      if (!Settings.TABS.includes(tab)) return;
+      const changed = this.model.tab !== tab;
+      this.model.tab = tab;
+      if (tab === 'help') this.model.log = this.log.entries('info').slice(-LOG_VIEW_ENTRIES);
+      if (changed) {
+        this.view.render(this.model, this.actions);
+        this.settings.set('tab', tab).then(
+          (values) => {
+            this.model.settings = values;
+          },
+          (error) => this.log.debug('שמירת הלשונית נכשלה', error),
+        );
+      }
+      if (options && options.focusTab) this.view.focusTab(tab);
+      else this.view.focusPage(this.model);
+      if (tab === 'text') this._ensurePicker();
+    }
+
+    /** עזרה, בכרטיסייה [helpTab] (או בזו שהייתה פתוחה). */
+    openHelp(helpTab) {
+      if (helpTab && Object.values(Panels.HelpTab).includes(helpTab)) this.model.helpTab = helpTab;
+      if (this.model.sheet === 'welcome') this.closeSheet();
+      if (this.model.tab !== 'help') this.selectTab('help');
+      else this._renderPage();
     }
 
     // ---------------------------------------------------- בנייה
@@ -627,16 +673,10 @@
 
     // ---------------------------------------------------- חיפוש מתקדם
 
-    openAdvanced() {
-      this.view.rememberFocus();
-      this.openSheet('advanced');
-      this._ensurePicker();
-    }
-
     /** בורר התחום צריך רמה בעץ כשבוחרים "קטגוריות וספרים שאבחר". */
     _ensurePicker() {
       const state = this.model.advanced;
-      if (state.query.scope.mode !== Advanced.Scope.pick) return;
+      if (this.model.tab !== 'text' || state.query.scope.mode !== Advanced.Scope.pick) return;
       if (state.picker.level || state.picker.loading) return;
       if (!Domain.serviceCan(this.model.health, 'browse')) return;
       this.advancedBrowse(state.picker.path);
@@ -648,7 +688,7 @@
       const state = this.model.advanced;
       const seq = ++this.pickerSeq;
       state.picker = { ...state.picker, path: path || '', loading: true, error: null };
-      this._renderSheet();
+      this._renderPage();
       try {
         const level = await this.service.browse(path || '');
         if (seq !== this.pickerSeq) return;
@@ -662,7 +702,7 @@
         }
         state.picker = { ...state.picker, loading: false, error: Domain.errorMessage(error) };
       }
-      this._renderSheet();
+      this._renderPage();
       if (focus) this.view.focusInSheet('adv-crumb-' + state.picker.path);
     }
 
@@ -678,7 +718,7 @@
       if (state.problem) state.problem = Advanced.validate(query);
       this._saveAdvancedSoon();
       if (options && options.light) this.view.updateAdvanced(this.model);
-      else this._renderSheet();
+      else this._renderPage();
     }
 
     _saveAdvancedSoon() {
@@ -695,13 +735,19 @@
     }
 
     advancedSet(patch, options) {
+      this._editAdvanced(Advanced.normalize({ ...this.model.advanced.query, ...patch }), options);
+    }
+
+    /**
+     * חיפוש רגיל, בונה, או תחביר של בר אילן. בלחיצה הפוקוס עובר לשדה
+     * הראשון; בחצים הוא נשאר על הבקר, כדי שאפשר יהיה לחזור.
+     */
+    advancedMode(mode, how) {
       const query = this.model.advanced.query;
-      const next = { ...query, ...patch };
-      // מעבר ראשון לכתיבה חופשית מתחיל מהשאילתה שבבונה.
-      if (patch.manual === true && !query.manual && patch.manualText === undefined && !query.manualText.trim()) {
-        next.manualText = Advanced.buildQuery(query);
-      }
-      this._editAdvanced(Advanced.normalize(next), options);
+      this.model.advanced.problem = null;
+      this._editAdvanced(Advanced.setMode(query, mode));
+      if (how && how.viaKeyboard) this.view.focusInSheet('adv-kind-' + mode);
+      else this.view.focusPage(this.model);
     }
 
     advancedWord(index, alternative, value) {
@@ -754,7 +800,7 @@
             max: Advanced.MAX_SCOPE_ITEMS,
           }),
         };
-        this._renderSheet();
+        this._renderPage();
         return;
       }
       this._editAdvanced(next);
@@ -765,33 +811,34 @@
       this.view.focusInSheet('adv-word-0-0');
     }
 
-    /** "ניקוי": המילים מתאפסות; התחום והאפשרויות נשארים. */
+    /** "ניקוי": המילים מתאפסות; סוג החיפוש, התחום והאפשרויות נשארים. */
     advancedClear() {
       const query = this.model.advanced.query;
       this.model.advanced.problem = null;
-      this._editAdvanced({ ...Advanced.emptyQuery(), scope: query.scope, options: query.options });
-      this.view.focusInSheet('adv-word-0-0');
+      this._editAdvanced({ ...Advanced.emptyQuery(), mode: query.mode, scope: query.scope, options: query.options });
+      this.view.focusPage(this.model);
     }
 
     async runAdvanced() {
       const state = this.model.advanced;
       if (state.running || !Domain.serviceCan(this.model.health, 'advancedSearch')) return;
-      const problem = Advanced.validate(state.query);
+      const query = Advanced.withAvailableScope(state.query, Domain.catalogReady(this.model.status));
+      const problem = Advanced.validate(query);
       state.problem = problem;
       if (problem) {
         state.status = null;
-        this._renderSheet();
+        this._renderPage();
         this.view.focusAdvancedProblem(problem);
         this.view.announce(problem.message);
         return;
       }
-      const body = Advanced.toRequest(state.query);
+      const body = Advanced.toRequest(query);
       state.running = true;
       state.status = null;
-      this._renderSheet();
-      this.log.info('חיפוש מתקדם: ' + body.q, {
-        scope: state.query.scope.mode,
-        items: state.query.scope.items.length,
+      this._renderPage();
+      this.log.info('חיפוש בטקסט (' + query.mode + '): ' + body.q, {
+        scope: query.scope.mode,
+        items: query.scope.items.length,
       });
       try {
         const result = await this.service.advancedSearch(body);
@@ -804,42 +851,165 @@
         state.status = { kind: 'error', text: Domain.errorMessage(error) };
       } finally {
         state.running = false;
-        this._renderSheet();
+        this._renderPage();
         if (state.status) this.view.announce(state.status.text);
       }
     }
 
-    /** "פתיחת בר אילן", מהמסך הראשי או מהדיאלוג. */
+    /** "פתיחת בר אילן", מהפס העליון. */
     async showResponsa() {
       if (this.model.showing) return;
       this.model.showing = true;
-      this._renderShowing();
-      const inDialog = () => this.model.sheet === 'advanced';
+      this.view.update(this.model, this.actions);
       try {
         const result = await this.service.showResponsa();
         this.log.info('בר אילן נפתח' + (result && result.broughtToFront ? '' : ' (לא עבר לחזית)'));
-        if (inDialog()) {
-          this.model.advanced.status = {
-            kind: 'success',
-            text:
-              result && result.broughtToFront
-                ? t('בר אילן נפתח.')
-                : t('בר אילן פתוח. אם הוא לא הופיע מעל אוצריא, עוברים אליו בשורת המשימות.'),
-          };
+        if (result && result.broughtToFront === false) {
+          await this.runtime.notify.info(
+            t('בר אילן פתוח. אם הוא לא הופיע מעל אוצריא, עוברים אליו בשורת המשימות.'),
+          );
         }
       } catch (error) {
-        const text = Domain.errorMessage(error);
-        if (inDialog()) this.model.advanced.status = { kind: 'error', text };
-        else await this.runtime.notify.error(text);
+        await this.runtime.notify.error(Domain.errorMessage(error));
       } finally {
         this.model.showing = false;
-        this._renderShowing();
+        this.view.update(this.model, this.actions);
       }
     }
 
-    _renderShowing() {
-      this.view.update(this.model, this.actions);
-      this._renderSheet();
+    // ---------------------------------------------------- איתור מקום
+
+    /**
+     * הקלדה: רק המודל, כי השדה עצמו כבר מציג את מה שהוקלד. הודעה קודמת
+     * שייכת למקום הקודם, ולכן נעלמת.
+     */
+    locateText(text) {
+      const state = this.model.locate;
+      state.text = text;
+      if (state.status) {
+        state.status = null;
+        this.view.refreshPage(this.model, this.actions);
+      }
+    }
+
+    /** דוגמה: ממלאת את השדה, וההחלטה לפתוח נשארת למשתמש. */
+    locateExample(value) {
+      if (this.model.locate.running) return;
+      this._fillLocate(value);
+    }
+
+    /** מקום אחרון: כבר נפתח פעם, ולכן נפתח מיד. */
+    locateRecent(value) {
+      if (this.model.locate.running) return;
+      this.model.locate.text = value;
+      return this.runLocate();
+    }
+
+    /** "פתיחה במקום מסוים" מספר ברשימה: שם הספר בשדה, והמשך הכתיבה למשתמש. */
+    locateIn(book) {
+      this.selectTab('locate');
+      // בזמן פתיחה המודל שייך לבקשה שרצה, והלשונית מראה אותה; תשובה מאוחרת
+      // הייתה דורסת שדה שמולא בינתיים.
+      if (this.model.locate.running) return;
+      this._fillLocate(Locate.startFrom(book.title));
+    }
+
+    _fillLocate(text) {
+      const state = this.model.locate;
+      state.text = text;
+      state.choices = null;
+      state.status = null;
+      this.view.refreshPage(this.model, this.actions);
+      this.view.setInputValue('locate-input', text);
+      this.view.focusPage(this.model);
+    }
+
+    async runLocate() {
+      const state = this.model.locate;
+      if (state.running) return;
+      const problem = Locate.validate(state.text);
+      if (problem) {
+        state.status = { kind: 'error', text: problem };
+        state.choices = null;
+        this._renderPage();
+        this.view.focusPage(this.model);
+        this.view.announce(problem);
+        return;
+      }
+      const ref = Locate.normalize(state.text);
+      Object.assign(state, { text: ref, ref, running: true, openingIndex: null, status: null, choices: null });
+      this._renderPage();
+      this.log.info('איתור מקום: ' + ref);
+      try {
+        const result = await this.service.locate(ref);
+        if (result && result.opened === false && Array.isArray(result.choices)) {
+          state.choices = result.choices;
+          this.log.info('איתור מקום: ' + result.choices.length + ' מקורות לבחירה');
+        } else {
+          this._located(ref, result);
+        }
+      } catch (error) {
+        state.status = { kind: 'error', text: Domain.errorMessage(error) };
+      } finally {
+        state.running = false;
+        this._renderPage();
+        if (state.choices) {
+          this.view.announce(t('נמצאו {count} מקורות. בוחרים את המקור לפתיחה.', {
+            count: Domain.formatCount(state.choices.length),
+          }));
+          this.view.focusInSheet('locate-choice-0');
+        } else if (state.status) {
+          this.view.announce(state.status.text);
+        }
+      }
+    }
+
+    /** בחירה מהמקורות שבר אילן מצא. */
+    async openLocateChoice(index) {
+      const state = this.model.locate;
+      if (state.running || !state.choices || !state.choices[index]) return;
+      state.running = true;
+      state.openingIndex = index;
+      state.status = null;
+      this._renderPage();
+      let refreshed = false;
+      try {
+        const result = await this.service.locate(state.ref, index);
+        // הבחירה כבר אינה ברשימה של בר אילן: השירות מחזיר רשימה עדכנית, ושום
+        // דבר לא נפתח.
+        if (result && result.opened === false && Array.isArray(result.choices)) {
+          state.choices = result.choices;
+          state.status = { kind: 'info', text: t('בר אילן ענה הפעם ברשימה אחרת. בוחרים שוב את המקור.') };
+          refreshed = true;
+        } else {
+          this._located(state.ref, result, state.choices[index]);
+        }
+      } catch (error) {
+        state.status = { kind: 'error', text: Domain.errorMessage(error) };
+      } finally {
+        state.running = false;
+        state.openingIndex = null;
+        this._renderPage();
+        if (state.status) this.view.announce(state.status.text);
+        if (refreshed) this.view.focusInSheet('locate-choice-0');
+      }
+    }
+
+    /** המקום נפתח: הודעה, והמקום נשמר בראש "אחרונים". */
+    _located(ref, result, choice) {
+      const state = this.model.locate;
+      state.status = {
+        kind: 'success',
+        text: Domain.openedMessage((result && result.window) || choice || ref, result),
+      };
+      this.log.info('נפתח במקום: ' + ((result && result.window) || ref));
+      state.history = Locate.remember(state.history, ref);
+      this.settings.set('locateHistory', state.history).then(
+        (values) => {
+          this.model.settings = values;
+        },
+        (error) => this.log.debug('שמירת המקומות האחרונים נכשלה', error),
+      );
     }
 
     async copyAdvancedQuery() {
@@ -855,20 +1025,22 @@
 
     // ---------------------------------------------------- הגדרות
 
+    /**
+     * מסך הפתיחה הוא הדיאלוג היחיד. 'settings' ו-'help' (מקיצורי דרך ומקוד
+     * ישן) הן לשוניות.
+     */
     openSheet(sheet, helpTab) {
-      if (sheet === 'help' && helpTab && Object.values(Panels.HelpTab).includes(helpTab)) {
-        this.model.helpTab = helpTab;
-      }
-      // מעבר ממסך הפתיחה לעזרה הוא גם סגירה שלו.
-      if (this.model.sheet === 'welcome' && sheet !== 'welcome') this._markWelcomeSeen();
-      this.model.sheet = sheet;
-      this.model.log = this.log.entries('info').slice(-LOG_VIEW_ENTRIES);
+      if (sheet === 'settings') return this.selectTab('settings');
+      if (sheet === 'help') return this.openHelp(helpTab);
+      if (sheet !== 'welcome') return undefined;
+      this.model.sheet = 'welcome';
       this.view.renderSheet(this.model, this.actions);
+      return undefined;
     }
 
     closeSheet() {
       if (this.model.sheet === null) return;
-      if (this.model.sheet === 'welcome') this._markWelcomeSeen();
+      this._markWelcomeSeen();
       this.model.sheet = null;
       this.view.renderSheet(this.model, this.actions);
     }
@@ -876,10 +1048,10 @@
     /** "בואו נתחיל": מסך הפתיחה לא יוצג שוב מעצמו. */
     finishWelcome() {
       this.closeSheet();
-      this.view.focusSearch();
     }
 
     /** שמירה שנכשלה אינה מפריעה: לכל היותר המסך יוצג שוב בפעם הבאה. */
+    /** גם התנאי של פריט התפריט ושל ספרי הספרייה: הם מוצגים רק אחרי ההבהרה. */
     _markWelcomeSeen() {
       if (this.model.settings.welcomeSeen) return;
       this.settings.set('welcomeSeen', true).then(
@@ -899,7 +1071,7 @@
         this.log.warn('שמירת ההגדרה ' + name + ' נכשלה', error);
         await this.runtime.notify.error(t('ההגדרה לא נשמרה. אפשר לנסות שוב.'));
       }
-      this._renderSheet();
+      this._renderPage();
     }
 
     /** הכפתור שהיה ממוקד נעלם עם ההערה: הפוקוס עובר לתיבת החיפוש. */
@@ -960,6 +1132,29 @@
       );
     }
 
+    async copyEmail() {
+      try {
+        await root.navigator.clipboard.writeText(Domain.SUPPORT_EMAIL);
+        await this.runtime.notify.success(t('הכתובת הועתקה.'));
+      } catch (_) {
+        await this.runtime.notify.error(t('ההעתקה לא הצליחה. הכתובת: {email}', { email: Domain.SUPPORT_EMAIL }));
+      }
+    }
+
+    /** תוכנת הדואר שבמחשב, עם פרטי המערכת. בלעדיה — הכתובת להעתקה. */
+    async writeEmail() {
+      const sent = await this.runtime.callSoft('feedback.sendEmail', {
+        to: Domain.SUPPORT_EMAIL,
+        subject: t('בר אילן באוצריא {version}', { version: this.model.pluginVersion || '' }).trim(),
+        body: '\n\n---\n' + Panels.statusText(this.model, { forReport: true }),
+      });
+      if (sent === null) {
+        await this.runtime.notify.info(
+          t('לא נמצאה תוכנת דואר במחשב. אפשר לכתוב מכל תיבת דואר אל {email}.', { email: Domain.SUPPORT_EMAIL }),
+        );
+      }
+    }
+
     async copyStatus() {
       const text = this._diagnostics();
       try {
@@ -991,7 +1186,7 @@
       const report = this.model.report;
       if (report.sending || report.text.trim().length < 10) return;
       report.sending = true;
-      this._renderSheet();
+      this._renderPage();
       // התיאור ופרטי המערכת קודם; מהיומן נכנס מה שנשאר, מהסוף (החדש).
       const head =
         report.text.trim().slice(0, MAX_REPORT_TEXT) +
@@ -1013,7 +1208,7 @@
         await this.runtime.notify.error(t('הדיווח לא נשלח. אפשר לנסות שוב מאוחר יותר.'));
       } finally {
         report.sending = false;
-        this._renderSheet();
+        this._renderPage();
       }
     }
 
@@ -1062,7 +1257,8 @@
         browseTo: (path) => this.browseTo(path),
         searchEverywhere: () => this.searchEverywhere(),
         loadMore: () => this.loadMore(),
-        openAdvanced: () => this.openAdvanced(),
+        selectTab: (tab, options) => this.selectTab(tab, options),
+        advancedMode: (mode, how) => this.advancedMode(mode, how),
         advancedBrowse: (path) => this.advancedBrowse(path, { focus: true }),
         advancedSet: (patch, options) => this.advancedSet(patch, options),
         advancedWord: (index, alternative, value) => this.advancedWord(index, alternative, value),
@@ -1079,28 +1275,34 @@
         runAdvanced: () => this.runAdvanced(),
         showResponsa: () => this.showResponsa(),
         copyAdvancedQuery: () => this.copyAdvancedQuery(),
+        locateText: (text) => this.locateText(text),
+        locateExample: (value) => this.locateExample(value),
+        locateRecent: (value) => this.locateRecent(value),
+        locateIn: (book) => this.locateIn(book),
+        runLocate: () => this.runLocate(),
+        openLocateChoice: (index) => this.openLocateChoice(index),
         open: (book) => this.open(book),
-        openSettings: () => this.openSheet('settings'),
-        openHelp: (tab) => this.openSheet('help', tab),
+        openHelp: (tab) => this.openHelp(tab),
         closeSheet: () => this.closeSheet(),
-        dismissSheet: () => {
-          if (this.model.sheet === 'welcome') return;
-          this.closeSheet();
-        },
+        // מסך הפתיחה אינו נסגר בלחיצה מחוץ לו: ההבהרה בו חובה.
+        dismissSheet: () => {},
         setSetting: (name, value) => this.setSetting(name, value),
         dismissStartupNotice: () => this.dismissStartupNotice(),
         setLanguage: (value) => this.setLanguage(value),
         createShortcut: (location) => this.createShortcut(location),
         copyStatus: () => this.copyStatus(),
+        copyEmail: () => this.copyEmail(),
+        writeEmail: () => this.writeEmail(),
         editReport: (text) => this.editReport(text),
         sendReport: () => this.sendReport(),
       };
     }
 
-    _renderSheet() {
-      if (this.model.sheet === null) return;
+    /** מסך הפתיחה, ולשונית שאינה "ספרים" — רק כשמשהו בהן השתנה. */
+    _renderPage() {
       this.model.log = this.log.entries('info').slice(-LOG_VIEW_ENTRIES);
-      this.view.renderSheet(this.model, this.actions);
+      if (this.model.sheet !== null) this.view.renderSheet(this.model, this.actions);
+      if (this.model.tab !== 'books') this.view.refreshPage(this.model, this.actions);
     }
 
     _renderResults() {

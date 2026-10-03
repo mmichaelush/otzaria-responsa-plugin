@@ -1,6 +1,6 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
-// המקומי, לפי `?scenario=...&mode=light|dark&query=...&sheet=settings|help&tab=...
-// &lang=en&library=1&browse=<נתיב>&oldservice=1&noicons=1`. ערכות הצבעים הן
+// המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|settings|help&tab=...
+// &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&noicons=1`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
 (function () {
   'use strict';
@@ -129,7 +129,7 @@
               ok: true,
               service: 'otzaria-responsa',
               apiVersion: scenario === 'serviceOutdated' ? 2 : 1,
-              serverVersion: '0.4.0',
+              serverVersion: '0.5.0',
               capabilities: params.get('oldservice')
                 ? ['catalog', 'open', 'icon', 'searchText', 'export']
                 : [
@@ -142,6 +142,8 @@
                     'otzariaIcons',
                     'advancedSearch',
                     'showResponsa',
+                    'notify',
+                    'locate',
                   ],
             };
       case '/status':
@@ -159,6 +161,16 @@
         return { ok: true, broughtToFront: true };
       case '/text/search':
         return { ok: true, outcome: 'found', count: 191, query: body.q, advanced: body.advanced, broughtToFront: true };
+      // "בראשית ב ג": כמה מקורות לבחירה, כמו בבר אילן; כל השאר נפתח מיד.
+      case '/reference/open':
+        return body.index === undefined && String(body.ref).startsWith('בראשית')
+          ? {
+              ok: true,
+              opened: false,
+              ref: body.ref,
+              choices: ['תורה בראשית ב ג', 'תרגום אונקלוס בראשית ב ג', 'רש"י בראשית ב ג', 'רמב"ן בראשית ב ג', 'אבן עזרא בראשית ב ג'],
+            }
+          : { ok: true, opened: true, ref: body.ref, window: body.ref, broughtToFront: true };
       default:
         return { ok: true };
     }
@@ -193,8 +205,12 @@
   // מסך הפתיחה מוצג רק כשמבקשים (`welcome=1`), כדי שלא יכסה כל מסך אחר.
   const storage = params.get('welcome') ? {} : { responsa_welcome_seen: true };
   if (params.get('browse')) storage.responsa_browse_path = params.get('browse');
-  // `adv=<name>`: חיפוש מתקדם שמור, כמו אחרי עבודה בדיאלוג.
+  // `page=<tab>`: הלשונית שנפתחת (ספרים, חיפוש בטקסט, איתור מקום, הגדרות, עזרה).
+  if (params.get('page')) storage.responsa_tab = params.get('page');
+  if (params.get('history')) storage.responsa_locate_history = ['שמות רבה פרשה א', 'ברכות דף ב עמוד א'];
+  // `adv=<name>`: חיפוש שמור, כמו אחרי עבודה בלשונית.
   const advanced = {
+    simple: { mode: 'simple', simpleText: 'צער בעלי חיים', options: { abbreviations: true, showForms: false } },
     words: {
       terms: [
         { words: ['קוצץ', 'עוקר', 'משחית'], form: 'exact', exclude: false },
@@ -215,7 +231,7 @@
         ],
       },
     },
-    manual: { manual: true, manualText: '8: ($שומר/%מצא) #(אכל/גנב/מכר) *(פקדון/אבידה)*' },
+    manual: { mode: 'manual', manualText: '8: ($שומר/%מצא) #(אכל/גנב/מכר) *(פקדון/אבידה)*' },
   }[params.get('adv')];
   if (advanced) storage.responsa_advanced_query = advanced;
   window.Otzaria = {
@@ -235,9 +251,9 @@
 
   window.addEventListener('load', () => {
     const payload = {
-      plugin: { id: 'com.otzaria-responsa', version: '0.3.0' },
+      plugin: { id: 'com.otzaria-responsa', version: '0.5.0' },
       app: {
-        version: '0.9.97',
+        version: '0.9.98',
         platform: scenario === 'unsupported' ? 'linux' : 'windows',
         language: params.get('lang') || 'he',
       },
@@ -253,7 +269,8 @@
               'reader.context_menu',
               'navigation.write',
               'ui.create_shortcut',
-              ...(params.get('library') ? ['library.books.provide'] : []),
+              'feedback.send_email',
+              'library.books.provide',
             ],
       theme: {
         mode: dark ? 'dark' : 'light',
@@ -279,26 +296,50 @@
         }
       }, 300);
     }
-    const sheet = params.get('sheet');
-    if (sheet === 'advanced') {
+    // `tab=<help tab>`: כרטיסייה בתוך "עזרה".
+    const helpTab = params.get('tab');
+    if (helpTab) {
+      const pick = () => {
+        const button = document.querySelector('.secondary-tabs [data-tab="' + helpTab + '"]');
+        if (button) button.click();
+        else setTimeout(pick, 100);
+      };
+      setTimeout(pick, 300);
+    }
+    // `run=1`: אחרי "חיפוש בבר אילן" (או "פתיחה בבר אילן" באיתור מקום).
+    if (params.get('run')) {
       setTimeout(() => {
-        document.querySelector('[data-focus-key="open-advanced"]').click();
-        // `run=1`: אחרי "חיפוש בבר אילן", עם התשובה בשורת המצב.
-        if (params.get('run')) setTimeout(() => document.querySelector('[data-focus-key="adv-run"]').click(), 200);
-        if (params.get('guide')) {
-          setTimeout(() => {
-            const guide = document.querySelector('.advanced-guide');
-            guide.open = true;
-            const body = document.querySelector('.advanced-body');
-            body.scrollTop = guide.offsetTop - body.offsetTop - 16;
-          }, 200);
-        }
+        const run = document.querySelector('[data-focus-key="adv-run"], [data-focus-key="locate-run"]');
+        if (run) run.click();
       }, 400);
-    } else if (sheet) {
+    }
+    // `example=1`: לחיצה על הדוגמה הראשונה, ובדיקה שהיא מילאה את השדה (נמצא
+    // בבדיקה חיה: `value` אינו ב-markup, והרענון לא עדכן אותו).
+    if (params.get('example')) {
       setTimeout(() => {
-        document.querySelector(sheet === 'help' ? '.help-toggle' : '.settings-toggle').click();
-        const tab = params.get('tab');
-        if (tab) setTimeout(() => document.querySelector('[data-tab="' + tab + '"]').click(), 100);
+        const chip = document.querySelector('[data-focus-key^="locate-example-"]');
+        chip.click();
+        setTimeout(() => {
+          const value = document.querySelector('.locate-input').value;
+          if (value !== chip.textContent) console.error('Error: example did not fill the field: "' + value + '"');
+        }, 200);
+      }, 400);
+    }
+    // `loc=<מקום>`: מה שהוקלד באיתור מקום.
+    const loc = params.get('loc');
+    if (loc) {
+      setTimeout(() => {
+        const input = document.querySelector('.locate-input');
+        input.value = loc;
+        input.dispatchEvent(new Event('input'));
+      }, 300);
+    }
+    if (params.get('guide')) {
+      setTimeout(() => {
+        const guide = document.querySelector('.advanced-guide');
+        guide.open = true;
+        const scroller = document.querySelector('.app-content');
+        scroller.scrollTop = guide.offsetTop - 16;
       }, 400);
     }
   });

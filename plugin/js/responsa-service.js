@@ -136,6 +136,15 @@
       return this.request('POST', '/text/search', body, MAX_STREAM_MS);
     }
 
+    /**
+     * מקום מדויק (`בראשית ב ג`). בלי [index] ועם כמה תוצאות — חוזר
+     * `{ opened: false, choices }`, ושום דבר אינו נפתח.
+     */
+    locate(ref, index) {
+      const body = typeof index === 'number' ? { ref, index } : { ref };
+      return this.request('POST', '/reference/open', body, MAX_STREAM_MS);
+    }
+
     /** "פתיחת בר אילן": מפעיל אותו אם צריך ומביא אותו לחזית. */
     showResponsa() {
       return this.request('POST', '/responsa/show', {}, MAX_STREAM_MS);

@@ -2,24 +2,25 @@
   "schemaVersion": 1,
   "id": "com.otzaria-responsa",
   "name": "בר אילן",
-  "version": "0.4.0",
-  "description": "ספרי פרויקט השו\"ת של בר אילן המותקן במחשב: חיפוש לפי ספר או מחבר ופתיחה בבר אילן, חיפוש מתקדם בטקסט, וחיפוש טקסט מסומן בלחיצה ימנית.",
+  "version": "0.5.0",
+  "description": "ספרי פרויקט השו\"ת של בר אילן המותקן במחשב: חיפוש ספרים ופתיחה בבר אילן, חיפוש בטקסט, איתור מקום מדויק, וחיפוש בלחיצה ימנית.",
   "author": "מיכאלוש",
   "homepage": "https://github.com/mmichaelush/otzaria-responsa-plugin",
   "stability": "beta",
   "entrypoint": "index.html",
   "icon": "icon/icon.png",
-  "minAppVersion": "0.9.97",
+  "minAppVersion": "0.9.98",
   "sdkVersion": "1.x",
   "permissions": [
     "network.localhost",
     "app.open_url",
     "app.startup_contributions",
-    "app.run_on_startup",
     "app.shortcuts",
     "reader.context_menu",
+    "library.books.provide",
     "navigation.write",
     "ui.create_shortcut",
+    "feedback.send_email",
     "events.subscribe:plugin.permissions_changed",
     "events.subscribe:settings.changed"
   ],
@@ -36,9 +37,6 @@
       "defaultPinned": true,
       "iconName": "book_open_medium_search_24_regular"
     },
-    "background": {
-      "entrypoint": "background.html"
-    },
     "startup": {
       "contextMenuItems": [
         {
@@ -46,9 +44,53 @@
           "title": "חיפוש בבר אילן",
           "icon": "search_24_regular",
           "when": {
-            "storage": {
-              "key": "responsa_context_menu",
-              "notEquals": false
+            "all": [
+              { "storage": { "key": "responsa_context_menu", "notEquals": false } },
+              { "storage": { "key": "responsa_welcome_seen", "equals": true } },
+              { "storage": { "key": "responsa_service_port", "exists": true } }
+            ]
+          },
+          "action": {
+            "type": "localService.post",
+            "args": {
+              "port": { "$storage": "responsa_service_port" },
+              "path": "/text/search",
+              "body": {
+                "q": { "$selection": "selectedText" },
+                "notify": true
+              },
+              "pendingMessage": "מחפש בבר אילן…",
+              "unavailableMessage": "שירות בר אילן אינו פועל. כדי לבדוק מה חסר, פותחים את לשונית \"בר אילן\".",
+              "timeoutMs": 120000
+            }
+          }
+        }
+      ],
+      "libraryBooks": [
+        {
+          "id": "responsa-books",
+          "provider": "responsa",
+          "title": "בר אילן",
+          "icon": "book_open_medium_search_24_regular",
+          "when": {
+            "all": [
+              { "storage": { "key": "responsa_library_books", "notEquals": false } },
+              { "storage": { "key": "responsa_welcome_seen", "equals": true } },
+              { "storage": { "key": "responsa_service_port", "exists": true } }
+            ]
+          },
+          "openAction": {
+            "type": "localService.post",
+            "args": {
+              "port": { "$storage": "responsa_service_port" },
+              "path": "/book/open",
+              "body": {
+                "key": { "$book": "id" },
+                "notify": true
+              },
+              "pendingMessage": "פותח בבר אילן…",
+              "unavailableMessage": "שירות בר אילן אינו פועל. כדי לבדוק מה חסר, פותחים את לשונית \"בר אילן\".",
+              "timeoutMs": 120000
             }
           }
         }

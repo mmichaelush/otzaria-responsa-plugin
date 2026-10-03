@@ -52,6 +52,18 @@ class FakeView {
   focusInSheet(key) {
     this.sheetFocus = key;
   }
+  focusTab(tab) {
+    this.tabFocus = tab;
+  }
+  focusPage(model) {
+    this.pageFocus = model.tab;
+  }
+  refreshPage() {
+    this.pageRefreshes = (this.pageRefreshes || 0) + 1;
+  }
+  setInputValue(key, value) {
+    this.inputs = Object.assign(this.inputs || {}, { [key]: value });
+  }
   focusAdvancedProblem(problem) {
     this.problemFocus = problem;
   }
@@ -90,7 +102,8 @@ test('boot בוחר מסך לפי מצב השירות', async () => {
   await app.boot({ app: { platform: 'windows' }, plugin: { version: '0.1.0' } });
   assert.equal(app.model.screen, Screen.ready);
   assert.equal(app.model.pluginVersion, '0.1.0');
-  assert.deepEqual(view.renders, [Screen.ready]);
+  // הלשוניות מצוירות מיד בטעינה, ואחר כך המסך שמתאים לשירות.
+  assert.deepEqual(view.renders, [Screen.loading, Screen.ready]);
   app.suspend();
 });
 
@@ -124,7 +137,8 @@ test('אותו מסך שוב: עדכון במקום ולא בנייה מחדש',
   await app.boot(windows);
   await app.refresh();
   await app.refresh();
-  assert.deepEqual(view.renders, [Screen.ready]);
+  // הלשוניות מצוירות מיד בטעינה, ואחר כך המסך שמתאים לשירות.
+  assert.deepEqual(view.renders, [Screen.loading, Screen.ready]);
   assert.ok(view.updates >= 2);
   app.suspend();
 });
@@ -311,7 +325,8 @@ test('בנייה מחדש מתוך מסך החיפוש: נשארים בחיפו�
   await until(() => bridge.notifications('ui.showSuccess').length === 1);
   assert.match(bridge.notifications('ui.showSuccess')[0], /8,402/);
   await until(() => app.model.buildActive === false);
-  assert.deepEqual(view.renders, [Screen.ready]);
+  // הלשוניות מצוירות מיד בטעינה, ואחר כך המסך שמתאים לשירות.
+  assert.deepEqual(view.renders, [Screen.loading, Screen.ready]);
   app.suspend();
 });
 
@@ -330,7 +345,7 @@ test('בנייה ראשונה: מסך בנייה, ובסוף חזרה לחיפו
   assert.equal(app.model.screen, Screen.building);
   await until(() => app.model.screen === Screen.ready);
   // אירוע ההתקדמות עודכן במקום, לא בנייה מחדש של המסך.
-  assert.deepEqual(view.renders, [Screen.needsCatalog, Screen.building, Screen.ready]);
+  assert.deepEqual(view.renders, [Screen.loading, Screen.needsCatalog, Screen.building, Screen.ready]);
   app.suspend();
 });
 
@@ -413,32 +428,51 @@ test('Windows בלבד', async () => {
 
 // ------------------------------------------------------- הגדרות ועזרה
 
-test('לוח ההגדרות והעזרה נפתחים ונסגרים; כרטיסייה לא מוכרת נשארת על הקודמת', async () => {
-  const { app, view } = setup({ '/status': reply(200, ready) });
+test('הגדרות ועזרה הן לשוניות; כרטיסייה לא מוכרת בעזרה נשארת על הקודמת', async () => {
+  const { app, view, bridge } = setup({ '/status': reply(200, ready) });
   await app.boot(windows);
-  app.actions.openSettings();
+  assert.equal(app.model.tab, 'books');
+  app.actions.selectTab('settings');
+  assert.equal(app.model.tab, 'settings');
   app.actions.openHelp('status');
   app.actions.openHelp('nope');
-  app.actions.closeSheet();
-  app.actions.closeSheet();
-  assert.deepEqual(view.sheets.slice(-4), ['settings', 'help', 'help', null]);
+  assert.equal(app.model.tab, 'help');
   assert.equal(app.model.helpTab, 'status');
+  assert.equal(app.model.sheet, null, 'אין דיאלוג: רק מסך הפתיחה הוא דיאלוג');
+  // מעבר בחצים: הפוקוס נשאר על הלשונית; לחיצה: לשדה הראשון.
+  app.actions.selectTab('locate', { focusTab: true });
+  assert.equal(view.tabFocus, 'locate');
+  app.actions.selectTab('text');
+  assert.equal(view.pageFocus, 'text');
+  app.actions.selectTab('nope');
+  assert.equal(app.model.tab, 'text');
+  await until(() =>
+    bridge.calls.some((c) => c.method === 'storage.set' && c.payload.key === 'responsa_tab' && c.payload.value === 'text'),
+  );
   app.suspend();
 });
 
-test('plugin.page_opened עם view פותח את הלוח המבוקש', async () => {
+test('הלשונית האחרונה נפתחת שוב בהפעלה הבאה', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  bridge.methods['storage.get'] = ({ key }) => ({ responsa_tab: 'locate', responsa_welcome_seen: true })[key] ?? null;
+  await app.boot(windows);
+  assert.equal(app.model.tab, 'locate');
+  app.suspend();
+});
+test('plugin.page_opened עם view פותח את הלשונית המבוקשת', async () => {
   const { app } = setup({ '/status': reply(200, ready) });
   await app.boot(windows);
   app.pageOpened({ param: { view: 'help', tab: 'troubleshoot' } });
-  assert.equal(app.model.sheet, 'help');
+  assert.equal(app.model.tab, 'help');
   assert.equal(app.model.helpTab, 'troubleshoot');
   app.pageOpened({ param: { view: 'settings' } });
-  assert.equal(app.model.sheet, 'settings');
+  assert.equal(app.model.tab, 'settings');
+  app.pageOpened({ param: { view: 'locate' } });
+  assert.equal(app.model.tab, 'locate');
   app.pageOpened(null);
-  assert.equal(app.model.sheet, 'settings');
+  assert.equal(app.model.tab, 'locate');
   app.suspend();
 });
-
 test('מתג שנכשל בשמירה נשאר במצבו, עם הסבר', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   bridge.methods['storage.set'] = { error: { code: 'error.internal' } };
@@ -461,7 +495,9 @@ test('בחירת אנגלית: הדף נבנה מחדש באנגלית, ופרי
     const patch = bridge.calls.find((c) => c.method === 'reader.updateContextMenuItem');
     assert.deepEqual(patch.payload, { id: 'responsa-search', patch: { title: 'Search in Bar-Ilan' } });
     assert.deepEqual(
-      bridge.calls.filter((c) => c.method === 'storage.set').map((c) => c.payload),
+      bridge.calls
+        .filter((c) => c.method === 'storage.set' && c.payload.key !== 'responsa_service_port')
+        .map((c) => c.payload),
       [{ key: 'responsa_language', value: 'en' }],
     );
   } finally {
@@ -546,19 +582,20 @@ test('רשימה מוכנה ומארח שתומך: נשלחת לחיפוש הס�
   app.suspend();
 });
 
-test('אירוע מהספרייה בזמן שהלשונית פתוחה: "פותח…" מוצג ונעלם', async () => {
-  const { app, view } = setup({
+test('הפורט של השירות נשמר לאוצריא, בשביל הלחיצה הימנית וחיפוש הספרייה', async () => {
+  const { app, bridge } = setup({
+    '/health': reply(200, { ok: true, service: 'otzaria-responsa', apiVersion: 1, capabilities: ['notify'] }),
     '/status': reply(200, ready),
-    '/book/open': reply(200, { ok: true, broughtToFront: true }),
   });
+  const stored = {};
+  bridge.methods['storage.get'] = ({ key }) => stored[key] ?? null;
+  bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
   await app.boot(windows);
-  const updates = view.updates;
-  await app.engine.openFromLibrary({ provider: 'responsa', id: 3232, title: 'חידושי אגדות' });
-  assert.equal(app.model.activity, null);
-  assert.ok(view.updates >= updates + 2);
+  await until(() => stored.responsa_service_port !== undefined);
+  assert.equal(stored.responsa_service_port, 39700);
+  assert.equal(app.model.servicePort, 39700);
   app.suspend();
 });
-
 // ------------------------------------------------ מסך פתיחה, קישורים, פרטים
 
 test('מסך הפתיחה: מוצג בהפעלה הראשונה, ו"הבנתי" שומר שלא יוצג שוב', async () => {
@@ -572,10 +609,13 @@ test('מסך הפתיחה: מוצג בהפעלה הראשונה, ו"הבנתי" 
   await app.boot(windows);
   assert.equal(app.model.sheet, 'welcome');
   assert.equal(view.sheets[0], 'welcome');
+  // לחיצה מחוץ למסך הפתיחה אינה סוגרת אותו: ההבהרה בו חובה.
+  app.actions.dismissSheet();
+  assert.equal(app.model.sheet, 'welcome');
   app.actions.finishWelcome();
   await until(() => stored.responsa_welcome_seen === true);
   assert.equal(app.model.sheet, null);
-  assert.equal(view.focused, 1, 'הפוקוס חוזר לתיבת החיפוש');
+  assert.equal(view.sheets.at(-1), null);
   app.suspend();
 
   const again = setup({ '/status': reply(200, ready) });
@@ -584,7 +624,6 @@ test('מסך הפתיחה: מוצג בהפעלה הראשונה, ו"הבנתי" 
   assert.equal(again.app.model.sheet, null);
   again.app.suspend();
 });
-
 test('מסך הפתיחה: מעבר ממנו לעזרה נחשב סגירה שלו', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   const stored = {};
@@ -593,10 +632,10 @@ test('מסך הפתיחה: מעבר ממנו לעזרה נחשב סגירה של
   await app.boot(windows);
   app.actions.openHelp('guide');
   await until(() => stored.responsa_welcome_seen === true);
-  assert.equal(app.model.sheet, 'help');
+  assert.equal(app.model.sheet, null);
+  assert.equal(app.model.tab, 'help');
   app.suspend();
 });
-
 test('קישור בלי אינטרנט: הסבר עם הכתובת, בלי לפתוח דפדפן', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   await app.boot({ ...windows, connectivity: { isOnline: false } });
@@ -784,7 +823,7 @@ const advancedHealth = reply(200, {
   ok: true,
   service: 'otzaria-responsa',
   apiVersion: 1,
-  capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'advancedSearch', 'showResponsa'],
+  capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'advancedSearch', 'showResponsa', 'notify', 'locate'],
 });
 
 async function bootAdvanced(routes) {
@@ -793,12 +832,29 @@ async function bootAdvanced(routes) {
   return context;
 }
 
+test('חיפוש רגיל: המילים נשלחות צמודות, והתשובה מוצגת', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 2562, query: 'נר שבת', advanced: true }),
+  });
+  app.actions.selectTab('text');
+  assert.equal(app.model.tab, 'text');
+  assert.equal(app.model.advanced.query.mode, 'simple');
+  app.advancedSet({ simpleText: 'נֵר, שַׁבָּת!' }, { light: true });
+  await app.runAdvanced();
+  const sent = requests(bridge, '/text/search')[0].body;
+  assert.deepEqual(sent, { q: 'נר שבת', advanced: true, options: { abbreviations: false, showForms: false, allDatabases: true } });
+  assert.equal(app.model.advanced.status.kind, 'success');
+  assert.match(view.announced.at(-1), /2,562|2562/);
+  app.suspend();
+});
+
 test('חיפוש מתקדם: נבנה מהבונה ונשלח עם האפשרויות, והתשובה מוצגת', async () => {
   const { app, bridge, view } = await bootAdvanced({
     '/text/search': reply(200, { ok: true, outcome: 'found', count: 191, query: 'נר [1:4] שבת', advanced: true }),
   });
-  app.openAdvanced();
-  assert.equal(app.model.sheet, 'advanced');
+  app.actions.selectTab('text');
+  app.actions.advancedMode('builder');
+  assert.equal(app.model.advanced.query.mode, 'builder');
   app.advancedWord(0, 0, 'נר');
   app.advancedAddTerm();
   assert.equal(view.sheetFocus, 'adv-word-1-0');
@@ -817,30 +873,30 @@ test('חיפוש מתקדם: נבנה מהבונה ונשלח עם האפשרו�
   assert.match(view.announced.at(-1), /191/);
   app.suspend();
 });
-
 test('חיפוש מתקדם: בלי מילה — אין בקשה, ההערה והפוקוס על הבעיה', async () => {
   const { app, bridge, view } = await bootAdvanced({});
-  app.openAdvanced();
+  app.actions.selectTab('text');
+  app.actions.advancedMode('builder');
   await app.runAdvanced();
   assert.equal(requests(bridge, '/text/search').length, 0);
   assert.match(app.model.advanced.problem.message, /לפחות מילה אחת/);
   assert.equal(view.problemFocus, app.model.advanced.problem);
-  // תיקון: ההערה מתעדכנת בהקלדה, בלי לבנות את השדה מחדש.
-  const sheets = view.sheets.length;
+  // תיקון: ההערה מתעדכנת בהקלדה, בלי לבנות את הלשונית מחדש.
+  const refreshes = view.pageRefreshes;
   app.advancedWord(0, 0, 'נר');
   assert.equal(app.model.advanced.problem, null);
-  assert.equal(view.sheets.length, sheets);
+  assert.equal(view.pageRefreshes, refreshes);
   assert.ok(view.advancedUpdates >= 1);
   app.suspend();
 });
-
 test('חיפוש מתקדם: בר אילן דחה את השאילתה — ההודעה שלו', async () => {
   const { app } = await bootAdvanced({
     '/text/search': reply(400, {
       error: { code: 'queryInvalid', message: 'בר אילן לא קיבל את השאילתה: אין משפחה בשם זה.' },
     }),
   });
-  app.advancedSet({ manual: true, manualText: '<שבט>' });
+  app.actions.advancedMode('manual');
+  app.advancedSet({ manualText: '<שבט>' });
   await app.runAdvanced();
   assert.equal(app.model.advanced.status.kind, 'error');
   assert.match(app.model.advanced.status.text, /אין משפחה בשם זה/);
@@ -853,7 +909,8 @@ test('חיפוש מתקדם: תחום — הבורר נטען, בחירה נשל
     '/catalog/browse': (params) => reply(200, JSON.parse(params.body).path ? innerLevel : rootLevel),
     '/text/search': reply(200, { ok: true, outcome: 'found', count: 8, query: 'נר', advanced: true }),
   });
-  app.openAdvanced();
+  app.actions.selectTab('text');
+  app.actions.advancedMode('builder');
   app.advancedScopeMode('pick');
   await until(() => app.model.advanced.picker.level !== null);
   assert.equal(view.sheetFocus, undefined);
@@ -875,6 +932,7 @@ test('חיפוש מתקדם: נשמר אחרי הפסקה בהקלדה, ונטע
   const stored = {};
   const first = await bootAdvanced({});
   first.bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
+  first.app.actions.advancedMode('builder');
   first.app.advancedWord(0, 0, 'שבת');
   first.app.advancedSet({ options: { abbreviations: true, showForms: false } });
   // השמירה ממתינה להפסקה בהקלדה (600ms): המתנה בזמן אמיתי, לא בתורות.
@@ -887,29 +945,157 @@ test('חיפוש מתקדם: נשמר אחרי הפסקה בהקלדה, ונטע
   second.bridge.methods['storage.get'] = ({ key }) => stored[key] ?? null;
   await second.app.boot(windows);
   assert.deepEqual(second.app.model.advanced.query.terms[0].words, ['שבת']);
+  assert.equal(second.app.model.advanced.query.mode, 'builder');
   assert.equal(second.app.model.advanced.query.options.abbreviations, true);
   second.app.suspend();
 });
 
-test('פתיחת בר אילן: מהדיאלוג — הודעה בו; מהמסך הראשי — כשל כהודעה של אוצריא', async () => {
-  let fail = false;
-  const { app, bridge } = await bootAdvanced({
-    '/responsa/show': () =>
-      fail
-        ? reply(409, { error: { code: 'notRunning', message: 'בר אילן לא עלה' } })
-        : reply(200, { ok: true, broughtToFront: true }),
-  });
-  app.openAdvanced();
-  await app.showResponsa();
+test('פתיחת בר אילן מהפס העליון: הצלחה בשקט, חלון מאחור או כשל — הודעה של אוצריא', async () => {
+  let answer = reply(200, { ok: true, broughtToFront: true });
+  const { app, bridge } = await bootAdvanced({ '/responsa/show': () => answer });
+  await app.actions.showResponsa();
   assert.equal(app.model.showing, false);
-  assert.deepEqual(app.model.advanced.status, { kind: 'success', text: 'בר אילן נפתח.' });
-  app.closeSheet();
-  fail = true;
-  await app.showResponsa();
+  assert.deepEqual(bridge.notifications('ui.showMessage'), []);
+  answer = reply(200, { ok: true, broughtToFront: false });
+  await app.actions.showResponsa();
+  assert.match(bridge.notifications('ui.showMessage')[0], /שורת המשימות/);
+  answer = reply(409, { error: { code: 'notRunning', message: 'בר אילן לא עלה' } });
+  await app.actions.showResponsa();
   assert.deepEqual(bridge.notifications('ui.showError'), ['בר אילן לא עלה']);
   app.suspend();
 });
 
+// ------------------------------------------------------ איתור מקום
+
+test('איתור מקום: תוצאה אחת נפתחת, והמקום נשמר ב"אחרונים"', async () => {
+  const stored = {};
+  const { app, bridge } = await bootAdvanced({
+    '/reference/open': reply(200, { ok: true, opened: true, ref: 'בראשית ב ג', window: 'תורה בראשית פרק ב', broughtToFront: true }),
+  });
+  bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
+  app.actions.selectTab('locate');
+  app.actions.locateText('  בְּרֵאשִׁית  ב ג ');
+  await app.actions.runLocate();
+  assert.deepEqual(requests(bridge, '/reference/open')[0].body, { ref: 'בראשית ב ג' });
+  assert.equal(app.model.locate.status.kind, 'success');
+  assert.match(app.model.locate.status.text, /תורה בראשית פרק ב/);
+  await until(() => Array.isArray(stored.responsa_locate_history));
+  assert.deepEqual(stored.responsa_locate_history, ['בראשית ב ג']);
+  app.suspend();
+});
+
+test('איתור מקום: כמה מקורות — בחירה, ואז פתיחה של המקור שנבחר', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/reference/open': (params) =>
+      JSON.parse(params.body).index === undefined
+        ? reply(200, { ok: true, opened: false, ref: 'בראשית ב ג', choices: ['תורה בראשית ב ג', 'רש"י בראשית ב ג'] })
+        : reply(200, { ok: true, opened: true, window: 'רש"י בראשית פרק ב', broughtToFront: true }),
+  });
+  app.actions.locateRecent('בראשית ב ג');
+  await until(() => app.model.locate.choices !== null);
+  assert.deepEqual(app.model.locate.choices, ['תורה בראשית ב ג', 'רש"י בראשית ב ג']);
+  assert.equal(view.sheetFocus, 'locate-choice-0');
+  await app.actions.openLocateChoice(1);
+  assert.deepEqual(requests(bridge, '/reference/open')[1].body, { ref: 'בראשית ב ג', index: 1 });
+  assert.equal(app.model.locate.status.kind, 'success');
+  assert.equal(app.model.locate.openingIndex, null);
+  app.suspend();
+});
+
+test('איתור מקום: בחירה שכבר אינה ברשימה — רשימה עדכנית, ולא "נפתח"', async () => {
+  const { app, view } = await bootAdvanced({
+    '/reference/open': (params) =>
+      JSON.parse(params.body).index === undefined
+        ? reply(200, { ok: true, opened: false, ref: 'בראשית ב ג', choices: ['א', 'ב', 'ג'] })
+        : reply(200, { ok: true, opened: false, ref: 'בראשית ב ג', choices: ['א'] }),
+  });
+  app.actions.locateText('בראשית ב ג');
+  await app.actions.runLocate();
+  await app.actions.openLocateChoice(2);
+  assert.deepEqual(app.model.locate.choices, ['א']);
+  assert.equal(app.model.locate.status.kind, 'info');
+  assert.equal(view.sheetFocus, 'locate-choice-0');
+  assert.deepEqual(app.model.locate.history, []);
+  app.suspend();
+});
+
+test('איתור מקום: בלי מקום, או מקום שבר אילן לא זיהה — הסבר, ובלי בקשה מיותרת', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/reference/open': reply(404, { error: { code: 'referenceNotFound', message: 'בר אילן לא מצא את "בראשת ב". כותבים…' } }),
+  });
+  app.actions.locateText('בראשית');
+  await app.actions.runLocate();
+  assert.equal(requests(bridge, '/reference/open').length, 0);
+  assert.match(app.model.locate.status.text, /חסר המקום/);
+  app.actions.locateText('בראשת ב');
+  await app.actions.runLocate();
+  assert.equal(app.model.locate.status.kind, 'error');
+  assert.match(app.model.locate.status.text, /לא מצא/);
+  assert.equal(app.model.locate.running, false);
+  app.suspend();
+});
+
+test('איתור מקום: דוגמה ממלאת את השדה בלבד, ובזמן פתיחה דבר אינו משתנה', async () => {
+  let release;
+  const { app, bridge, view } = await bootAdvanced({
+    '/reference/open': () =>
+      new Promise((resolve) => {
+        release = () => resolve(reply(200, { ok: true, opened: true, window: 'בראשית פרק ב', broughtToFront: true }));
+      }),
+  });
+  app.actions.locateExample('ברכות דף ב עמוד א');
+  assert.equal(app.model.locate.text, 'ברכות דף ב עמוד א');
+  // נמצא בבדיקה חיה: בלי זה השדה נשאר ריק, כי `value` אינו ב-markup.
+  assert.equal(view.inputs['locate-input'], 'ברכות דף ב עמוד א');
+  assert.equal(requests(bridge, '/reference/open').length, 0);
+
+  app.actions.locateText('בראשית ב ג');
+  const running = app.actions.runLocate();
+  await until(() => typeof release === 'function');
+  app.actions.locateExample('שמות א א');
+  app.actions.locateRecent('ויקרא א א');
+  app.actions.locateIn({ key: '1', title: 'רש"י' });
+  assert.equal(app.model.locate.text, 'בראשית ב ג');
+  assert.equal(app.model.tab, 'locate');
+  release();
+  await running;
+  assert.equal(requests(bridge, '/reference/open').length, 1);
+  assert.equal(app.model.locate.status.kind, 'success');
+  app.suspend();
+});
+
+test('איתור מקום: הקלדה מעלימה גם הודעת הצלחה של המקום הקודם', async () => {
+  const { app } = await bootAdvanced({
+    '/reference/open': reply(200, { ok: true, opened: true, window: 'בראשית פרק ב', broughtToFront: true }),
+  });
+  app.actions.locateText('בראשית ב ג');
+  await app.actions.runLocate();
+  assert.equal(app.model.locate.status.kind, 'success');
+  app.actions.locateText('שמות');
+  assert.equal(app.model.locate.status, null);
+  app.suspend();
+});
+
+test('"פתיחה במקום מסוים" מספר ברשימה: שם הספר בשדה, בלשונית איתור מקום', async () => {
+  const { app, view } = await bootAdvanced({});
+  app.actions.locateIn({ key: '1', title: 'רש"י (מהדורת וילנא)' });
+  assert.equal(app.model.tab, 'locate');
+  assert.equal(app.model.locate.text, 'רש"י ');
+  assert.equal(view.pageFocus, 'locate');
+  app.suspend();
+});
+
+test('פנייה במייל: נפתחת תוכנת הדואר עם הכתובת; בלעדיה — הכתובת להעתקה', async () => {
+  const { app, bridge } = await bootAdvanced({});
+  await app.actions.writeEmail();
+  const email = bridge.calls.find((c) => c.method === 'feedback.sendEmail');
+  assert.equal(email.payload.to, 'michaelush613@gmail.com');
+  assert.match(email.payload.body, /גרסת התוסף|תוסף/);
+  bridge.methods['feedback.sendEmail'] = { error: { code: 'error.internal' } };
+  await app.actions.writeEmail();
+  assert.match(bridge.notifications('ui.showMessage').at(-1), /michaelush613@gmail.com/);
+  app.suspend();
+});
 test('חיפוש מתקדם: שירות ישן — אין בקשה', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   await app.boot(windows);

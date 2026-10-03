@@ -23,9 +23,6 @@
 
   const PAGE_SIZE = 50;
 
-  /** השירות משתמש רק בעשר המילים הראשונות; טקסט ארוך מזה אינו נשלח. */
-  const MAX_SELECTION_LENGTH = 2000;
-
   /** ההרשאה שבלעדיה אין ערוץ לשירות. */
   const LOCALHOST_PERMISSION = 'network.localhost';
 
@@ -54,6 +51,9 @@
     /** ההודעה בפורום אוצריא שמציגה את התוסף ומבהירה את מעמדו. */
     forum: 'https://otzaria.org/forum/post/40010',
   });
+
+  /** כתובת המייל לפניות ולדיווחים, מחוץ לדיווח המובנה של אוצריא. */
+  const SUPPORT_EMAIL = 'michaelush613@gmail.com';
 
   /** פריט "חיפוש בבר אילן" בתפריט הלחיצה הימנית (manifest.json). */
   const CONTEXT_MENU_ITEM = 'responsa-search';
@@ -387,7 +387,7 @@
     portTaken: N('תוכנה אחרת במחשב משתמשת בחיבור של השירות.'),
     badResponse: N('השירות החזיר תשובה לא תקינה.'),
     internal: N('אירעה תקלה פנימית בשירות. אפשר לנסות שוב.'),
-    catalogUnreadable: N('לא ניתן לקרוא את רשימת הספרים. אפשר לבנות אותה מחדש בהגדרות התוסף.'),
+    catalogUnreadable: N('לא ניתן לקרוא את רשימת הספרים. אפשר לבנות אותה מחדש בלשונית "הגדרות".'),
     elevated: N('בר אילן פועל כמנהל מערכת, ולכן אין אליו גישה. יש לסגור אותו ולפתוח אותו שוב כרגיל.'),
     queryInvalid: N('בר אילן לא קיבל את השאילתה. יש לבדוק את הסימנים שבה.'),
     scopeNotFound: N('חלק מהקטגוריות או הספרים שנבחרו לא נמצאו בבר אילן. אפשר לקרוא את רשימת הספרים מחדש ולנסות שוב.'),
@@ -477,24 +477,17 @@
   }
 
   /**
-   * הערה על שירות ישן, שאינו יודע לחפש בבר אילן: `apiVersion` שלו זהה, ולכן
-   * המסך הראשי עובד, אבל הלחיצה הימנית לא תעבוד. `null` כשהכול תקין.
+   * הערה על שירות ישן: `apiVersion` שלו זהה, ולכן הלשונית עובדת, אבל שירות
+   * לפני 0.5.0 (בלי `notify`) אינו מבין את הבקשות שאוצריא שולחת בלחיצה
+   * הימנית ובחיפוש הספרייה, ולכן הם מוסתרים (`Engine.syncPort`). `null`
+   * כשהכול תקין.
    */
   function serviceNotice(health) {
-    if (!health) return null;
-    if (!serviceCan(health, 'searchText')) {
-      return {
-        kind: 'serviceOld',
-        text: t('שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית לא יעבוד. כדאי להוריד את הגרסה החדשה.'),
-      };
-    }
-    if (!serviceCan(health, 'browse')) {
-      return {
-        kind: 'serviceOld',
-        text: t('שירות בר אילן שבמחשב ישן, ולכן אין כאן עיון בקטגוריות. כדאי להוריד את הגרסה החדשה.'),
-      };
-    }
-    return null;
+    if (!health || serviceCan(health, 'notify')) return null;
+    return {
+      kind: 'serviceOld',
+      text: t('שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית ופתיחת ספרים מחיפוש הספרייה אינם זמינים. כדאי להוריד את הגרסה החדשה.'),
+    };
   }
 
   /** שורת הנתיב בעיון: "כל הספרים" ואחריו כל רמה, עם הנתיב שלה. */
@@ -565,6 +558,11 @@
     return books;
   }
 
+  /** יש רשימת ספרים (לבחירת קטגוריות בחיפוש בטקסט). */
+  function catalogReady(status) {
+    return Boolean(status && status.catalog && status.catalog.exists);
+  }
+
   /**
    * האם צריך לשלוח את הרשימה לאוצריא: נקראה רשימה אחרת ממה שנשלח, או
    * שגרסת התוסף השתנתה (למשל שינוי בשורת הקטגוריה).
@@ -603,10 +601,23 @@
     }
   }
 
-  /** הטקסט שנבחר מתוך אירוע לחיצה על פריט בתפריט ההקשר. */
-  function selectedText(payload) {
-    const text = payload && (payload.selectedText || (payload.selection && payload.selection.text));
-    return typeof text === 'string' ? text.trim() : '';
+  /** `http://127.0.0.1:39701` ← `39701`; כל דבר אחר ← `null`. */
+  function portOf(baseUrl) {
+    const match = /^http:\/\/127\.0\.0\.1:(\d{1,5})$/.exec(String(baseUrl || ''));
+    if (!match) return null;
+    const port = Number(match[1]);
+    return port >= 1 && port <= 65535 ? port : null;
+  }
+
+  /** ההודעה אחרי פתיחה: גם מאיפה החלון, כש-Windows לא הביא אותו לחזית. */
+  function openedMessage(title, result) {
+    const name = title || t('הספר');
+    if (result && result.broughtToFront === false) {
+      return t('"{title}" נפתח בבר אילן. אם החלון לא הופיע, הוא בשורת המשימות.', {
+        title: name,
+      });
+    }
+    return t('"{title}" נפתח בבר אילן', { title: name });
   }
 
   const api = {
@@ -615,13 +626,13 @@
     API_VERSION,
     SERVICE_ID,
     PAGE_SIZE,
-    MAX_SELECTION_LENGTH,
     LOCALHOST_PERMISSION,
     LIBRARY_PERMISSION,
     LIBRARY_PROVIDER,
     STARTUP_PERMISSION,
     CONTEXT_MENU_ITEM,
     Links,
+    SUPPORT_EMAIL,
     Command,
     Screen,
     formatCount,
@@ -637,6 +648,7 @@
     hasLocalhostPermission,
     screenFor,
     serviceCan,
+    catalogReady,
     catalogNotice,
     buildProgress,
     remainingLabel,
@@ -654,7 +666,8 @@
     startupPermissionHint,
     libraryBooksFromExport,
     needsLibrarySync,
-    selectedText,
+    portOf,
+    openedMessage,
     subtitleFor,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;

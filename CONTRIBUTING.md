@@ -36,26 +36,29 @@
 
 | קובץ | תפקיד |
 |---|---|
-| `manifest.json` | זהות, גרסה, הרשאות ותרומות עלייה (תפריט, קיצורים) |
-| `index.html` | מבנה הלשונית וסדר הסקריפטים. אין בו לוגיקה |
-| `background.html` | מנוע הרקע: רק i18n, domain, log, runtime, settings, service, engine |
+| `manifest.json` | זהות, גרסה, הרשאות ותרומות עלייה (תפריט ופעולתו, ספק ספרים ופעולתו, קיצורים) |
+| `index.html` | שלד הלשונית (פס עליון, שורת לשוניות, תוכן, מסך הפתיחה) וסדר הסקריפטים. אין בו לוגיקה |
 | `css/style.css` | כל העיצוב. צבעים מתפקידי הערכה של אוצריא |
 | `i18n/en.js` | מילון האנגלית. המפתחות הם מחרוזות המקור בעברית |
 | `icon/icon.png` | סמל התוסף בחנות ובחלון ההתקנה (נבנה, לא נערך) |
 | `js/responsa-i18n.js` | `t()`, כיוון, locale. `language` הוא getter |
 | `js/responsa-domain.js` | כל ההחלטות, טהורות: איזה מסך, הודעות לפי קוד, פרטי ספר, רשימת ההכנה, `Links` |
+| `js/responsa-advanced.js` | החיפוש בטקסט: אופנים, בניית השאילתה, "מה יחופש", בדיקה |
+| `js/responsa-locate.js` | איתור מקום: נרמול, בדיקה, "אחרונים" |
 | `js/responsa-log.js` | יומן בזיכרון (200 רשומות) ו-`scrub()` לנתיבים |
 | `js/responsa-runtime.js` | הגבול היחיד מול `Otzaria.call` |
 | `js/responsa-settings.js` | הגדרות, כל אחת במפתח אחסון משלה (`KEYS`) |
 | `js/responsa-service.js` | הגבול היחיד מול הרשת: `network.fetchStream` אל השירות |
-| `js/responsa-engine.js` | מה שעובד בלי מסך: לחיצה ימנית, פתיחה מהספרייה, קיצורים |
+| `js/responsa-engine.js` | מול אוצריא: שליחת הרשימה לחיפוש הספרייה, שמירת הפורט, כותרת התפריט, קיצורים |
 | `js/responsa-theme.js` | ערכת אוצריא ← משתני CSS |
 | `js/responsa-icons.js` | אייקוני Fluent לדף (נבנה, לא נערך) |
-| `js/responsa-ui.js` | DOM של המסך הראשי |
-| `js/responsa-panels.js` | DOM של ההגדרות, העזרה ומסך הפתיחה |
-| `js/responsa-view.js` | מחבר מודל ל-DOM: עדכון במקום, פוקוס, `inert` |
-| `js/responsa-app.js` | הבקר: מצב, טיימרים, מחזור חיים, דיווח |
-| `js/responsa-main.js` / `responsa-background.js` | חיבור לאירועי אוצריא, בלשונית וברקע |
+| `js/responsa-ui.js` | DOM של לשונית "ספרים" ומסכי ההכנה |
+| `js/responsa-panels.js` | DOM של הלשוניות "הגדרות" ו"עזרה", ומסך הפתיחה |
+| `js/responsa-advanced-ui.js` | DOM של לשונית "חיפוש בטקסט" |
+| `js/responsa-locate-ui.js` | DOM של לשונית "איתור מקום" |
+| `js/responsa-view.js` | שורת הלשוניות והלשונית הנוכחית: עדכון במקום, פוקוס, `inert` |
+| `js/responsa-app.js` | הבקר: מצב, לשוניות, טיימרים, מחזור חיים, דיווח |
+| `js/responsa-main.js` | חיבור לאירועי אוצריא. אין מנוע רקע |
 | `test/` | בדיקות Node, בלי DOM ובלי תלויות. `test/helpers/` — גשר מדומה וטעינה |
 
 ### `helper/` — השירות המקומי (Dart)
@@ -86,8 +89,8 @@
 שאלו לפי הסדר:
 
 1. **זו החלטה** (מה להציג, איזו הודעה, האם לשלוח)? ← `responsa-domain.js`. פונקציה טהורה, עם בדיקה ב-`domain.test.js`.
-2. **זה חייב לעבוד גם כשהלשונית סגורה** (לחיצה ימנית, מסך הספרייה, קיצור)? ← `responsa-engine.js`. הוא רץ גם ב-`background.html`, ושם אין DOM.
-3. **זה ציור של המסך?** ← `responsa-ui.js` (מסך ראשי) או `responsa-panels.js` (הגדרות, עזרה, פתיחה). DOM בלבד: מודל ופעולות נכנסים, אלמנט יוצא.
+2. **זה חייב לעבוד גם כשהלשונית סגורה** (לחיצה ימנית, מסך הספרייה)? ← פעולה של אוצריא במניפסט (`localService.post`), ונקודת קצה בשירות. קוד התוסף אינו רץ אז.
+3. **זה ציור של המסך?** ← הקובץ של הלשונית: `responsa-ui.js` (ספרים), `responsa-advanced-ui.js` (חיפוש בטקסט), `responsa-locate-ui.js` (איתור מקום) או `responsa-panels.js` (הגדרות, עזרה, פתיחה). DOM בלבד: מודל ופעולות נכנסים, אלמנט יוצא.
 4. **זה מצב, טיימר או תגובה לפעולת משתמש?** ← `responsa-app.js`.
 5. **קריאה חדשה ל-SDK של אוצריא?** ← דרך `responsa-runtime.js`, תמיד.
 6. **בקשה חדשה לשירות?** ← `responsa-service.js`, ובצד השני נקודת קצה ב-`helper_service.dart` ועדכון של `docs/PROTOCOL.md`.
@@ -153,9 +156,12 @@
 | `scenario=` | `ready`, `serviceMissing`, `needsCatalog`, `building`, `buildFailed`, `rebuilding`, `otherInstallation`, `notInstalled`, `portTaken`, `permissionDenied`, `serviceError`, `serviceOutdated`, `unsupported` |
 | `mode=dark` | ערכה כהה |
 | `lang=en` | אנגלית |
-| `library=1` | אוצריא שמעניקה `library.books.provide` |
+| `page=` | הלשונית: `books`, `text`, `locate`, `settings`, `help` (עם `tab=guide\|troubleshoot\|status\|about`) |
 | `query=` | חיפוש מוכן |
-| `sheet=settings` / `sheet=help&tab=guide\|troubleshoot\|status\|about` | לוח פתוח |
+| `adv=` | חיפוש שמור בלשונית "חיפוש בטקסט": `simple`, `words`, `scope`, `manual` |
+| `loc=` / `history=1` | מקום שהוקלד ב"איתור מקום" / מקומות אחרונים |
+| `run=1` | לחיצה על "חיפוש בבר אילן" או "פתיחה בבר אילן" בלשונית |
+| `oldservice=1` | שירות ישן, בלי היכולות החדשות |
 | `welcome=1` | מסך הפתיחה (בלי הסימון "כבר הוצג") |
 | `details=<key>` | פרטי הספר פתוחים (למשל `3232`, עם `query`) |
 | `offline=1` | בלי אינטרנט |
@@ -179,7 +185,7 @@ dart test
 cd ..
 
 # הוולידטור הרשמי (אותה בדיקה שהחנות מריצה)
-node build/validator/src/cli.js plugin --app-version 0.9.97 --fail-on-warnings --publish false
+node build/validator/src/cli.js plugin --app-version 0.9.98 --fail-on-warnings --publish false
 
 git diff --check
 ```

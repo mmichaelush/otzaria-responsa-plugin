@@ -1,7 +1,8 @@
-// מה שהתוסף עושה בלי מסך: פתיחת ספר שנבחר במסך הספרייה, חיפוש טקסט מסומן
-// בבר אילן, פקודות מקיצורי מקלדת, ושליחת רשימת הספרים לחיפוש הספרייה של
-// אוצריא. רץ גם בלשונית התוסף וגם במנוע הרקע: אוצריא שולחת כל אירוע למופע
-// אחד בלבד, ולכן אין טיפול כפול.
+// מה שהלשונית עושה מול אוצריא ולא מול המסך: שליחת רשימת הספרים לחיפוש
+// הספרייה, שמירת הפורט של השירות, כותרת פריט התפריט בשפה הנוכחית, ופקודות
+// מקיצורי מקלדת. "חיפוש בבר אילן" בלחיצה ימנית ופתיחה מחיפוש הספרייה אינם
+// כאן: אוצריא פונה בהם לשירות בעצמה (`localService.post` במניפסט), בלי
+// להעיר את התוסף.
 (function (root) {
   'use strict';
 
@@ -17,8 +18,7 @@
     /**
      * @param runtime  responsa-runtime.js.
      * @param service  `ServiceClient` מ-responsa-service.js.
-     * @param options  `{ permissions, pluginVersion, onActivity, now, log }`:
-     *                 מ-`plugin.boot`, ו-callback לדף שמציג "פותח…"/"מחפש…".
+     * @param options  `{ permissions, pluginVersion, now, log }`, מ-`plugin.boot`.
      */
     constructor(runtime, service, options) {
       const opts = options || {};
@@ -26,11 +26,12 @@
       this.service = service;
       this.permissions = opts.permissions || null;
       this.pluginVersion = opts.pluginVersion || null;
-      this.onActivity = opts.onActivity || (() => {});
       this.now = opts.now || (() => Date.now());
       this.log = opts.log || (root.ResponsaLog && root.ResponsaLog.shared) || console;
       this.syncing = null;
       this.syncFailedAt = null;
+      /** מה שכבר נשמר בהפעלה הזו: פורט, `null` כשנמחק, `undefined` — עוד לא. */
+      this.savedPort = undefined;
     }
 
     /**
@@ -44,72 +45,46 @@
       if (permissions.slice().sort().join('\n') !== before) this.syncFailedAt = null;
     }
 
-    // ------------------------------------------------------ פתיחה מהספרייה
+    // -------------------------------------------------------- פורט השירות
 
-    /** `library.providerBook.openRequested`: `{ provider, id, title }`. */
-    async openFromLibrary(payload) {
-      const request = payload || {};
-      if (request.provider && request.provider !== Domain.LIBRARY_PROVIDER) return;
-      const title = typeof request.title === 'string' ? request.title : '';
-      if (!Number.isSafeInteger(request.id)) {
-        await this.runtime.notify.error(t('הספר שנבחר אינו מזוהה. יש לחפש אותו שוב.'));
-        return;
-      }
-      this.onActivity({ kind: 'opening', title });
-      this.log.info('פתיחה ממסך הספרייה: ' + request.id + ' "' + title + '"');
+    /**
+     * פריט התפריט וספרי הספרייה פונים לשירות דרך אוצריא (`$storage`), בלי
+     * להעיר את התוסף, ומוצגים רק כשהפורט שמור. שירות לפני 0.5.0 (בלי
+     * `notify`) אינו מבין את הבקשות האלה: הפורט נמחק, והם מוסתרים עד העדכון.
+     */
+    syncPort(health, baseUrl) {
+      return Domain.serviceCan(health, 'notify') ? this.savePort(baseUrl) : this.clearPort();
+    }
+
+    /** נכתב רק כשהשתנה, כי כל כתיבה מעדכנת את תנאי ה-`when` של אוצריא. */
+    async savePort(baseUrl) {
+      const port = Domain.portOf(baseUrl);
+      if (port === null || port === this.savedPort) return false;
       try {
-        const result = await this.service.open(String(request.id));
-        await this.runtime.notify.success(openedMessage(title, result));
+        const stored = await this.runtime.call('storage.get', { key: KEYS.servicePort });
+        if (stored !== port) await this.runtime.call('storage.set', { key: KEYS.servicePort, value: port });
+        this.savedPort = port;
+        if (stored !== port) this.log.info('פורט השירות נשמר לאוצריא: ' + port);
+        return stored !== port;
       } catch (error) {
-        await this.runtime.notify.error(Domain.actionErrorMessage(error));
-      } finally {
-        this.onActivity(null);
+        this.log.warn('שמירת פורט השירות נכשלה', error);
+        return false;
       }
     }
 
-    // ------------------------------------------------- חיפוש טקסט מסומן
-
-    /** `contextMenu.itemClicked`. פריט של תוסף אחר אינו מגיע לכאן. */
-    async contextMenuClicked(payload) {
-      if (!payload || payload.itemId !== Domain.CONTEXT_MENU_ITEM) return;
-      await this.searchSelection(Domain.selectedText(payload));
-    }
-
-    async searchSelection(selected) {
-      if (!selected) {
-        await this.runtime.notify.error(
-          t('יש לסמן בספר מילה או משפט, ואז לבחור "חיפוש בבר אילן".'),
-        );
-        return;
-      }
-      // השירות משתמש רק בעשר המילים הראשונות, ובקשה ארוכה נדחית.
-      const text = selected.slice(0, Domain.MAX_SELECTION_LENGTH);
-      this.onActivity({ kind: 'searching', title: Domain.shortTitle(text) });
-      this.log.info('חיפוש טקסט מסומן (' + selected.length + ' תווים)');
+    async clearPort() {
+      if (this.savedPort === null) return false;
       try {
-        const health = this.service.health || (await this.service.connect());
-        if (!Domain.serviceCan(health, 'searchText')) {
-          await this.runtime.notify.error(
-            t('כדי לחפש בבר אילן צריך לעדכן את שירות בר אילן. בלשונית "בר אילן" יש כפתור להורדת הגרסה החדשה.'),
-          );
-          return;
+        const stored = await this.runtime.call('storage.get', { key: KEYS.servicePort });
+        if (stored !== null && stored !== undefined) {
+          await this.runtime.call('storage.remove', { key: KEYS.servicePort });
+          this.log.info('השירות ישן: הלחיצה הימנית וספרי הספרייה מוסתרים עד העדכון');
         }
-        const result = await this.service.searchText(text);
-        this.log.info('תוצאת החיפוש בבר אילן: ' + (result && result.outcome), {
-          count: result && result.count,
-          truncated: result && result.truncated,
-        });
-        const message = Domain.searchOutcomeMessage(result);
-        if (Domain.searchSucceeded(result)) await this.runtime.notify.success(message);
-        else await this.runtime.notify.error(message);
+        this.savedPort = null;
+        return stored !== null && stored !== undefined;
       } catch (error) {
-        await this.runtime.notify.error(
-          error && error.code === 'badRequest'
-            ? t('בטקסט שנבחר אין מילים בעברית לחיפוש בבר אילן. יש לסמן מילה או משפט בעברית ולנסות שוב.')
-            : Domain.actionErrorMessage(error),
-        );
-      } finally {
-        this.onActivity(null);
+        this.log.warn('מחיקת פורט השירות נכשלה', error);
+        return false;
       }
     }
 
@@ -125,25 +100,6 @@
         id: Domain.CONTEXT_MENU_ITEM,
         patch: { title: t('חיפוש בבר אילן') },
       });
-    }
-
-    /**
-     * ההבהרה על הרישיון מוצגת בפתיחה הראשונה (כך נקבע בפורום אוצריא). מי
-     * שמשתמש רק בלחיצה ימנית, דרך מנוע הרקע, אולי לעולם לא פותח את הלשונית,
-     * ולכן בפעולה הראשונה שלו נפתחת הלשונית על מסך הפתיחה. בלי ההרשאה לפתוח
-     * אותה — ההבהרה מוצגת כהודעה. פעם אחת לכל הפעלה של המנוע.
-     */
-    async ensureLicenseNotice(seen) {
-      if (seen || this.noticeRequested) return false;
-      this.noticeRequested = true;
-      this.log.info('ההבהרה עוד לא הוצגה: פותח את מסך הפתיחה');
-      const opened = await this.runtime.callSoft('plugin.openSelf', { param: { view: 'welcome' } });
-      if (opened === null) {
-        await this.runtime.notify.info(
-          t('התוסף נועד למי שרכש כדין רישיון לפרויקט השו"ת של בר אילן. "שארית ישראל לא יעשו עוולה". הפרטים בלשונית התוסף.'),
-        );
-      }
-      return true;
     }
 
     // ---------------------------------------------------------- פקודות
@@ -220,17 +176,7 @@
     }
   }
 
-  function openedMessage(title, result) {
-    const name = title || t('הספר');
-    if (result && result.broughtToFront === false) {
-      return t('"{title}" נפתח בבר אילן. אם החלון לא הופיע, הוא בשורת המשימות.', {
-        title: name,
-      });
-    }
-    return t('"{title}" נפתח בבר אילן', { title: name });
-  }
-
-  const api = { Engine, openedMessage };
+  const api = { Engine };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaEngine = api;
 })(typeof self !== 'undefined' ? self : globalThis);

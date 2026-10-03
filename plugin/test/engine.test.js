@@ -45,78 +45,72 @@ const CURRENT_HEALTH = { capabilities: ['searchText', 'export'] };
 
 function setup({ answers, service, permissions, pluginVersion } = {}) {
   const runtime = fakeRuntime(answers);
-  const activity = [];
   const engine = new Engine(runtime, { health: CURRENT_HEALTH, ...(service || {}) }, {
     permissions,
     pluginVersion,
-    onActivity: (value) => activity.push(value),
   });
-  return { engine, runtime, activity };
+  return { engine, runtime };
 }
 
-test('פתיחה מהספרייה: הספר נפתח בבר אילן לפי המזהה, עם הודעה ו"פותח…"', async () => {
-  const opened = [];
-  const { engine, runtime, activity } = setup({
-    service: { open: async (key) => (opened.push(key), { ok: true, broughtToFront: true }) },
-  });
-  await engine.openFromLibrary({ provider: 'responsa', id: 7008, title: 'אבני נזר' });
-  assert.deepEqual(opened, ['7008']);
-  assert.deepEqual(runtime.toasts, [['success', '"אבני נזר" נפתח בבר אילן']]);
-  assert.deepEqual(activity, [{ kind: 'opening', title: 'אבני נזר' }, null]);
-});
-
-test('פתיחה מהספרייה: כשל מהשירות מוצג כפי שהוא', async () => {
-  const { engine, runtime, activity } = setup({
-    service: {
-      open: async () => {
-        throw new ServiceError('windowLimit', 'יותר מדי חלונות');
+test('פורט השירות נשמר לאוצריא רק כשהשתנה, ורק פעם אחת בהפעלה', async () => {
+  const stored = {};
+  const { engine, runtime } = setup({
+    answers: {
+      'storage.get': ({ key }) => stored[key] ?? null,
+      'storage.set': ({ key, value }) => {
+        stored[key] = value;
+        return true;
       },
     },
   });
-  await engine.openFromLibrary({ provider: 'responsa', id: 1, title: 'א' });
-  assert.deepEqual(runtime.toasts, [['error', 'יותר מדי חלונות']]);
-  assert.equal(activity.at(-1), null, '"פותח…" נעלם גם בכשל');
+  assert.equal(await engine.savePort('http://127.0.0.1:39701'), true);
+  assert.equal(stored[Settings.KEYS.servicePort], 39701);
+  // אותו פורט: אין קריאה נוספת לאחסון בכלל.
+  const before = runtime.calls.length;
+  assert.equal(await engine.savePort('http://127.0.0.1:39701'), false);
+  assert.equal(runtime.calls.length, before);
+  // השירות עבר לפורט אחר: נשמר מחדש.
+  assert.equal(await engine.savePort('http://127.0.0.1:39703'), true);
+  assert.equal(stored[Settings.KEYS.servicePort], 39703);
 });
 
-test('פתיחה מהספרייה: ספק אחר נזרק, ומזהה פגום מקבל הסבר', async () => {
-  const { engine, runtime } = setup({ service: { open: async () => assert.fail('לא אמור לפתוח') } });
-  await engine.openFromLibrary({ provider: 'other', id: 1 });
-  assert.deepEqual(runtime.toasts, []);
-  await engine.openFromLibrary({ provider: 'responsa', id: '7' });
-  assert.equal(runtime.toasts.length, 1);
-  assert.equal(runtime.toasts[0][0], 'error');
+test('פורט השירות: כתובת לא תקינה אינה נשמרת, וכשל באחסון אינו זורק', async () => {
+  const quiet = setup({});
+  assert.equal(await quiet.engine.savePort(null), false);
+  assert.equal(await quiet.engine.savePort('http://localhost:39700'), false);
+  assert.equal(quiet.runtime.calls.length, 0);
+
+  const failing = setup({ answers: { 'storage.get': new Error('rate_limited') } });
+  assert.equal(await failing.engine.savePort('http://127.0.0.1:39700'), false);
 });
 
-test('לחיצה ימנית: פריט אחר נזרק, בחירה ריקה מקבלת הסבר', async () => {
-  const { engine, runtime } = setup({ service: { searchText: async () => assert.fail() } });
-  await engine.contextMenuClicked({ itemId: 'marker-colors', selectedText: 'א' });
-  assert.deepEqual(runtime.toasts, []);
-  await engine.contextMenuClicked({ itemId: 'responsa-search', selectedText: '   ' });
-  assert.match(runtime.toasts[0][1], /יש לסמן בספר/);
-});
-
-test('לחיצה ימנית: התשובה של בר אילן הופכת להודעה המתאימה', async () => {
-  const replies = [
-    { outcome: 'found', count: 2543, query: 'ואהבת לרעך כמוך', truncated: false },
-    { outcome: 'asked', query: 'קקק', truncated: false },
-    { outcome: 'refused', query: 'שבת', message: 'נמצאו מעל 32000 תוצאות', truncated: true },
-  ];
-  const sent = [];
+test('שירות לפני 0.5.0: הפורט נמחק, כדי שאוצריא לא תפנה אליו', async () => {
+  const stored = { [Settings.KEYS.servicePort]: 39700 };
   const { engine, runtime } = setup({
-    service: { searchText: async (text) => (sent.push(text), replies.shift()) },
+    answers: {
+      'storage.get': ({ key }) => stored[key] ?? null,
+      'storage.set': ({ key, value }) => {
+        stored[key] = value;
+        return true;
+      },
+      'storage.remove': ({ key }) => {
+        delete stored[key];
+        return true;
+      },
+    },
   });
-  for (const text of ['ואהבת לרעך כמוך', 'קקק', 'שבת']) {
-    await engine.contextMenuClicked({ itemId: 'responsa-search', selectedText: text });
-  }
-  assert.deepEqual(sent, ['ואהבת לרעך כמוך', 'קקק', 'שבת']);
-  assert.deepEqual(
-    runtime.toasts.map(([kind]) => kind),
-    ['success', 'success', 'error'],
-    '"שואל" אינו כשל: בר אילן ממתין לתשובה של המשתמש',
-  );
-  assert.match(runtime.toasts[0][1], /2,543/);
-  assert.match(runtime.toasts[2][1], /32000/);
-  assert.match(runtime.toasts[2][1], /רק את תחילת הטקסט/);
+  const oldService = { capabilities: ['searchText', 'browse'] };
+  const newService = { capabilities: ['searchText', 'browse', 'notify'] };
+
+  assert.equal(await engine.syncPort(oldService, 'http://127.0.0.1:39700'), true);
+  assert.equal(Settings.KEYS.servicePort in stored, false);
+  // כבר נמחק בהפעלה הזו: אין קריאה נוספת.
+  const before = runtime.calls.length;
+  assert.equal(await engine.syncPort(oldService, 'http://127.0.0.1:39700'), false);
+  assert.equal(runtime.calls.length, before);
+  // אחרי העדכון: נשמר שוב.
+  assert.equal(await engine.syncPort(newService, 'http://127.0.0.1:39700'), true);
+  assert.equal(stored[Settings.KEYS.servicePort], 39700);
 });
 
 test('פקודת פתיחת הלשונית; בלי ההרשאה מקבלים הסבר', async () => {
@@ -217,7 +211,28 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     welcomeSeen: false,
     browsePath: '',
     advancedQuery: null,
+    tab: 'books',
+    locateHistory: [],
   });
+});
+
+test('הגדרות: הלשונית האחרונה והמקומות האחרונים, בגבולות', async () => {
+  const long = 'א'.repeat(201);
+  const runtime = fakeRuntime({
+    'storage.get': ({ key }) =>
+      ({
+        responsa_tab: 'locate',
+        responsa_locate_history: ['בראשית ב ג', 7, '', long, ...Array(12).fill('ברכות דף ב')],
+      })[key] ?? null,
+  });
+  const values = await new Settings.SettingsStore(runtime).load();
+  assert.equal(values.tab, 'locate');
+  assert.equal(values.locateHistory[0], 'בראשית ב ג');
+  assert.equal(values.locateHistory.length, Settings.MAX_LOCATE_HISTORY);
+  assert.ok(!values.locateHistory.includes(long));
+
+  const unknown = fakeRuntime({ 'storage.get': ({ key }) => (key === 'responsa_tab' ? 'nope' : null) });
+  assert.equal((await new Settings.SettingsStore(unknown).load()).tab, 'books');
 });
 
 test('הגדרות: קריאה שנכשלה אינה "אין הגדרות", ושמירה שנכשלה זורקת', async () => {
@@ -240,55 +255,6 @@ test('הגדרות: כל מתג נשמר במפתח משלו, בערך פשוט'
       { key: 'responsa_language', value: 'en' },
     ],
   );
-});
-
-test('לחיצה ימנית: שירות ישן בלי חיפוש טקסט מקבל הסבר, בלי לנסות', async () => {
-  const { engine, runtime } = setup({
-    service: {
-      health: { capabilities: ['export'] },
-      searchText: async () => assert.fail('שירות ישן אינו מכיר את הנתיב'),
-    },
-  });
-  await engine.contextMenuClicked({ itemId: 'responsa-search', selectedText: 'שבת' });
-  assert.equal(runtime.toasts[0][0], 'error');
-  assert.match(runtime.toasts[0][1], /לעדכן את שירות בר אילן/);
-});
-
-test('לחיצה ימנית: בלי מידע על השירות מתחברים קודם', async () => {
-  let connected = 0;
-  const { engine, runtime } = setup({
-    service: {
-      health: null,
-      connect: async () => (connected++, CURRENT_HEALTH),
-      searchText: async () => ({ outcome: 'found', count: 1, query: 'שבת', truncated: false }),
-    },
-  });
-  await engine.contextMenuClicked({ itemId: 'responsa-search', selectedText: 'שבת' });
-  assert.equal(connected, 1);
-  assert.equal(runtime.toasts[0][0], 'success');
-});
-
-test('לחיצה ימנית: קטע ארוך נחתך לפני השליחה', async () => {
-  const sent = [];
-  const { engine } = setup({
-    service: {
-      searchText: async (text) => (sent.push(text), { outcome: 'found', count: 1, query: 'שבת', truncated: true }),
-    },
-  });
-  await engine.searchSelection('שבת '.repeat(2000));
-  assert.equal(sent[0].length, 2000);
-});
-
-test('לחיצה ימנית: טקסט בלי עברית מקבל הסבר ברור', async () => {
-  const { engine, runtime } = setup({
-    service: {
-      searchText: async () => {
-        throw new ServiceError('badRequest', 'Bad request');
-      },
-    },
-  });
-  await engine.contextMenuClicked({ itemId: 'responsa-search', selectedText: 'Genesis' });
-  assert.match(runtime.toasts[0][1], /אין מילים בעברית/);
 });
 
 test('כותרת הפריט בתפריט מעודכנת לשפה הנוכחית', async () => {
@@ -383,22 +349,3 @@ test('כותרת הפריט: בלי "הוספת רכיבים לתוכנה" הפ�
   assert.equal(runtime.calls.some((c) => c.method === 'reader.updateContextMenuItem'), false);
 });
 
-test('ההבהרה על הרישיון: בפעולה הראשונה מהרקע נפתח מסך הפתיחה, פעם אחת', async () => {
-  const { engine, runtime } = setup({ answers: { 'plugin.openSelf': true } });
-  assert.equal(await engine.ensureLicenseNotice(false), true);
-  const opened = runtime.calls.find((c) => c.method === 'plugin.openSelf');
-  assert.deepEqual(opened.payload, { param: { view: 'welcome' } });
-  assert.equal(await engine.ensureLicenseNotice(false), false, 'פעם אחת לכל הפעלה');
-  assert.equal(runtime.calls.filter((c) => c.method === 'plugin.openSelf').length, 1);
-});
-
-test('ההבהרה על הרישיון: כבר הוצגה — אין מה לעשות; בלי הרשאה — הודעה', async () => {
-  const seen = setup({});
-  assert.equal(await seen.engine.ensureLicenseNotice(true), false);
-  assert.equal(seen.runtime.calls.length, 0);
-
-  const blocked = setup({ answers: { 'plugin.openSelf': new Error('permission_denied') } });
-  await blocked.engine.ensureLicenseNotice(false);
-  assert.equal(blocked.runtime.toasts[0][0], 'info');
-  assert.match(blocked.runtime.toasts[0][1], /שארית ישראל לא יעשו עוולה/);
-});

@@ -19,7 +19,22 @@
     browsePath: 'responsa_browse_path',
     /** החיפוש המתקדם האחרון (ResponsaAdvanced.normalize בודק אותו בטעינה). */
     advancedQuery: 'responsa_advanced_query',
+    /** הלשונית האחרונה בתוסף, כדי שייפתח בה שוב. */
+    tab: 'responsa_tab',
+    /** המקומות האחרונים שנפתחו ב"איתור מקום". */
+    locateHistory: 'responsa_locate_history',
+    /**
+     * הפורט של השירות, שהדף מצא. פעולות הלחיצה של אוצריא (`$storage`) פונות
+     * אליו בלי להעיר את התוסף; לא הגדרה של המשתמש.
+     */
+    servicePort: 'responsa_service_port',
   });
+
+  /** הלשוניות של התוסף, לפי הסדר. */
+  const TABS = Object.freeze(['books', 'text', 'locate', 'settings', 'help']);
+
+  /** כמה מקומות אחרונים נשמרים. */
+  const MAX_LOCATE_HISTORY = 8;
 
   const LANGUAGES = Object.freeze(['auto', 'he', 'en']);
 
@@ -31,6 +46,8 @@
     welcomeSeen: false,
     browsePath: '',
     advancedQuery: null,
+    tab: 'books',
+    locateHistory: [],
   });
 
   /** ערך לא מוכר (או אחסון פגום) חוזר לברירת המחדל ולא מפיל את התוסף. */
@@ -50,6 +67,10 @@
         value.advancedQuery && typeof value.advancedQuery === 'object' && !Array.isArray(value.advancedQuery)
           ? value.advancedQuery
           : null,
+      tab: TABS.includes(value.tab) ? value.tab : DEFAULTS.tab,
+      locateHistory: (Array.isArray(value.locateHistory) ? value.locateHistory : [])
+        .filter((entry) => typeof entry === 'string' && entry.trim() && entry.length <= 200)
+        .slice(0, MAX_LOCATE_HISTORY),
     };
   }
 
@@ -77,6 +98,8 @@
         'welcomeSeen',
         'browsePath',
         'advancedQuery',
+        'tab',
+        'locateHistory',
       ];
       const values = await Promise.all(names.map((name) => read(KEYS[name])));
       this.values = normalize(Object.fromEntries(names.map((name, i) => [name, values[i]])));
@@ -97,7 +120,7 @@
     }
   }
 
-  const api = { KEYS, LANGUAGES, DEFAULTS, normalize, SettingsStore };
+  const api = { KEYS, LANGUAGES, TABS, MAX_LOCATE_HISTORY, DEFAULTS, normalize, SettingsStore };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaSettings = api;
 })(typeof self !== 'undefined' ? self : globalThis);

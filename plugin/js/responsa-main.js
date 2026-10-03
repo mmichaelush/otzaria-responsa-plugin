@@ -1,5 +1,5 @@
 // נקודת הכניסה של הלשונית: מחבר את הבקר לאירועי אוצריא. כל השאר בקבצים
-// האחרים; המקבילה של מנוע הרקע היא responsa-background.js.
+// האחרים. לתוסף אין מנוע רקע.
 (function () {
   'use strict';
 
@@ -32,8 +32,7 @@
   on('plugin.resumed', () => app.resume());
   on('plugin.page_opened', (detail) => app.pageOpened(detail));
 
-  // אירועים ממוקדים: מגיעים לכאן כשאין מנוע רקע (ההרשאה "הפעלה ברקע" כבויה).
-  on('library.providerBook.openRequested', (payload) => engine.openFromLibrary(payload));
-  on('contextMenu.itemClicked', (payload) => engine.contextMenuClicked(payload));
+  // קיצור "פתיחת לשונית בר אילן". לחיצה ימנית ופתיחה מהספרייה אינן מגיעות
+  // לכאן: אוצריא פונה בהן לשירות בעצמה (`localService.post` במניפסט).
   on('app.command', (payload) => engine.command(payload));
 })();

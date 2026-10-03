@@ -279,9 +279,9 @@ test('breadcrumbs ו-scopeName', () => {
   assert.equal(Domain.scopeName(''), '');
 });
 
-test('serviceNotice: שירות בלי browse מקבל הערה משלו', () => {
+test('serviceNotice: שירות לפני 0.5.0 (בלי notify) מקבל הערה', () => {
   const caps = (list) => ({ capabilities: list });
-  assert.equal(Domain.serviceNotice(caps(['searchText', 'browse'])), null);
-  assert.match(Domain.serviceNotice(caps(['searchText'])).text, /עיון בקטגוריות/);
-  assert.match(Domain.serviceNotice(caps([])).text, /לחיצה ימנית/);
+  assert.equal(Domain.serviceNotice(caps(['searchText', 'browse', 'notify'])), null);
+  assert.match(Domain.serviceNotice(caps(['searchText', 'browse'])).text, /לחיצה ימנית ופתיחת ספרים/);
+  assert.equal(Domain.serviceNotice(null), null);
 });

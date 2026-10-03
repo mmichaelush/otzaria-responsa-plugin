@@ -19,10 +19,20 @@ const browser = [
 if (!browser) throw new Error('לא נמצא Edge או Chrome');
 
 const scenarios = [
-  'scenario=ready&sheet=advanced&adv=words',
-  'scenario=ready&sheet=advanced&adv=scope',
-  'scenario=ready&sheet=advanced&adv=manual&run=1',
-  'scenario=ready&sheet=advanced&oldservice=1',
+  'scenario=ready&page=text',
+  'scenario=ready&page=text&adv=simple&run=1',
+  'scenario=ready&page=text&adv=words',
+  'scenario=ready&page=text&adv=scope',
+  'scenario=ready&page=text&adv=manual&run=1',
+  'scenario=ready&page=text&oldservice=1',
+  'scenario=needsCatalog&page=text&adv=scope',
+  'scenario=serviceMissing&page=text',
+  'scenario=ready&page=locate&history=1',
+  'scenario=ready&page=locate&example=1',
+  'scenario=ready&page=locate&loc=' + encodeURIComponent('בראשית ב ג') + '&run=1',
+  'scenario=ready&page=locate&loc=' + encodeURIComponent('ברכות דף ב') + '&run=1',
+  'scenario=ready&page=locate&oldservice=1',
+  'scenario=building&page=locate',
   'scenario=serviceMissing',
   'scenario=needsCatalog',
   'scenario=building',
@@ -34,13 +44,14 @@ const scenarios = [
   'scenario=unsupported',
   'scenario=ready&query=' + encodeURIComponent('מהרש"א'),
   'scenario=rebuilding&query=' + encodeURIComponent('אבני נזר'),
-  'scenario=ready&sheet=settings',
-  'scenario=ready&sheet=settings&library=1',
-  ...['guide', 'troubleshoot', 'status', 'about'].map((tab) => 'scenario=ready&sheet=help&tab=' + tab),
+  'scenario=ready&page=settings',
+  'scenario=serviceMissing&page=settings',
+  ...['guide', 'troubleshoot', 'status', 'about'].map((tab) => 'scenario=ready&page=help&tab=' + tab),
+  'scenario=serviceMissing&page=help&tab=troubleshoot',
   'scenario=ready&welcome=1',
   'scenario=serviceMissing&welcome=1&offline=1',
   'scenario=ready&details=3232&query=' + encodeURIComponent('מהרש"א'),
-  'scenario=ready&sheet=help&tab=about&offline=1',
+  'scenario=ready&page=help&tab=about&offline=1',
 ];
 
 let failures = 0;

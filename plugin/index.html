@@ -14,37 +14,27 @@
           <span class="topbar-subtitle"></span>
         </div>
         <div class="topbar-actions">
-          <button type="button" class="icon-button help-toggle"></button>
-          <button
-            type="button"
-            class="icon-button settings-toggle"
-            aria-pressed="false"
-            aria-controls="settings-sheet"
-          ></button>
+          <button type="button" class="button button-text show-responsa" hidden></button>
         </div>
       </header>
+      <!-- הלשוניות הראשיות. הכפתורים נבנים ב-responsa-view.js. -->
+      <div class="main-tabs" role="tablist"></div>
+      <!-- main נשאר ציון הדרך של העמוד; הלשונית הנוכחית היא ה-tabpanel שבתוכו. -->
       <main class="app-content">
-        <div class="content-column"></div>
+        <div class="content-column" id="main-panel" role="tabpanel"></div>
       </main>
     </div>
 
     <!-- אזור קבוע לקורא מסך: אזור שנוצר זה עתה אינו מוכרז. -->
     <div class="live-region visually-hidden" aria-live="polite" aria-atomic="true"></div>
 
+    <!-- מסך הפתיחה בלבד: כל השאר בלשוניות. -->
     <div class="overlay-scrim"></div>
-    <aside
-      class="side-sheet"
-      id="settings-sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
-      aria-hidden="true"
-    ></aside>
     <section
       class="help-dialog"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="help-title"
+      aria-labelledby="welcome-title"
       aria-hidden="true"
     ></section>
 
@@ -53,6 +43,7 @@
     <script src="i18n/en.js"></script>
     <script src="js/responsa-domain.js"></script>
     <script src="js/responsa-advanced.js"></script>
+    <script src="js/responsa-locate.js"></script>
     <script src="js/responsa-icons.js"></script>
     <script src="js/responsa-theme.js"></script>
     <script src="js/responsa-log.js"></script>
@@ -63,6 +54,7 @@
     <script src="js/responsa-ui.js"></script>
     <script src="js/responsa-panels.js"></script>
     <script src="js/responsa-advanced-ui.js"></script>
+    <script src="js/responsa-locate-ui.js"></script>
     <script src="js/responsa-view.js"></script>
     <script src="js/responsa-app.js"></script>
     <script src="js/responsa-main.js"></script>

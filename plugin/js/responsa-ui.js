@@ -63,7 +63,7 @@
       {
         type: 'button',
         class: 'icon-button' + (opts.className ? ' ' + opts.className : ''),
-        'aria-label': label,
+        'aria-label': opts.ariaLabel || label,
         title: label,
         'aria-expanded': opts.expanded === undefined ? null : String(Boolean(opts.expanded)),
         'aria-controls': opts.controls || null,
@@ -422,45 +422,7 @@
           'data-role': 'search-spinner',
         }),
       ),
-      el('div', { class: 'tools-host' }, searchTools(model, actions)),
-      el('div', { class: 'activity-host' }, activityView(model)),
       el('div', { class: 'results-host' }, resultsBlock(model, actions)),
-    );
-  }
-
-  /** מתחת לתיבת החיפוש: חיפוש מתקדם בטקסט, ופתיחת בר אילן עצמו. */
-  function searchTools(model, actions) {
-    return el(
-      'div',
-      { class: 'search-tools' },
-      button('tonal', t('חיפוש מתקדם בטקסט'), actions.openAdvanced, {
-        icon: 'database_search_24_regular',
-        key: 'open-advanced',
-      }),
-      Domain.serviceCan(model.health, 'showResponsa')
-        ? button('text', t('פתיחת בר אילן'), actions.showResponsa, {
-            icon: 'open_24_regular',
-            key: 'show-responsa',
-            busy: model.showing,
-            busyLabel: t('פותח…'),
-          })
-        : null,
-    );
-  }
-
-  /** "פותח…"/"מחפש…" כשפעולה מהספרייה או מתפריט הלחיצה הימנית הגיעה לדף. */
-  function activityView(model) {
-    const activity = model.activity;
-    if (!activity) return null;
-    const text =
-      activity.kind === 'searching'
-        ? t('מחפש בבר אילן: "{title}"…', { title: activity.title })
-        : t('פותח בבר אילן: "{title}"…', { title: activity.title || t('הספר') });
-    return el(
-      'div',
-      { class: 'activity', role: 'status' },
-      el('span', { class: 'spinner', 'aria-hidden': 'true' }),
-      el('span', { class: 'activity-text' }, text),
     );
   }
 
@@ -731,6 +693,13 @@
             expanded,
             controls: expanded ? detailsId : null,
           }),
+          Domain.serviceCan(model.health, 'locate')
+            ? iconButton('document_search_24_regular', t('פתיחה במקום מסוים'), () => actions.locateIn(book), {
+                key: 'locate-' + book.key,
+                // כפתור כזה בכל שורה: בלי שם הספר, קורא מסך שומע רשימה של כפתורים זהים.
+                ariaLabel: t('פתיחה במקום מסוים: {title}', { title: book.title }),
+              })
+            : null,
           button('tonal', t('פתיחה בבר אילן'), () => actions.open(book), {
             key: 'open-' + book.key,
             icon: 'open_24_regular',
@@ -802,8 +771,6 @@
     resultsBlock,
     searchLabel,
     noticeView,
-    activityView,
-    searchTools,
     rebuildBanner,
     updateProgress,
   };

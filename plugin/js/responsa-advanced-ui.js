@@ -1,7 +1,7 @@
-// דיאלוג החיפוש המתקדם (מסך מלא, כמו העזרה): כל האפשרויות של "חיפוש מתקדם"
-// בבר אילן בצורה גרפית — מילים וחלופות, צורות, מרחקים, תחום ואפשרויות —
-// ותצוגה של השאילתה כפי שתישלח. כמו responsa-panels.js: מודל ופעולות
-// נכנסים, אלמנט יוצא, וטקסט רק דרך textContent.
+// לשונית "חיפוש בטקסט": חיפוש רגיל בשדה אחד, וחיפוש מתקדם עם כל האפשרויות
+// של "חיפוש מתקדם" בבר אילן בצורה גרפית — מילים וחלופות, צורות, מרחקים,
+// תחום ואפשרויות. בשני האופנים מוסבר במילים מה יחופש. כמו responsa-panels.js:
+// מודל ופעולות נכנסים, אלמנט יוצא, וטקסט רק דרך textContent.
 (function (root) {
   'use strict';
 
@@ -13,9 +13,15 @@
   const { segmented, switchRow } = root.ResponsaPanels;
   const t = (text, vars) => I18n.t(text, vars);
 
-  function heading(title, subtitle) {
+  /** כותרת של שלב: מספר, שם והסבר קצר. */
+  function heading(title, subtitle, step) {
     return [
-      el('h3', { class: 'advanced-heading' }, title),
+      el(
+        'h3',
+        { class: 'advanced-heading' },
+        step ? el('span', { class: 'step-number', 'aria-hidden': 'true' }, String(step)) : null,
+        title,
+      ),
       subtitle ? el('p', { class: 'advanced-subheading' }, subtitle) : null,
     ];
   }
@@ -142,11 +148,11 @@
     const single = (Advanced.FORM_BY_ID[term.form] || {}).single;
     return el(
       'li',
-      { class: 'term-card' + (invalid ? ' is-error' : '') },
+      { class: 'term-card' + (invalid ? ' is-error' : '') + (term.exclude ? ' is-excluded' : '') },
       el(
         'div',
         { class: 'term-header' },
-        el('span', { class: 'term-number' }, t('מילה {n}', { n: index + 1 })),
+        el('span', { class: 'term-number' }, term.exclude ? t('בלי המילה') : t('מילה {n}', { n: index + 1 })),
         query.terms.length > 1
           ? iconButton('delete_24_regular', t('הסרת מילה {n}', { n: index + 1 }), () => actions.advancedRemoveTerm(index), {
               key: 'adv-remove-' + index,
@@ -214,11 +220,19 @@
     });
     return [
       el('ol', { class: 'term-list' }, items),
-      button('tonal', t('הוספת מילה'), actions.advancedAddTerm, {
-        icon: 'add_24_regular',
-        key: 'adv-add-term',
-        disabled: query.terms.length >= Advanced.MAX_TERMS,
-      }),
+      el(
+        'div',
+        { class: 'builder-actions' },
+        button('tonal', t('הוספת מילה'), actions.advancedAddTerm, {
+          icon: 'add_24_regular',
+          key: 'adv-add-term',
+          disabled: query.terms.length >= Advanced.MAX_TERMS,
+        }),
+        button('text', t('כתיבה בתחביר של בר אילן'), () => actions.advancedMode(Advanced.Mode.manual), {
+          icon: 'code_24_regular',
+          key: 'adv-to-manual',
+        }),
+      ),
       el(
         'div',
         { class: 'settings-card advanced-card' },
@@ -257,26 +271,57 @@
     return [
       input,
       el('p', { class: 'advanced-hint' }, t('הסימנים מוסברים למטה, ב"סימני החיפוש של בר אילן".')),
+      button('text', t('חזרה לבונה החיפוש'), () => actions.advancedMode(Advanced.Mode.builder), {
+        icon: 'arrow_right_24_regular',
+        key: 'adv-to-builder',
+      }),
+    ];
+  }
+
+  /** חיפוש רגיל: שדה אחד, כמו בחלון החיפוש של בר אילן. */
+  function simpleEditor(state, actions) {
+    const input = el('input', {
+      class: 'search-input simple-input',
+      type: 'search',
+      dir: 'rtl',
+      placeholder: t('מילים לחיפוש, למשל: נר שבת'),
+      'aria-label': t('מילים לחיפוש בבר אילן'),
+      autocomplete: 'off',
+      spellcheck: 'false',
+      maxlength: String(Advanced.MAX_QUERY_LENGTH),
+      dataset: { focusKey: 'adv-simple' },
+    });
+    input.value = state.query.simpleText;
+    input.addEventListener('input', () => actions.advancedSet({ simpleText: input.value }, { light: true }));
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') actions.runAdvanced();
+    });
+    return [
+      el('label', { class: 'search-bar' }, icon('search_24_regular'), input),
+      el(
+        'p',
+        { class: 'advanced-hint' },
+        t('המילים יחופשו צמודות, בסדר שנכתבו. לחיפוש מילים רחוקות, צורות אחרות של מילה או מילים חלופיות — "חיפוש מתקדם".'),
+      ),
     ];
   }
 
   function wordsSection(state, actions) {
     const query = state.query;
+    const Mode = Advanced.Mode;
     return el(
       'section',
       { class: 'advanced-section' },
-      heading(t('מה לחפש')),
-      segmented(
-        t('איך לכתוב את החיפוש'),
-        [
-          { value: 'builder', label: t('בונה החיפוש') },
-          { value: 'manual', label: t('כתיבה בתחביר של בר אילן') },
-        ],
-        query.manual ? 'manual' : 'builder',
-        (mode) => actions.advancedSet({ manual: mode === 'manual' }),
-        'adv-mode-',
+      heading(
+        t('מה לחפש'),
+        query.mode === Mode.builder ? t('מילה בכל שדה. לכל מילה בוחרים איך לחפש אותה, וביניהן — כמה הן רחוקות.') : null,
+        query.mode === Mode.simple ? null : 1,
       ),
-      query.manual ? manualEditor(state, actions) : builder(state, actions),
+      query.mode === Mode.simple
+        ? simpleEditor(state, actions)
+        : query.mode === Mode.manual
+          ? manualEditor(state, actions)
+          : builder(state, actions),
     );
   }
 
@@ -406,41 +451,40 @@
     );
   }
 
-  function scopeSection(state, actions) {
+  function scopeSection(state, actions, step, catalogReady) {
     const scope = state.query.scope;
     const hints = {
       [Advanced.Scope.all]: t('כמו "חיפוש בכל המאגרים" בבר אילן.'),
       [Advanced.Scope.current]: t('הספרים שכבר נבחרו בבר אילן, ב"המאגרים המשתתפים".'),
       [Advanced.Scope.pick]: t('הבחירה נשמרת גם בבר אילן, ותקפה גם לחיפושים הבאים בו.'),
     };
+    // בחירת קטגוריות נשענת על רשימת הספרים; בלעדיה רק כל הספרים או הבחירה
+    // שכבר בבר אילן.
+    const modes = [
+      { value: Advanced.Scope.all, label: t('כל הספרים') },
+      catalogReady ? { value: Advanced.Scope.pick, label: t('קטגוריות וספרים שאבחר') } : null,
+      { value: Advanced.Scope.current, label: t('הבחירה שבבר אילן') },
+    ].filter(Boolean);
+    const mode = Advanced.withAvailableScope(state.query, catalogReady).scope.mode;
     return el(
       'section',
       { class: 'advanced-section' },
-      heading(t('איפה לחפש')),
-      segmented(
-        t('איפה לחפש'),
-        [
-          { value: Advanced.Scope.all, label: t('כל הספרים') },
-          { value: Advanced.Scope.pick, label: t('קטגוריות וספרים שאבחר') },
-          { value: Advanced.Scope.current, label: t('הבחירה שבבר אילן') },
-        ],
-        scope.mode,
-        (mode) => actions.advancedScopeMode(mode),
-        'adv-scope-',
-      ),
-      el('p', { class: 'advanced-hint' }, hints[scope.mode]),
-      scope.mode === Advanced.Scope.pick ? [scopeChips(state, actions), picker(state, actions)] : null,
+      heading(t('איפה לחפש'), null, step),
+      segmented(t('איפה לחפש'), modes, mode, (value) => actions.advancedScopeMode(value), 'adv-scope-'),
+      el('p', { class: 'advanced-hint' }, hints[mode]),
+      mode === Advanced.Scope.pick ? [scopeChips(state, actions), picker(state, actions)] : null,
     );
   }
 
   // ------------------------------------------------------ אפשרויות ותצוגה
 
-  function optionsSection(state, actions) {
+  function optionsSection(state, actions, step) {
     const options = state.query.options;
+    const simple = state.query.mode === Advanced.Mode.simple;
     return el(
       'section',
       { class: 'advanced-section' },
-      heading(t('אפשרויות')),
+      heading(t('אפשרויות'), null, step),
       el(
         'div',
         { class: 'settings-card advanced-card' },
@@ -452,37 +496,72 @@
           onToggle: (abbreviations) => actions.advancedSet({ options: { ...options, abbreviations } }),
           key: 'adv-abbreviations',
         }),
-        switchRow({
-          iconName: 'document_bullet_list_24_regular',
-          title: t('לבחור צורות לפני התוצאות'),
-          subtitle: t('בר אילן יפתח את "ניהול הצורות", ושם בוחרים אילו צורות של המילים ייכללו'),
-          checked: options.showForms,
-          onToggle: (showForms) => actions.advancedSet({ options: { ...options, showForms } }),
-          key: 'adv-forms',
-        }),
+        simple
+          ? null
+          : switchRow({
+              iconName: 'document_bullet_list_24_regular',
+              title: t('לבחור צורות לפני התוצאות'),
+              subtitle: t('בר אילן יפתח את "ניהול הצורות", ושם בוחרים אילו צורות של המילים ייכללו'),
+              checked: options.showForms,
+              onToggle: (showForms) => actions.advancedSet({ options: { ...options, showForms } }),
+              key: 'adv-forms',
+            }),
       ),
     );
   }
 
-  function previewSection(state, actions) {
-    const text = Advanced.buildQuery(state.query);
+  /** "רק ב: שו"ת, רמב"ם" — המקום, במשפט ההסבר. */
+  function scopeLabel(query, catalogReady) {
+    const scope = query.scope;
+    if (scope.mode === Advanced.Scope.current) return t('בספרים שכבר נבחרו בבר אילן.');
+    if (scope.mode === Advanced.Scope.pick && catalogReady && scope.items.length) {
+      const names = scope.items.slice(0, 3).map((item) => item.name);
+      const more = scope.items.length - names.length;
+      return more > 0
+        ? t('רק ב: {names}, ועוד {count}.', { names: names.join(', '), count: more })
+        : t('רק ב: {names}.', { names: names.join(', ') });
+    }
+    return t('בכל הספרים.');
+  }
+
+  /**
+   * "מה יחופש": ההסבר במילים, לפני הכול. מי שמכיר את התחביר רואה גם את
+   * השאילתה כפי שתישלח.
+   */
+  function summaryCard(state, actions, catalogReady) {
+    const query = state.query;
+    const text = Advanced.buildQuery(query);
+    const lines = text ? Advanced.describe(query, scopeLabel(query, catalogReady)) : [];
+    const advanced = query.mode !== Advanced.Mode.simple;
     return el(
       'section',
-      { class: 'advanced-section' },
-      heading(t('השאילתה שתישלח לבר אילן')),
+      // לא אזור חי: הוא משתנה בכל הקשה, וקורא מסך היה חוזר עליו שוב ושוב.
+      { class: 'summary-card' },
+      el('h3', { class: 'summary-title' }, icon('info_24_regular'), t('מה יחופש')),
       el(
         'div',
-        { class: 'query-preview' },
-        el(
-          'code',
-          { class: 'query-text' + (text ? '' : ' is-empty'), dir: 'rtl', 'data-role': 'adv-preview' },
-          text ? Advanced.displayQuery(text) : t('השאילתה תופיע כאן'),
-        ),
-        iconButton('copy_24_regular', t('העתקת השאילתה'), actions.copyAdvancedQuery, { key: 'adv-copy' }),
+        { class: 'summary-lines', 'data-role': 'adv-summary' },
+        lines.length
+          ? lines.map((line) => el('p', { class: 'summary-line' }, line))
+          : el('p', { class: 'summary-line is-empty' }, t('כותבים מילים, וכאן יוסבר מה יחופש.')),
       ),
+      advanced
+        ? el(
+            'div',
+            { class: 'query-preview' },
+            el('span', { class: 'query-label' }, t('בתחביר של בר אילן:')),
+            el(
+              'code',
+              { class: 'query-text' + (text ? '' : ' is-empty'), dir: 'rtl', 'data-role': 'adv-preview' },
+              text ? Advanced.displayQuery(text) : t('השאילתה תופיע כאן'),
+            ),
+            iconButton('copy_24_regular', t('העתקת השאילתה'), actions.copyAdvancedQuery, { key: 'adv-copy' }),
+          )
+        : null,
       el(
         'p',
-        { class: 'advanced-error', role: 'alert', 'data-role': 'adv-problem', hidden: !state.problem },
+        // מוכרז דרך האזור הקבוע (`announce`) ברגע הבדיקה, פעם אחת.
+        { class: 'advanced-error', 'data-role': 'adv-problem', hidden: !state.problem },
         state.problem ? state.problem.message : '',
       ),
     );
@@ -541,14 +620,6 @@
         'div',
         { class: 'advanced-actions' },
         button('text', t('ניקוי'), actions.advancedClear, { key: 'adv-clear', disabled: state.running }),
-        Domain.serviceCan(model.health, 'showResponsa')
-          ? button('tonal', t('פתיחת בר אילן'), actions.showResponsa, {
-              icon: 'open_24_regular',
-              key: 'adv-show',
-              busy: model.showing,
-              busyLabel: t('פותח…'),
-            })
-          : null,
         button('filled', t('חיפוש בבר אילן'), actions.runAdvanced, {
           icon: 'search_24_regular',
           key: 'adv-run',
@@ -559,21 +630,30 @@
     );
   }
 
-  function advancedDialog(model, actions) {
+  /** הלשונית "חיפוש בטקסט". [catalogReady] — יש רשימת ספרים לבחירת קטגוריות. */
+  function textSearchPage(model, actions) {
     const state = model.advanced;
+    const Mode = Advanced.Mode;
     const supported = Domain.serviceCan(model.health, 'advancedSearch');
+    const catalogReady = Domain.catalogReady(model.status);
+    const advanced = state.query.mode !== Mode.simple;
     const body = supported
       ? [
-          el(
-            'p',
-            { class: 'help-lead' },
-            t('כל האפשרויות של "חיפוש מתקדם" בבר אילן, בלי לזכור סימנים. החיפוש רץ בבר אילן, והתוצאות נפתחות בו.'),
+          segmented(
+            t('סוג החיפוש'),
+            [
+              { value: Mode.simple, label: t('חיפוש רגיל') },
+              { value: Mode.builder, label: t('חיפוש מתקדם') },
+            ],
+            advanced ? Mode.builder : Mode.simple,
+            (mode, how) => actions.advancedMode(mode, how),
+            'adv-kind-',
           ),
           wordsSection(state, actions),
-          scopeSection(state, actions),
-          optionsSection(state, actions),
-          previewSection(state, actions),
-          guideSection(actions),
+          scopeSection(state, actions, advanced ? 2 : null, catalogReady),
+          optionsSection(state, actions, advanced ? 3 : null),
+          summaryCard(state, actions, catalogReady),
+          advanced ? guideSection(actions) : null,
         ]
       : el(
           'div',
@@ -588,23 +668,19 @@
         );
     return el(
       'div',
-      { class: 'dialog-content' },
+      { class: 'text-page' },
       el(
         'header',
-        { class: 'sheet-header' },
-        el('h2', { class: 'sheet-title', id: 'advanced-title' }, t('חיפוש מתקדם בבר אילן')),
-        iconButton('dismiss_24_regular', t('סגירה'), actions.closeSheet, { className: 'sheet-close', key: 'close-advanced' }),
+        { class: 'page-header' },
+        el('h2', { class: 'page-title', id: 'text-title' }, t('חיפוש בטקסט')),
+        el('p', { class: 'page-lead' }, t('החיפוש רץ בבר אילן, והתוצאות נפתחות בחלון שלו.')),
       ),
-      el(
-        'div',
-        { class: 'dialog-body advanced-body', dataset: { focusKey: 'advanced-panel' } },
-        body,
-      ),
+      el('div', { class: 'advanced-body' }, body),
       supported ? footer(model, state, actions) : null,
     );
   }
 
-  const api = { advancedDialog };
+  const api = { textSearchPage };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaAdvancedUi = api;
 })(typeof self !== 'undefined' ? self : globalThis);

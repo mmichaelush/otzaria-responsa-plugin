@@ -171,6 +171,116 @@ textarea {
   }
 }
 
+/* ---------- לשוניות ראשיות (M3 primary tabs) ---------- */
+
+.main-tabs {
+  display: flex;
+  flex-shrink: 0;
+  /* safe: כשהלשוניות גולשות, הראשונה אינה נחתכת מחוץ לגלילה. */
+  justify-content: center;
+  justify-content: safe center;
+  overflow-x: auto;
+  background: var(--color-surface-container-high);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.main-tab {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 11em;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.6em;
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: 0.93em;
+  font-weight: 500;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.main-tab .icon {
+  width: 1.4em;
+  height: 1.4em;
+}
+
+.main-tab[aria-selected='true'] {
+  color: var(--color-primary);
+}
+
+.main-tab[aria-selected='true']::after {
+  position: absolute;
+  inset-inline: 22%;
+  bottom: 0;
+  height: 3px;
+  content: '';
+  background: var(--color-primary);
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+}
+
+.main-tab:hover {
+  background: color-mix(in srgb, var(--color-on-surface) 5%, transparent);
+}
+
+.main-tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -4px;
+  border-radius: var(--radius-sm);
+}
+
+/* בחלון צר: רק האייקונים, ו-title נותן את השם. */
+@media (max-width: 480px) {
+  .main-tab-label {
+    display: none;
+  }
+
+  .main-tab {
+    min-height: 3em;
+  }
+}
+
+/* "פתיחת בר אילן" בפס העליון: בחלון צר רק האייקון. */
+@media (max-width: 600px) {
+  .show-responsa-label {
+    display: none;
+  }
+}
+
+/* ---------- לשונית: כותרת וגוף ---------- */
+
+.page-header {
+  margin-bottom: var(--space-4);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.45em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.page-lead {
+  margin: var(--space-1) 0 0;
+  color: var(--color-on-surface-variant);
+}
+
+.page-body:focus {
+  outline: none;
+}
+
+.help-panel {
+  padding-top: var(--space-4);
+}
+
+.secondary-tabs {
+  margin-bottom: var(--space-2);
+}
+
 .app-content {
   flex: 1;
   min-width: 0;
@@ -521,25 +631,6 @@ textarea {
   .result-details dd + dt {
     margin-top: var(--space-2);
   }
-}
-
-/* ---------- פעולה שהגיעה מהספרייה או מלחיצה ימנית ---------- */
-
-.activity {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  margin-top: var(--space-4);
-  color: var(--color-on-secondary-container);
-  background: var(--color-secondary-container);
-  border-radius: var(--radius-md);
-}
-
-.activity-text {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 /* ---------- כרטיס מצב (הכנה, שגיאות, בנייה) ---------- */
@@ -933,7 +1024,7 @@ span.breadcrumb {
   user-select: none;
 }
 
-/* ---------- כיסוי, לוח צד ודיאלוג ---------- */
+/* ---------- כיסוי ודיאלוג (מסך הפתיחה) ---------- */
 
 .overlay-scrim {
   position: fixed;
@@ -950,40 +1041,6 @@ span.breadcrumb {
   pointer-events: auto;
 }
 
-/* כמו ContextOverlayPanel של אוצריא: בצד סוף השורה (שמאל בעברית). */
-.side-sheet {
-  position: fixed;
-  top: 10px;
-  bottom: 12px;
-  z-index: 101;
-  display: flex;
-  flex-direction: column;
-  width: min(400px, calc(100% - 20px));
-  inset-inline-end: 10px;
-  overflow: hidden;
-  background: var(--color-surface-container-high);
-  border-radius: var(--radius-panel);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-shadow) 18%, transparent);
-  opacity: 0;
-  transform: translateX(calc(-100% - 10px));
-  transition:
-    transform var(--motion-sheet),
-    opacity var(--motion-fade);
-  pointer-events: none;
-}
-
-[dir='ltr'] .side-sheet {
-  transform: translateX(calc(100% + 10px));
-}
-
-.side-sheet.is-open,
-[dir='ltr'] .side-sheet.is-open {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-}
-
-.sheet-content,
 .dialog-content {
   display: flex;
   flex-direction: column;
@@ -1014,19 +1071,6 @@ span.breadcrumb {
   top: 50%;
   inset-inline-end: var(--space-2);
   transform: translateY(-50%);
-}
-
-.sheet-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0 var(--space-4) var(--space-4);
-}
-
-.sheet-footer {
-  display: flex;
-  justify-content: center;
-  padding-top: var(--space-4);
 }
 
 /* ---------- כרטיסי הגדרות (SettingsCard של אוצריא) ---------- */
@@ -1229,7 +1273,7 @@ span.breadcrumb {
   height: 1.1em;
 }
 
-/* ---------- דיאלוג עזרה ---------- */
+/* ---------- דיאלוג (מסך הפתיחה) ---------- */
 
 .help-dialog {
   position: fixed;
@@ -1260,34 +1304,6 @@ span.breadcrumb {
 
 .help-dialog .dialog-content {
   height: 100%;
-}
-
-/* עזרה ותמיכה במסך מלא (Full-screen dialog של Material 3): הלשונית כולה,
-   והתוכן בעמודה ברוחב קריא באמצע. */
-.help-dialog[data-sheet='help'],
-.help-dialog[data-sheet='advanced'] {
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  box-shadow: none;
-  transform: translateY(12px);
-}
-
-.help-dialog[data-sheet='help'].is-open,
-.help-dialog[data-sheet='advanced'].is-open {
-  transform: none;
-}
-
-.help-dialog[data-sheet='help'] .tabs {
-  justify-content: center;
-  padding-inline: max(0px, calc((100% - 880px) / 2));
-}
-
-.help-dialog[data-sheet='help'] .dialog-body,
-.help-dialog[data-sheet='advanced'] .dialog-body {
-  padding-inline: max(var(--space-5), calc((100% - 880px) / 2));
 }
 
 .tabs {
@@ -1782,18 +1798,205 @@ span.breadcrumb {
   overflow-wrap: anywhere;
 }
 
-/* ---------- כלים מתחת לתיבת החיפוש ---------- */
+/* ---------- חיפוש בטקסט ---------- */
 
-.search-tools {
+.text-page > .advanced-body > .segmented {
+  margin-bottom: var(--space-4);
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  margin-inline-end: var(--space-2);
+  font-size: 0.85em;
+  color: var(--color-on-primary-container);
+  background: var(--color-primary-container);
+  border-radius: var(--radius-pill);
+}
+
+.builder-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
-  justify-content: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.term-card.is-excluded {
+  background: color-mix(in srgb, var(--color-error-container) 35%, var(--color-surface-container-low));
+}
+
+/* "מה יחופש": ההסבר במילים, לפני השאילתה עצמה. */
+.summary-card {
+  padding: var(--space-4);
+  margin-top: var(--space-5);
+  background: var(--color-secondary-container);
+  color: var(--color-on-secondary-container);
+  border-radius: var(--radius-md);
+}
+
+.summary-title {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0 0 var(--space-2);
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.summary-line {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.summary-line + .summary-line {
+  margin-top: var(--space-1);
+}
+
+.summary-line.is-empty {
+  color: color-mix(in srgb, var(--color-on-secondary-container) 70%, transparent);
+}
+
+.summary-card .query-preview {
   margin-top: var(--space-3);
 }
 
-/* ---------- חיפוש מתקדם ---------- */
+.query-label {
+  flex-shrink: 0;
+  font-size: 0.9em;
+}
+
+/* ---------- איתור מקום ---------- */
+
+.locate-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.locate-row .search-bar {
+  flex: 1 1 18em;
+}
+
+.locate-page .advanced-status {
+  margin-top: var(--space-3);
+}
+
+.locate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin-top: var(--space-4);
+}
+
+.locate-chips-title {
+  color: var(--color-on-surface-variant);
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.chip {
+  min-height: 2.2em;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: 0.93em;
+  color: var(--color-on-surface);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+}
+
+.chip:hover {
+  background: color-mix(in srgb, var(--color-on-surface) 6%, transparent);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.locate-choices {
+  margin-top: var(--space-4);
+}
+
+.choice-list {
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+}
+
+.choice-list li + li {
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.choice-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  min-height: 3em;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  color: var(--color-on-surface);
+  text-align: start;
+  cursor: pointer;
+  background: var(--color-surface-container-lowest);
+  border: 0;
+}
+
+.choice-row:hover {
+  background: color-mix(in srgb, var(--color-on-surface) 6%, var(--color-surface-container-lowest));
+}
+
+.choice-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.choice-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.choice-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.locate-page .faq-item {
+  margin-top: var(--space-5);
+}
+
+/* ---------- פנייה במייל ("אודות") ---------- */
+
+.contact-email {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: var(--space-2) 0 0;
+}
+
+.contact-address {
+  font-weight: 600;
+  user-select: all;
+}
 
 .advanced-section + .advanced-section,
 .advanced-section + .advanced-guide {
@@ -2167,16 +2370,20 @@ span.breadcrumb {
   text-align: start;
 }
 
+/* נשאר בתחתית הלשונית בזמן גלילה, כדי שהחיפוש תמיד בהישג יד. */
 .advanced-footer {
+  position: sticky;
+  bottom: 0;
   display: flex;
-  flex-shrink: 0;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3) max(var(--space-5), calc((100% - 880px) / 2));
+  padding: var(--space-3) var(--space-4);
+  margin-top: var(--space-5);
   background: var(--color-surface-container-high);
-  border-top: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  box-shadow: 0 -2px 8px color-mix(in srgb, var(--color-shadow) 8%, transparent);
 }
 
 .advanced-status {

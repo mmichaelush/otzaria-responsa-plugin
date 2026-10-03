@@ -14,7 +14,8 @@ const term = (words, form, exclude) => ({
   form: form || 'exact',
   exclude: Boolean(exclude),
 });
-const query = (overrides) => normalize({ ...emptyQuery(), ...overrides });
+/** בונה (ולא חיפוש רגיל), אלא אם נאמר אחרת. */
+const query = (overrides) => normalize({ ...emptyQuery(), mode: 'builder', ...overrides });
 
 test('מילים צמודות, מרחק אחריה ומרחק לשני הכיוונים', () => {
   assert.equal(buildQuery(query({ terms: [term('נר'), term('שבת')] })), 'נר שבת');
@@ -94,11 +95,11 @@ test('בדיקה: מה חסר או שגוי, ובאיזו מילה', () => {
 });
 
 test('כתיבה חופשית: נשלחת כמות שהיא, אחרי בדיקת תווים', () => {
-  const q = query({ manual: true, manualText: '  8: ($שומר/%מצא)   #(אכל/גנב) ' });
+  const q = query({ mode: 'manual', manualText: '  8: ($שומר/%מצא)   #(אכל/גנב) ' });
   assert.equal(buildQuery(q), '8: ($שומר/%מצא) #(אכל/גנב)');
   assert.equal(validate(q), null);
-  assert.match(validate(query({ manual: true, manualText: 'נר & שבת' })).message, /"&"/);
-  assert.match(validate(query({ manual: true, manualText: '[1:4]' })).message, /בעברית/);
+  assert.match(validate(query({ mode: 'manual', manualText: 'נר & שבת' })).message, /"&"/);
+  assert.match(validate(query({ mode: 'manual', manualText: '[1:4]' })).message, /בעברית/);
 });
 
 test('גוף הבקשה: כל הספרים, הבחירה שבבר אילן, או תחום', () => {
@@ -139,7 +140,7 @@ test('תחום: קטגוריה בולעת את מה שתחתיה, ובחירה �
 });
 
 test('עריכה: הוספה והסרה של מילים, חלופות ומרחקים', () => {
-  let q = emptyQuery();
+  let q = { ...emptyQuery(), mode: 'builder' };
   q = Advanced.setWord(q, 0, 0, 'נר');
   q = Advanced.addTerm(q);
   q = Advanced.setWord(q, 1, 0, 'שבת');
@@ -181,10 +182,97 @@ test('כל דוגמה נבנית לשאילתה תקינה', () => {
   assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'exclude')), '-בני ישראל');
 });
 
+test('חיפוש רגיל: מילים עבריות בלבד, צמודות; ניקוד, פיסוק וסימני חיפוש נמחקים', () => {
+  const simple = (text) => query({ mode: 'simple', simpleText: text });
+  assert.equal(buildQuery(simple('בְּרֵאשִׁית בָּרָא, אֱלֹהִים!')), 'בראשית ברא אלהים');
+  assert.equal(buildQuery(simple('״רמב״ם״ ר׳ יוסי־בן')), 'רמב"ם ר\' יוסי בן');
+  // סימן חיפוש של בר אילן היה פועל כאופרטור.
+  assert.equal(buildQuery(simple('#נר [1:4] שבת*')), 'נר שבת');
+  assert.match(validate(simple('shabbat 123')).message, /בעברית/);
+  assert.equal(validate(simple('נר שבת')), null);
+  // אין "ניהול צורות" בחיפוש רגיל, גם אם נשמר מהמתקדם.
+  const body = toRequest(query({ mode: 'simple', simpleText: 'נר', options: { abbreviations: true, showForms: true } }));
+  assert.deepEqual(body.options, { abbreviations: true, showForms: false, allDatabases: true });
+  assert.equal(body.advanced, true);
+});
+
+test('מודל מגרסה 0.4: כתיבה חופשית, או בונה שמולא, נשמרים באותו אופן', () => {
+  assert.equal(normalize({ manual: true, manualText: 'נר' }).mode, 'manual');
+  assert.equal(normalize({ terms: [term('נר')] }).mode, 'builder');
+  assert.equal(normalize({}).mode, 'simple');
+  assert.equal(normalize({ mode: 'nope' }).mode, 'simple');
+});
+
+test('מעבר מחיפוש רגיל לבונה: המילים שנכתבו הופכות למילים בבונה', () => {
+  let q = { ...emptyQuery(), simpleText: 'נר של שבת' };
+  q = Advanced.setMode(q, 'builder');
+  assert.deepEqual(q.terms.map((entry) => entry.words[0]), ['נר', 'של', 'שבת']);
+  assert.equal(buildQuery(q), 'נר של שבת');
+  // בונה שכבר מולא אינו נדרס.
+  const filled = Advanced.setMode({ ...q, mode: 'simple', simpleText: 'אחר' }, 'builder');
+  assert.equal(buildQuery(filled), 'נר של שבת');
+  // מעבר לתחביר מתחיל מהשאילתה שבבונה.
+  assert.equal(Advanced.setMode(Advanced.updateGap(q, 0, { kind: 'after', distance: 2 }), 'manual').manualText, 'נר [1:2] של שבת');
+});
+
+test('הסבר במילים: מה יחופש, איפה ובאילו אפשרויות', () => {
+  assert.deepEqual(Advanced.describe(query({ mode: 'simple', simpleText: 'נר שבת' }), 'בכל הספרים.'), [
+    'מקורות שבהם המילים "נר שבת" מופיעות צמודות, בסדר הזה.',
+    'בכל הספרים.',
+  ]);
+  const q = query({
+    terms: [term('נר', 'prefixes'), term(['שבת', 'חנוכה']), term('יום', 'exact', true)],
+    gaps: [{ kind: 'after', distance: 4 }, { kind: 'adjacent' }],
+    options: { abbreviations: true, showForms: true },
+  });
+  assert.deepEqual(Advanced.describe(q), [
+    'מקורות שבהם מופיעה המילה "נר" עם אותיות שימוש, ואחריה (עד 4 מילים ממנה) "שבת" או "חנוכה".',
+    'בלי מקורות שבהם מופיעה המילה "יום".',
+    'כולל ראשי תיבות: "צער בעלי חיים" ימצא גם "צעב"ח".',
+    'לפני התוצאות בר אילן יציג את הצורות שנמצאו, לבחירה.',
+  ]);
+  const scattered = query({ terms: [term('עגונה'), term('גוי')], anyOrder: true, within: 10 });
+  assert.deepEqual(Advanced.describe(scattered), [
+    'מקורות שבהם מופיעות כל המילים, בכל סדר, עד 10 מילים זו מזו:',
+    '• "עגונה"',
+    '• "גוי"',
+  ]);
+});
+
 test('תצוגה: מרחקים ופיזור מבודדים משמאל לימין, והשאילתה עצמה אינה משתנה', () => {
   assert.equal(
     Advanced.displayQuery('10: חכמים [-1:1] תקנו'),
     '\u206610:\u2069 חכמים \u2066[-1:1]\u2069 תקנו',
   );
   assert.equal(Advanced.displayQuery('#נר'), '#נר');
+});
+
+test('withAvailableScope: בלי רשימת ספרים, בחירת קטגוריות היא "כל הספרים"', () => {
+  const query = Advanced.emptyQuery();
+  query.mode = Advanced.Mode.simple;
+  query.simpleText = 'נר שבת';
+  query.scope = { mode: Advanced.Scope.pick, items: [] };
+
+  assert.equal(Advanced.withAvailableScope(query, true), query);
+  const shown = Advanced.withAvailableScope(query, false);
+  assert.equal(shown.scope.mode, Advanced.Scope.all);
+  assert.equal(Advanced.validate(shown), null);
+  assert.equal(Advanced.toRequest(shown).options.allDatabases, true);
+  // הבחירה השמורה נשארת, לפעם שהרשימה תהיה.
+  assert.equal(query.scope.mode, Advanced.Scope.pick);
+});
+
+test('describe: מילה מוחרגת בין שתי מילים היא חוליה בשרשרת, לא שורה נפרדת', () => {
+  let query = Advanced.setMode(Advanced.emptyQuery(), Advanced.Mode.builder);
+  query = Advanced.setWord(query, 0, 0, 'נר');
+  query = Advanced.addTerm(query);
+  query = Advanced.setWord(query, 1, 0, 'חנוכה');
+  query = Advanced.updateTerm(query, 1, { exclude: true });
+  query = Advanced.addTerm(query);
+  query = Advanced.setWord(query, 2, 0, 'שבת');
+
+  const lines = Advanced.describe(query, null);
+
+  assert.match(lines[0], /נר.*לא המילה .*חנוכה.*שבת/);
+  assert.equal(lines.filter((line) => /^בלי מקורות/.test(line)).length, 0);
 });
