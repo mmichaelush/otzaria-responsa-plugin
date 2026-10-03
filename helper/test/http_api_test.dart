@@ -299,6 +299,15 @@ void main() {
       expect(errorCode(result.json), 'unknownBook');
     });
 
+    test('מפתח שאינו מספר חיובי או מחרוזת: 400 עם הודעה ברורה', () async {
+      for (final key in <Object>[0, -3, 1524.0, true]) {
+        final result = await call('POST', '/book/open', body: {'key': key});
+        expect(result.status, 400, reason: '$key');
+        expect(errorMessage(result.json), 'מפתח הספר אינו תקין.');
+      }
+      expect(backend.openCalls, isEmpty);
+    });
+
     test('ספר שגוי מתורגם ל-wrongBook עם הודעה על הספר', () async {
       backend.onOpen = (_) async => const ResponsaOpenReport(
         ok: false,
@@ -739,6 +748,40 @@ void main() {
       expect(result.status, 404);
       expect(errorCode(result.json), 'referenceNotFound');
       expect(errorMessage(result.json), contains('"בראשית ב ג"'));
+    });
+
+    test('כשל פתיחה: הודעה למשתמש, לא הטקסט הפנימי', () async {
+      backend.onLocate = (reference, index) async => const ResponsaOpenReport(
+        ok: false,
+        failure: ResponsaFailure.openedWrongBook,
+        message: 'נפתח "X" — אינו תואם לselectedResult',
+      );
+      final result = await call(
+        'POST',
+        '/reference/open',
+        body: {'ref': 'בראשית ב ג'},
+      );
+      expect(errorMessage(result.json), contains('בר אילן פתח ספר אחר'));
+      expect(errorMessage(result.json), isNot(contains('selectedResult')));
+    });
+
+    test('סימני כיווניות, גרשיים כפולים וגרש הפוך מנורמלים', () async {
+      await call(
+        'POST',
+        '/reference/open',
+        body: {'ref': '\u200Fשו\'\'ע או``ח סי\u00B4 א\u200E'},
+      );
+      expect(backend.locateCalls.single.reference, 'שו"ע או"ח סי\' א');
+    });
+
+    test('ניקוד אינו נספר באורך', () async {
+      final pointed = 'בְּ' * HelperService.maxReferenceLength;
+      final result = await call(
+        'POST',
+        '/reference/open',
+        body: {'ref': pointed},
+      );
+      expect(result.status, 200);
     });
 
     test('בלי עברית, אינדקס שלילי או הפניה ארוכה: 400', () async {

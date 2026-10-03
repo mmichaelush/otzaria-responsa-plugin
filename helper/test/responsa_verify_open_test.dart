@@ -9,11 +9,13 @@ void main() {
     required String selectedResult,
     required String usedRef,
     String? expectedTitle,
+    bool selectedIsUniqueExact = false,
   }) => ResponsaAutomation.verifyOpened(
     window: window,
     selectedResult: selectedResult,
     usedRef: usedRef,
     expectedTitle: expectedTitle,
+    selectedIsUniqueExact: selectedIsUniqueExact,
   );
 
   group('פתיחה תקינה עוברת', () {
@@ -26,6 +28,33 @@ void main() {
           expectedTitle: 'גינת ורדים כללים',
         ),
         isEmpty,
+      );
+    });
+
+    test('בר אילן פתח בדיוק את המקום שביקשנו, ומשמיט את שם היחידה', () {
+      // נמדד חי (3.10.2026): "גינת ורדים כלל א" נפתח בחלון בשם הזה בדיוק.
+      expect(
+        verify(
+          window: 'גינת ורדים כלל א',
+          selectedResult: 'גינת ורדים כלל א',
+          usedRef: 'גינת ורדים כלל א',
+          expectedTitle: 'גינת ורדים כללים',
+          selectedIsUniqueExact: true,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('בלי תוצאה יחידה מדויקת אין ויתור על הכותרת המצופה', () {
+      // שתי תוצאות בשם הזה בדיוק (גם שו"ת גינת ורדים): אולי הספר האחר.
+      expect(
+        verify(
+          window: 'גינת ורדים כלל א',
+          selectedResult: 'גינת ורדים כלל א',
+          usedRef: 'גינת ורדים כלל א',
+          expectedTitle: 'גינת ורדים כללים',
+        ),
+        contains('expectedTitle'),
       );
     });
 
@@ -175,5 +204,68 @@ void main() {
       ),
       isNotEmpty,
     );
+  });
+
+  group('uniqueExactResult', () {
+    test('האינדקס של התוצאה המדויקת היחידה', () {
+      expect(
+        ResponsaAutomation.uniqueExactResult([
+          'שו"ת גינת ורדים חלק אורח חיים כלל א',
+          'גינת ורדים כלל א',
+        ], 'גינת ורדים כלל א'),
+        1,
+      );
+    });
+
+    test('אין, או יש כמה: null', () {
+      expect(
+        ResponsaAutomation.uniqueExactResult([
+          'שושנת העמקים כלל א',
+        ], 'גינת ורדים כלל א'),
+        isNull,
+      );
+      expect(
+        ResponsaAutomation.uniqueExactResult([
+          'גינת ורדים כלל א',
+          'גינת ורדים כלל א',
+        ], 'גינת ורדים כלל א'),
+        isNull,
+      );
+    });
+  });
+
+  group('hasPlausibleResult', () {
+    test('תוצאה שהיא בדיוק ההפניה (מקום בתוך יחידה) עוצרת את הסולם', () {
+      expect(
+        ResponsaAutomation.hasPlausibleResult(
+          ['גינת ורדים כלל א', 'שו"ת גינת ורדים חלק אורח חיים כלל א סימן א'],
+          'גינת ורדים כלל א',
+          'גינת ורדים כללים',
+        ),
+        isTrue,
+      );
+    });
+
+    test('כמה תוצאות שהן בדיוק ההפניה: עמום, ולא עוצר את הסולם', () {
+      expect(
+        ResponsaAutomation.hasPlausibleResult(
+          ['גינת ורדים כלל א', 'גינת ורדים כלל א'],
+          'גינת ורדים כלל א',
+          'גינת ורדים כללים',
+        ),
+        isFalse,
+      );
+    });
+
+    test('תוצאה שאינה קשורה נפסלת', () {
+      expect(
+        ResponsaAutomation.hasPlausibleResult(
+          ['שושנת העמקים כלל א'],
+          'גינת ורדים כלל א',
+          'גינת ורדים כללים',
+        ),
+        isFalse,
+      );
+    });
   });
 }

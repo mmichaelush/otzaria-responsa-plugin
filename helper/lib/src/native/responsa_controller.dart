@@ -141,13 +141,17 @@ class ResponsaController {
   /// חלון ראשי אחרי הפעלה קרה עולה בדרך כלל תוך ~5 שניות.
   static const Duration launchTimeout = Duration(seconds: 40);
 
-  /// יחד עם [launchTimeout] פחות מ-120 השניות שאחריהן התוסף מוותר
-  /// (`fetchStream`): פתיחה שנמשכת מעבר לזה מקפיצה חלון כשאיש כבר לא מחכה.
-  /// פתיחה רגילה אורכת כשלוש שניות.
-  static const Duration openBudget = Duration(seconds: 75);
+  /// יחד עם [launchTimeout] ועם מרווח לפעולות שחורגות מעט מהמועד, פחות
+  /// מ-120 השניות שאחריהן אוצריא מוותרת: פתיחה שנמשכת מעבר לזה מקפיצה חלון
+  /// כשאיש כבר לא מחכה, ואחרי שהמשתמש קרא "השירות אינו פועל". פתיחה רגילה
+  /// אורכת כשלוש שניות.
+  static const Duration openBudget = Duration(seconds: 60);
 
   /// כמו [openBudget]. חיפוש כבד אורך עד כ-15 שניות.
-  static const Duration searchBudget = Duration(seconds: 75);
+  static const Duration searchBudget = Duration(seconds: 60);
+
+  /// כמה מקומות לכל היותר מוחזרים לבחירה באיתור מקום.
+  static const int maxLocateChoices = 1000;
 
   /// מצב ההתקנה והמופע. מהיר; אינו נוגע בתוכנה.
   Future<ResponsaStatus> status() async {
@@ -505,31 +509,39 @@ class ResponsaController {
     }
     final deadline = ResponsaDeadline(openBudget);
     try {
-      var index = request.index;
-      if (index == null) {
-        final parsed = automation.parseReference(request.reference, deadline);
-        if (parsed.results.isEmpty) {
-          throw ResponsaAutomationException(
-            ResponsaFailure.referenceNotParsed,
-            'בר אילן לא זיהה את המקום "${request.reference}"',
-            {'ref': request.reference},
-          );
-        }
-        if (parsed.results.length > 1 || request.listOnly) {
-          return ResponsaOpenReport(
-            ok: true,
-            usedRef: request.reference,
-            choices: parsed.results,
-            openedWindows: automation.openedWindows,
-          );
-        }
-        index = 0;
+      // ניתוח אחד, והפתיחה משתמשת בו. מקום שבר אילן אינו מזהה אינו מקפיץ
+      // הודעה: כל ניסיון ממתין עד הסוף. שניים מספיקים לטעינה קרה, ושגיאת
+      // כתיב נענית מהר יותר.
+      final parsed = automation.parseReference(
+        request.reference,
+        deadline,
+        attempts: 2,
+        limit: maxLocateChoices,
+      );
+      if (parsed.results.isEmpty) {
+        throw ResponsaAutomationException(
+          ResponsaFailure.referenceNotParsed,
+          'בר אילן לא זיהה את המקום "${request.reference}"',
+          {'ref': request.reference},
+        );
+      }
+      final index = request.index ?? (parsed.results.length == 1 ? 0 : null);
+      // בלי בחירה, או בחירה שכבר אינה ברשימה (בר אילן ענה אחרת הפעם):
+      // הרשימה חוזרת לבחירה, ושום דבר אינו נפתח.
+      if (index == null || index >= parsed.results.length || request.listOnly) {
+        return ResponsaOpenReport(
+          ok: true,
+          usedRef: request.reference,
+          choices: parsed.results,
+          openedWindows: automation.openedWindows,
+        );
       }
       final outcome = automation.openBook(
         [request.reference],
         deadline,
         resultIndex: index,
         checkReference: false,
+        parsed: parsed,
       );
       return ResponsaOpenReport(
         ok: true,

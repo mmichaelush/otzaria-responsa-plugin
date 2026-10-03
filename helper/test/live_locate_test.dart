@@ -1,6 +1,6 @@
 // כלי מדידה ידני: מקומות מדויקים (`בראשית ב ג`) בעמוד כתיבת המקורות של בר
 // אילן החי. בלי RESPONSA_OPEN רק מנתח ומדפיס את התוצאות, ואינו פותח חלון.
-// RESPONSA_REFS="בראשית ב ג|ברכות דף ב" [RESPONSA_OPEN=1] dart test --run-skipped test/live_locate_test.dart
+// RESPONSA_REFS="בראשית ב ג|ברכות דף ב" [RESPONSA_OPEN=1] [RESPONSA_AUTOSTART=1] dart test --run-skipped test/live_locate_test.dart
 @Tags(['live'])
 library;
 
@@ -19,7 +19,9 @@ void main() {
         .map((ref) => ref.trim())
         .where((ref) => ref.isNotEmpty);
     final open = Platform.environment['RESPONSA_OPEN'] == '1';
-    final controller = ResponsaController(allowAutoStart: () => false);
+    final controller = ResponsaController(
+      allowAutoStart: () => Platform.environment['RESPONSA_AUTOSTART'] == '1',
+    );
 
     for (final ref in refs) {
       final watch = Stopwatch()..start();
@@ -46,5 +48,5 @@ void main() {
         print('   opened window="${report.window}"');
       }
     }
-  });
+  }, timeout: const Timeout(Duration(minutes: 10)));
 }

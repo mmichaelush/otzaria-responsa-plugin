@@ -249,12 +249,14 @@ class ResponsaAutomation {
 
   // ------------------------------------------------------ ניתוח הפניה
 
-  /// רשימה ריקה = ההפניה לא נותחה. זה מצב חוקי, לא חריג.
+  /// רשימה ריקה = ההפניה לא נותחה. זה מצב חוקי, לא חריג. [limit] — כמה
+  /// תוצאות לקרוא לכל היותר.
   ({DiscoveredDialog dialog, List<String> results}) parseReference(
     String reference,
     ResponsaDeadline deadline, {
     int attempts = 3,
     Duration settle = const Duration(milliseconds: 1200),
+    int? limit,
   }) {
     dismissInfoModals();
     final dialog = ensureCitationDialog(deadline);
@@ -271,10 +273,19 @@ class ResponsaAutomation {
     }
 
     ResponsaWin32.setWindowText(edit, reference);
+    // לא `click`: הפניה שלא נותחה פותחת בתוך הלחיצה את "לא נמצאה כל
+    // תוצאה!", ו-BM_CLICK סינכרוני ממתין עד שהמודאל נסגר — 15 שניות.
+    if (!ResponsaWin32.postClick(search)) {
+      throw const ResponsaAutomationException(
+        ResponsaFailure.citationDialogNotFound,
+        'עמוד כתיבת המקורות נסגר',
+      );
+    }
     var count = 0;
     var waitFor = settle;
-    for (var attempt = 0; attempt < attempts; attempt++) {
-      ResponsaWin32.click(search);
+    var limit = attempts;
+    var reposted = false;
+    for (var attempt = 0; attempt < limit; attempt++) {
       pause(waitFor, deadline);
       // המודאל "לא נמצאה כל תוצאה!" הוא תשובה סופית, לא כשל זמני.
       if (dismissInfoModals() > 0) {
@@ -282,11 +293,23 @@ class ResponsaAutomation {
       }
       count = ResponsaWin32.listBoxCount(results);
       if (count > 0) break;
+      // לוחצים שוב רק כשהתוכנה ענתה ואין תוצאה — הלחיצה לא נקלטה (טעינה
+      // קרה). `-1` = עוד מחפשת: לחיצה נוספת הייתה מריצה את החיפוש פעם
+      // שנייה, וממלאת מחדש את הרשימה בזמן שקוראים אותה. אחרי הניסיון האחרון
+      // הלחיצה החוזרת מקבלת המתנה משלה.
+      if (count == 0 && (attempt + 1 < limit || !reposted)) {
+        ResponsaWin32.postClick(search);
+        if (attempt + 1 == limit) limit++;
+        reposted = true;
+      }
       waitFor += const Duration(seconds: 1);
     }
 
     if (count <= 0) return (dialog: dialog, results: const <String>[]);
-    return (dialog: dialog, results: ResponsaWin32.listBoxItems(results));
+    return (
+      dialog: dialog,
+      results: ResponsaWin32.listBoxItems(results, limit: limit),
+    );
   }
 
   // ------------------------------------------------- שחרור חלונות MDI
@@ -349,12 +372,16 @@ class ResponsaAutomation {
 
   /// [references] לפי סדר יורד של סיכוי. אין השמטת מילים מההתחלה בכוונה:
   /// היא מייצרת שברי שם גנריים (`פסחים`) שפותחים ספר אחר.
+  ///
+  /// [parsed] — רשימה שכבר נותחה מההפניה הראשונה ([parseReference]), כדי לא
+  /// לנתח שוב; אז נפתחת התוצאה [resultIndex] שהמשתמש בחר.
   ResponsaOpenOutcome openBook(
     List<String> references,
     ResponsaDeadline deadline, {
     String? expectedTitle,
     int? resultIndex,
     bool checkReference = true,
+    ({DiscoveredDialog dialog, List<String> results})? parsed,
   }) {
     final ladder = [
       for (final reference in references)
@@ -380,7 +407,12 @@ class ResponsaAutomation {
     // נסיגה שאינה עוצרת את הסולם. נשמרת ההפניה ולא התוצאות: כל חוליה אחריה
     // מנקה את הרשימה, ובחירה לפי אינדקס הייתה בוחרת שורה אחרת.
     String? fallbackRef;
-    for (final candidate in ladder) {
+    if (parsed != null && parsed.results.isNotEmpty) {
+      tried.add(openRef);
+      dialog = parsed.dialog;
+      results = parsed.results;
+    }
+    for (final candidate in dialog == null ? ladder : const <String>[]) {
       if (tried.contains(candidate)) continue;
       tried.add(candidate);
       // ניסיון חוזר רק לחוליה הראשונה: כל ניסיון עולה ~5 שניות בלי לשנות
@@ -476,6 +508,7 @@ class ResponsaAutomation {
       usedRef: usedRef,
       expectedTitle: expectedTitle,
       checkReference: checkReference,
+      selectedIsUniqueExact: uniqueExactResult(results, usedRef) == index,
     );
     if (failed.isNotEmpty) {
       throw ResponsaAutomationException(
@@ -512,7 +545,33 @@ class ResponsaAutomation {
         ? reference
         : ResponsaNames.withoutQualifier(expectedTitle);
     if (wanted.trim().isEmpty) return true;
-    return results.any((result) => ResponsaHebrew.coversTitle(wanted, result));
+    if (results.any((result) => ResponsaHebrew.coversTitle(wanted, result))) {
+      return true;
+    }
+    // כמו ב-[verifyOpened]: תוצאה יחידה שהיא בדיוק ההפניה שנשלחה, כשאינה
+    // קיצור של השם (`גינת ורדים כלל א` של `גינת ורדים כללים`). בלי זה הסולם
+    // ממשיך לחוליות שנכשלות, וחוזר אליה רק אחרי כחצי דקה.
+    return expectedTitle != null &&
+        !ResponsaHebrew.normalize(
+          wanted,
+        ).startsWith(ResponsaHebrew.normalize(reference)) &&
+        uniqueExactResult(results, reference) != null;
+  }
+
+  /// האינדקס של התוצאה היחידה שהיא בדיוק [reference]. `null` כשאין כזו, וגם
+  /// כשיש כמה: אז הבקשה עמומה (`גינת ורדים כלל א` גם בשו"ת גינת ורדים),
+  /// ואין לוותר על אימות הכותרת.
+  static int? uniqueExactResult(List<String> results, String reference) {
+    int? found;
+    for (var index = 0; index < results.length; index++) {
+      if (ResponsaHebrew.matchLevel(reference, results[index]) !=
+          ResponsaMatchLevel.exact) {
+        continue;
+      }
+      if (found != null) return null;
+      found = index;
+    }
+    return found;
   }
 
   /// הבדיקות שכותרת החלון לא עברה; ריק = הספר הנכון. כל הרפיה כאן היא ספר
@@ -520,12 +579,16 @@ class ResponsaAutomation {
   ///
   /// [checkReference] כבוי במקום שהמשתמש כתב (`בראשית ב ג`): הוא בחר את
   /// התוצאה בעצמו, והכותרת כתובה אחרת (`בראשית פרק ב פסוק ג`).
+  ///
+  /// [selectedIsUniqueExact] — התוצאה שנבחרה היא היחידה ברשימה שהיא בדיוק
+  /// [usedRef] ([uniqueExactResult]). רק אז מותר לוותר על הכותרת המצופה.
   static List<String> verifyOpened({
     required String window,
     required String selectedResult,
     required String usedRef,
     String? expectedTitle,
     bool checkReference = true,
+    bool selectedIsUniqueExact = false,
   }) {
     final failed = <String>[
       if (ResponsaHebrew.matchLevel(selectedResult, window) ==
@@ -539,7 +602,18 @@ class ResponsaAutomation {
     ];
     if (expectedTitle != null) {
       final expected = ResponsaNames.withoutQualifier(expectedTitle);
-      if (!ResponsaHebrew.coversTitle(expected, window)) {
+      // בר אילן פתח בדיוק את מה שביקשנו, בחוליה שאינה קיצור של השם ובלי
+      // תוצאה מתחרה: יחידה שבר אילן משמיט משם החלון (`גינת ורדים כלל א` של
+      // `גינת ורדים כללים`) אינה ספר שגוי. שם החיבור לבדו פותח את הספר
+      // שמעליו, ולכן אינו נחשב.
+      final exactRequest =
+          selectedIsUniqueExact &&
+          ResponsaHebrew.matchLevel(usedRef, window) ==
+              ResponsaMatchLevel.exact &&
+          !ResponsaHebrew.normalize(
+            expected,
+          ).startsWith(ResponsaHebrew.normalize(usedRef));
+      if (!exactRequest && !ResponsaHebrew.coversTitle(expected, window)) {
         failed.add('expectedTitle');
       }
     }

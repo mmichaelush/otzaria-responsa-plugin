@@ -48,7 +48,7 @@ void main() {
       expect(openRef, 'גינת ורדים כללים');
       expect(
         ladder,
-        containsAllInOrder(['גינת ורדים כללים כלל א', 'גינת ורדים כלל א']),
+        containsAllInOrder(['גינת ורדים כלל א', 'גינת ורדים כללים כלל א']),
       );
       // פותח את "גינת ורדים הקדמה", והאימות פוסל אותו אחרי כחמש שניות.
       expect(ladder, isNot(contains('גינת ורדים')));
@@ -87,6 +87,41 @@ void main() {
     });
   });
 
+  group('כמה ספרים תחת אותו ספר', () {
+    // `חזקוני` עצמו ספר (הקדמה), ותחתיו חמשת החומשים: חלוקה רגילה שהמנתח
+    // מכיר, ו-`חזקוני פרק א` עמום בין האחים.
+    final rows = ResponsaCatalogBuilder.classify(
+      _tree([
+        (0, 65540, '(מפרשי תנ"ך (החומש מחולק לפרקים'),
+        (1, 131084, 'מפרשי תנ"ך'),
+        (2, 277764, 'חזקוני'),
+        (3, 50724865, 'הקדמה'),
+        (3, 393219, 'בראשית'),
+        (4, 302579713, 'פרק א'),
+        (3, 393220, 'שמות'),
+        (4, 302579713, 'פרק א'),
+      ]),
+    );
+
+    test('אינם ספר בתוך ספר', () {
+      expect(rows.map((row) => row.title), [
+        'חזקוני',
+        'חזקוני בראשית',
+        'חזקוני שמות',
+      ]);
+      expect(rows.where((row) => row.nestedInBook), isEmpty);
+    });
+
+    test('הסולם אינו כולל מקום בלי שם היחידה', () {
+      final unit = rows[1];
+      final openRef = ResponsaCatalogBuilder.buildOpenRefs([unit]).single;
+      expect(
+        ResponsaCatalogBuilder.alternativeRefs(unit, openRef),
+        isNot(contains('חזקוני פרק א')),
+      );
+    });
+  });
+
   group('יחידה רגילה', () {
     test('ספר שאינו בתוך ספר: בלי מקום בסולם, ועם שם החיבור', () {
       final rows = ResponsaCatalogBuilder.classify(
@@ -112,6 +147,20 @@ void main() {
   });
 
   group('מקטעים', () {
+    test('`*` בראש השם אינו חלק מהמקום', () {
+      final rows = ResponsaCatalogBuilder.classify(
+        _tree([
+          (0, 131103, 'ספרי מערכות ועניינים'),
+          (1, 302092, 'גינת ורדים'),
+          (2, 50724865, 'הקדמה'),
+          (2, 393220, 'כללים'),
+          (3, 319356929, '*כלל א'),
+        ]),
+      );
+
+      expect(rows.last.anchor, 'כלל א');
+    });
+
     test('`*` בראש השם אינו מבטל את זיהוי המקטע', () {
       expect(ResponsaCatalogBuilder.isSection('*סימן רצז', 0), isTrue);
       expect(ResponsaCatalogBuilder.isSection('סימן רצז', 0), isTrue);

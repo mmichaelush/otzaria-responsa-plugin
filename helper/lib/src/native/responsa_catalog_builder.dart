@@ -129,14 +129,17 @@ class ResponsaCatalogBuilder {
 
   /// `פרק א - השותפות בעסק` ← `פרק א`: התיאור אינו חלק מההפניה.
   static String _anchorOf(String name) {
-    final core = ResponsaNames.coreOf(name);
+    final core = ResponsaNames.coreOf(_withoutNote(name));
     return _positionName.firstMatch(core)?.group(0) ?? core;
   }
 
   /// `*` שבראש השם (`*סימן רצז`) מסמן הערה של בר אילן, ואינו חלק מהשם.
+  static String _withoutNote(String name) =>
+      name.startsWith('*') ? name.substring(1) : name;
+
   static bool isSection(String name, int param) =>
       ((param >> 16) & _sectionPlaneBits) != 0 ||
-      _sectionName.hasMatch(name.startsWith('*') ? name.substring(1) : name);
+      _sectionName.hasMatch(_withoutNote(name));
 
   /// ספר = הצומת הגבוה ביותר שתוכנו מקטעים ושיושב תחת צומת חיבור (בלי התנאי
   /// קטגוריות כמו `שולחן ערוך` נראות כספרים). כלל מבני, כי עומק הספר משתנה.
@@ -217,27 +220,36 @@ class ResponsaCatalogBuilder {
       if (identity != null && !seen.add(identity)) continue;
       unique.add(entry.row);
     }
+    // ספר בתוך ספר = היחיד תחת הספר שמעליו (`גינת ורדים` > `כללים`). כמה
+    // ספרים תחת אותו ספר (`חזקוני` > `בראשית`…`דברים`) הם חלוקה רגילה שהמנתח
+    // מכיר, ושם מקום בלי שם היחידה (`חזקוני פרק א`) עמום בין האחים.
     final paths = {for (final row in unique) row.refPath};
+    final above = [for (final row in unique) _bookAbove(row, paths)];
+    final children = <String, int>{};
+    for (final path in above.nonNulls) {
+      children[path] = (children[path] ?? 0) + 1;
+    }
     return [
-      for (final row in unique)
-        _hasBookAbove(row, paths)
+      for (var i = 0; i < unique.length; i++)
+        above[i] != null && children[above[i]] == 1
             ? ResponsaBookRow(
-                chain: row.chain,
-                anchor: row.anchor,
+                chain: unique[i].chain,
+                anchor: unique[i].anchor,
                 nestedInBook: true,
               )
-            : row,
+            : unique[i],
     ];
   }
 
-  static bool _hasBookAbove(ResponsaBookRow row, Set<String> paths) {
+  /// הנתיב של הספר הקרוב שמעל [row], אם יש.
+  static String? _bookAbove(ResponsaBookRow row, Set<String> paths) {
     for (var length = row.chain.length - 1; length > 1; length--) {
       final above = [
         for (final node in row.chain.take(length)) node.name,
       ].join(ResponsaTreeReader.pathSeparator);
-      if (paths.contains(above)) return true;
+      if (paths.contains(above)) return above;
     }
-    return false;
+    return null;
   }
 
   /// השם המלא בלי תוויות מיון: השם הקצר שייך לכמה מחברים, ותוויות אינן חלק
@@ -266,10 +278,12 @@ class ResponsaCatalogBuilder {
     final candidates = <List<String>>[
       // החיבור בלי השם שמעליו — עוזר כשהמנתח אינו מכיר את הצירוף.
       work,
-      // יחידה שהמנתח אינו מכיר בשמה (`גינת ורדים כללים`): מקום בתוכה.
+      // יחידה שהמנתח אינו מכיר בשמה (`גינת ורדים כללים`): מקום בתוכה, קודם
+      // בלי שם היחידה — אותו שם שהמנתח לא הכיר ב-[openRef] — אבל עם כל מה
+      // שמעליה (`רא"ש בכורות סימן א`, לא `רא"ש סימן א`).
       if (anchor != null) ...[
+        [...work.take(work.length - 1), anchor],
         [...work, anchor],
-        [work.first, anchor],
       ],
       // ראש השם והיחידה בלבד: צמתי ביניים כמו `חידושים על הגמרא` אינם
       // מוכרים למנתח (`חידושי הגר"ח מגילה`).

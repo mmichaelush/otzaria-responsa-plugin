@@ -84,15 +84,13 @@ class ResponsaWin32 {
       send(hwnd, bmClick, timeoutMs: timeoutMs) != null;
 
   /// לחיצה בלי לחכות לה: כפתור שמריץ פעולה ארוכה ופותח מודאל לא מחזיר
-  /// שליטה, ו-[click] עליו נתקע (נמדד).
-  static void postClick(int hwnd) {
-    PostMessage(
-      HWND(Pointer.fromAddress(hwnd)),
-      bmClick,
-      const WPARAM(0),
-      const LPARAM(0),
-    );
-  }
+  /// שליטה, ו-[click] עליו נתקע (נמדד). `false` — החלון כבר אינו קיים.
+  static bool postClick(int hwnd) => PostMessage(
+    HWND(Pointer.fromAddress(hwnd)),
+    bmClick,
+    const WPARAM(0),
+    const LPARAM(0),
+  ).value;
 
   /// הודעה בלי לחכות לה, לפעולה שעשויה לפתוח מודאל.
   static void post(int hwnd, int message, {int wParam = 0, int lParam = 0}) {

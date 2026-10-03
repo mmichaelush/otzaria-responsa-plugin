@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
+import 'package:responsa_helper/src/native/responsa_controller.dart';
 import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/server/api_error.dart';
 import 'package:responsa_helper/src/server/build_coordinator.dart';
@@ -283,7 +284,9 @@ class HelperService {
     // מספר: אוצריא שולחת את מזהה הספר מחיפוש הספרייה (`$book.id`) כמות שהוא.
     final key = switch (body['key']) {
       final int number when number > 0 => '$number',
-      _ => _string(body, 'key'),
+      final String _ => _string(body, 'key'),
+      null => '',
+      _ => throw const ApiError.badRequest('מפתח הספר אינו תקין.'),
     };
     if (key.isEmpty) throw const ApiError.badRequest('חסר מפתח ספר.');
     final notify = _bool(body, 'notify') ?? false;
@@ -493,14 +496,18 @@ class HelperService {
 
   /// אורך מקום מדויק שהמשתמש כותב, ומספר התוצאות לבחירה.
   static const int maxReferenceLength = 200;
-  static const int maxReferenceIndex = 1000;
+  static const int maxReferenceIndex = ResponsaController.maxLocateChoices - 1;
 
   /// מקום מדויק (`בראשית ב ג`) בעמוד כתיבת המקורות של בר אילן. כמה תוצאות
   /// בלי `index` — חוזרות לבחירה (`opened: false`), ושום דבר אינו נפתח.
   Future<Map<String, Object?>> openReference(Map<String, Object?> body) async {
+    // האורך נבדק אחרי הנרמול: ניקוד וסימני כיווניות אינם נספרים.
     final reference = normalizeReference(
-      _string(body, 'ref', maxLength: maxReferenceLength),
+      _string(body, 'ref', maxLength: maxReferenceLength * 4),
     );
+    if (reference.length > maxReferenceLength) {
+      throw const ApiError.badRequest('המקום ארוך מדי.');
+    }
     if (!RegExp('[\u05D0-\u05EA]').hasMatch(reference)) {
       throw const ApiError.badRequest(
         'יש לכתוב שם ספר ומקום בעברית, למשל "בראשית ב ג".',
@@ -554,21 +561,27 @@ class HelperService {
       throw ApiError.fromAutomationFailure(
         failure,
         failure == ResponsaFailure.referenceNotParsed
-            ? 'בר אילן לא מצא את "$reference". כותבים שם ספר ומקום בכתיב '
-                  'מלא, למשל "בראשית ב ג", "ברכות דף ב" או "שולחן ערוך אורח '
-                  'חיים סימן א".'
-            : report.message ?? 'הפתיחה בבר אילן נכשלה.',
+            ? 'בר אילן לא מצא את ${_quote(reference)}. כותבים שם ספר ומקום '
+                  'בכתיב מלא, למשל "בראשית ב ג", "ברכות דף ב" או "שולחן ערוך '
+                  'אורח חיים סימן א".'
+            : openFailureMessage(
+                failure,
+                title: _shorten(reference),
+                detail: report.message,
+              ),
       );
     });
   }
 
   /// ניקוד וטעמים נמחקים, מקף הופך לרווח, וגרשיים מנורמלים: המנתח של בר אילן
-  /// מצפה לכתיב מלא בלי ניקוד.
+  /// מצפה לכתיב מלא בלי ניקוד. סימני כיווניות ורוחב אפס, שמגיעים בהדבקה
+  /// מאוצריא או מ-Word, אינם נראים אבל מפילים את הניתוח.
   static String normalizeReference(String value) => value
+      .replaceAll(RegExp('[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'), '')
       .replaceAll(RegExp('[\u0591-\u05BD\u05BF-\u05C7]'), '')
       .replaceAll('\u05BE', ' ')
-      .replaceAll(RegExp('[\u05F4\u201C\u201D]'), '"')
-      .replaceAll(RegExp('[\u05F3\u2018\u2019]'), "'")
+      .replaceAll(RegExp('[\u05F3\u2018\u2019\u00B4`]'), "'")
+      .replaceAll(RegExp("[\u05F4\u201C\u201D]|''"), '"')
       .replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
@@ -592,7 +605,8 @@ class HelperService {
   }
 
   /// `notify: true` — אוצריא מציגה את `message` כמות שהוא (פעולת
-  /// `localService.post` מתפריט הקשר), ולכן זה משפט שלם ולא רק הסיבה.
+  /// `localService.post` מתפריט הקשר), ולכן זה משפט שלם ולא רק הסיבה. אוצריא
+  /// מקצרת הודעה ל-200 תווים, ולכן הטקסט המסומן מצוטט בקיצור.
   static String searchNotifyMessage(
     ResponsaSearchOutcome outcome, {
     required String query,
@@ -601,14 +615,16 @@ class HelperService {
     final note = truncated ? ' החיפוש כלל רק את תחילת הטקסט שסומן.' : '';
     final count = outcome.count;
     final reason = outcome.message;
+    final quoted = _quote(query);
     return switch (outcome.state) {
-      ResponsaSearchState.found =>
-        count == null
-            ? 'החיפוש "$query" הוצג בבר אילן.$note'
-            : 'בר אילן מצא ${_formatCount(count)} תוצאות עבור "$query".$note',
+      ResponsaSearchState.found => switch (count) {
+        null => 'החיפוש $quoted הוצג בבר אילן.$note',
+        1 => 'בר אילן מצא תוצאה אחת עבור $quoted.$note',
+        _ => 'בר אילן מצא ${_formatCount(count)} תוצאות עבור $quoted.$note',
+      },
       ResponsaSearchState.asked =>
-        'בר אילן לא מצא תוצאות עבור "$query" במאגרים שנבחרו, ושואל אם לחפש '
-            'בכל המאגרים. עונים על השאלה בחלון של בר אילן.$note',
+        'בר אילן לא מצא את $quoted במאגרים שנבחרו, ושואל אם לחפש בכל '
+            'המאגרים. עונים על השאלה בחלון של בר אילן.$note',
       ResponsaSearchState.refused =>
         reason == null
             ? 'בר אילן לא ביצע את החיפוש. הסיבה מוצגת בחלון של בר אילן.$note'
@@ -625,6 +641,15 @@ class HelperService {
       broughtToFront
       ? '"$title" נפתח בבר אילן'
       : '"$title" נפתח בבר אילן. אם החלון לא הופיע, הוא בשורת המשימות.';
+
+  /// טקסט של המשתמש בתוך הודעה: במירכאות, ועד [maxQuotedLength] תווים.
+  static String _quote(String text) => '"${_shorten(text)}"';
+
+  static const int maxQuotedLength = 40;
+
+  static String _shorten(String text) => text.length <= maxQuotedLength
+      ? text
+      : '${text.substring(0, maxQuotedLength - 1).trimRight()}…';
 
   /// `2543` ← `2,543`, כמו בתוסף.
   static String _formatCount(int count) {
