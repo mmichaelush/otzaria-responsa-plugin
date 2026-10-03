@@ -22,6 +22,13 @@ abstract interface class ResponsaBackend {
     String? installPath,
   });
 
+  /// מקום מדויק (`בראשית ב ג`). בלי [index] ועם כמה תוצאות — `choices`.
+  Future<ResponsaOpenReport> locate(
+    String reference, {
+    int? index,
+    String? installPath,
+  });
+
   /// מפעיל את בר אילן אם צריך. [query] כבר מנוקה (`ResponsaQuery`, או
   /// `ResponsaAdvancedQuery` עם [setup] של חיפוש מתקדם).
   Future<ResponsaSearchReport> searchText(
@@ -64,6 +71,13 @@ class NativeResponsaBackend implements ResponsaBackend {
     expectedTitle: expectedTitle,
     installPath: installPath,
   );
+
+  @override
+  Future<ResponsaOpenReport> locate(
+    String reference, {
+    int? index,
+    String? installPath,
+  }) => _controller.locate(reference, index: index, installPath: installPath);
 
   @override
   Future<ResponsaSearchReport> searchText(

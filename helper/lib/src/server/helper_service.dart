@@ -32,7 +32,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.4.0';
+  static const String serverVersion = '0.5.0';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -44,6 +44,8 @@ class HelperService {
     'otzariaIcons',
     'advancedSearch',
     'showResponsa',
+    'notify',
+    'locate',
   ];
 
   static const int maxPageSize = 200;
@@ -278,8 +280,13 @@ class HelperService {
   /// פתיחה אחת בכל רגע: שתי פתיחות חופפות מתחרות על אותו מופע ומשאירות
   /// חלונות שאיש אינו סוגר.
   Future<Map<String, Object?>> open(Map<String, Object?> body) async {
-    final key = _string(body, 'key');
+    // מספר: אוצריא שולחת את מזהה הספר מחיפוש הספרייה (`$book.id`) כמות שהוא.
+    final key = switch (body['key']) {
+      final int number when number > 0 => '$number',
+      _ => _string(body, 'key'),
+    };
     if (key.isEmpty) throw const ApiError.badRequest('חסר מפתח ספר.');
+    final notify = _bool(body, 'notify') ?? false;
     return _exclusive(_Automation.open, () async {
       final index = await _requireIndex();
       final book = index.byKey(key);
@@ -302,6 +309,10 @@ class HelperService {
           if (report.window != null) 'window': report.window,
           if (report.usedRef != null) 'usedRef': report.usedRef,
           'broughtToFront': report.broughtToFront,
+          if (notify) ...{
+            'message': openedMessage(book.title, report.broughtToFront),
+            'severity': 'success',
+          },
         };
       }
       final failure = report.failure ?? ResponsaFailure.timeout;
@@ -329,6 +340,7 @@ class HelperService {
   /// נשען על הקטלוג כדי למצוא את הקטגוריות בעץ המאגרים.
   Future<Map<String, Object?>> searchText(Map<String, Object?> body) async {
     final advanced = _bool(body, 'advanced') ?? false;
+    final notify = _bool(body, 'notify') ?? false;
     final String text;
     var truncated = false;
     var setup = ResponsaSearchSetup.none;
@@ -385,7 +397,13 @@ class HelperService {
           'ok': true,
           'outcome': outcome.state.name,
           'count': ?outcome.count,
-          'message': ?_searchMessage(outcome),
+          'message': ?(notify
+              ? searchNotifyMessage(outcome, query: text, truncated: truncated)
+              : _searchMessage(outcome)),
+          if (notify)
+            'severity': outcome.state == ResponsaSearchState.found
+                ? 'success'
+                : 'info',
           'query': text,
           'truncated': truncated,
           if (advanced) 'advanced': true,
@@ -473,6 +491,88 @@ class HelperService {
     return scope;
   }
 
+  /// אורך מקום מדויק שהמשתמש כותב, ומספר התוצאות לבחירה.
+  static const int maxReferenceLength = 200;
+  static const int maxReferenceIndex = 1000;
+
+  /// מקום מדויק (`בראשית ב ג`) בעמוד כתיבת המקורות של בר אילן. כמה תוצאות
+  /// בלי `index` — חוזרות לבחירה (`opened: false`), ושום דבר אינו נפתח.
+  Future<Map<String, Object?>> openReference(Map<String, Object?> body) async {
+    final reference = normalizeReference(
+      _string(body, 'ref', maxLength: maxReferenceLength),
+    );
+    if (!RegExp('[\u05D0-\u05EA]').hasMatch(reference)) {
+      throw const ApiError.badRequest(
+        'יש לכתוב שם ספר ומקום בעברית, למשל "בראשית ב ג".',
+      );
+    }
+    final rawIndex = body['index'];
+    if (rawIndex != null &&
+        (rawIndex is! int || rawIndex < 0 || rawIndex > maxReferenceIndex)) {
+      throw const ApiError.badRequest('index חייב להיות מספר תוצאה.');
+    }
+    final index = rawIndex as int?;
+    final notify = _bool(body, 'notify') ?? false;
+    return _exclusive(_Automation.open, () async {
+      final report = await _backend.locate(
+        reference,
+        index: index,
+        installPath: await store.repository.sourceInstallPath(),
+      );
+      if (report.ok && report.choices.isNotEmpty) {
+        logLine('locate "$reference": ${report.choices.length} choices');
+        return {
+          'ok': true,
+          'opened': false,
+          'ref': reference,
+          'choices': report.choices,
+        };
+      }
+      if (report.ok) {
+        logLine(
+          'located "$reference"${index == null ? '' : ' #$index'} '
+          '-> "${report.window}"',
+        );
+        return {
+          'ok': true,
+          'opened': true,
+          'ref': reference,
+          if (report.window != null) 'window': report.window,
+          'broughtToFront': report.broughtToFront,
+          if (notify) ...{
+            'message': openedMessage(
+              report.window ?? reference,
+              report.broughtToFront,
+            ),
+            'severity': 'success',
+          },
+        };
+      }
+      final failure = report.failure ?? ResponsaFailure.timeout;
+      logLine('locate "$reference" failed: ${failure.name} ${report.message}');
+      await _rejectIfNotInstalled(failure);
+      throw ApiError.fromAutomationFailure(
+        failure,
+        failure == ResponsaFailure.referenceNotParsed
+            ? 'בר אילן לא מצא את "$reference". כותבים שם ספר ומקום בכתיב '
+                  'מלא, למשל "בראשית ב ג", "ברכות דף ב" או "שולחן ערוך אורח '
+                  'חיים סימן א".'
+            : report.message ?? 'הפתיחה בבר אילן נכשלה.',
+      );
+    });
+  }
+
+  /// ניקוד וטעמים נמחקים, מקף הופך לרווח, וגרשיים מנורמלים: המנתח של בר אילן
+  /// מצפה לכתיב מלא בלי ניקוד.
+  static String normalizeReference(String value) => value
+      .replaceAll(RegExp('[\u0591-\u05BD\u05BF-\u05C7]'), '')
+      .replaceAll('\u05BE', ' ')
+      .replaceAll(RegExp('[\u05F4\u201C\u201D]'), '"')
+      .replaceAll(RegExp('[\u05F3\u2018\u2019]'), "'")
+      .replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
   /// "פתיחת בר אילן": מפעיל אותו אם צריך ומביא אותו לחזית.
   Future<Map<String, Object?>> showResponsa(Map<String, Object?> body) async {
     final report = await _backend.show(
@@ -489,6 +589,52 @@ class HelperService {
       failure,
       report.message ?? 'לא ניתן היה לפתוח את בר אילן.',
     );
+  }
+
+  /// `notify: true` — אוצריא מציגה את `message` כמות שהוא (פעולת
+  /// `localService.post` מתפריט הקשר), ולכן זה משפט שלם ולא רק הסיבה.
+  static String searchNotifyMessage(
+    ResponsaSearchOutcome outcome, {
+    required String query,
+    required bool truncated,
+  }) {
+    final note = truncated ? ' החיפוש כלל רק את תחילת הטקסט שסומן.' : '';
+    final count = outcome.count;
+    final reason = outcome.message;
+    return switch (outcome.state) {
+      ResponsaSearchState.found =>
+        count == null
+            ? 'החיפוש "$query" הוצג בבר אילן.$note'
+            : 'בר אילן מצא ${_formatCount(count)} תוצאות עבור "$query".$note',
+      ResponsaSearchState.asked =>
+        'בר אילן לא מצא תוצאות עבור "$query" במאגרים שנבחרו, ושואל אם לחפש '
+            'בכל המאגרים. עונים על השאלה בחלון של בר אילן.$note',
+      ResponsaSearchState.refused =>
+        reason == null
+            ? 'בר אילן לא ביצע את החיפוש. הסיבה מוצגת בחלון של בר אילן.$note'
+            : 'בר אילן לא ביצע את החיפוש: $reason$note',
+      ResponsaSearchState.forms ||
+      ResponsaSearchState.invalid ||
+      ResponsaSearchState.pending =>
+        _searchMessage(outcome) ?? 'החיפוש נשלח לבר אילן.',
+    };
+  }
+
+  /// `"<שם>" נפתח בבר אילן`, ואם Windows לא הביא את החלון לחזית — איפה הוא.
+  static String openedMessage(String title, bool broughtToFront) =>
+      broughtToFront
+      ? '"$title" נפתח בבר אילן'
+      : '"$title" נפתח בבר אילן. אם החלון לא הופיע, הוא בשורת המשימות.';
+
+  /// `2543` ← `2,543`, כמו בתוסף.
+  static String _formatCount(int count) {
+    final digits = '$count';
+    final out = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
+      out.write(digits[i]);
+    }
+    return out.toString();
   }
 
   /// הטקסט של בר אילן כשיש; בלעדיו הסבר משלנו, כי "שאל" או "סירב" בלי

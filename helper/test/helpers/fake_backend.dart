@@ -24,6 +24,10 @@ class FakeBackend implements ResponsaBackend {
   Future<ResponsaOpenReport> Function(List<String> references)? onOpen;
   final List<List<String>> openCalls = [];
 
+  /// מה ש-[locate] מחזיר. ברירת מחדל: נפתח חלון בשם ההפניה.
+  Future<ResponsaOpenReport> Function(String reference, int? index)? onLocate;
+  final List<({String reference, int? index})> locateCalls = [];
+
   /// מה ש-[searchText] מחזיר. ברירת מחדל: נמצאו 7 תוצאות.
   Future<ResponsaSearchReport> Function(String query)? onSearch;
   final List<({String query, String? installPath, ResponsaSearchSetup setup})>
@@ -102,6 +106,25 @@ class FakeBackend implements ResponsaBackend {
         ok: true,
         window: expectedTitle,
         usedRef: references.first,
+        broughtToFront: true,
+      ),
+    );
+  }
+
+  @override
+  Future<ResponsaOpenReport> locate(
+    String reference, {
+    int? index,
+    String? installPath,
+  }) {
+    locateCalls.add((reference: reference, index: index));
+    final handler = onLocate;
+    if (handler != null) return handler(reference, index);
+    return Future.value(
+      ResponsaOpenReport(
+        ok: true,
+        window: reference,
+        usedRef: reference,
         broughtToFront: true,
       ),
     );

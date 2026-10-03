@@ -1,3 +1,3 @@
 /// יש להעלות בכל שינוי בכללי בניית הקטלוג - קטלוג ישן יסומן לרענון. בקובץ נפרד
 /// כדי ששכבת הבנייה (בלי אוצריא) ושכבת הקריאה (בלי Win32) ישוו אליו.
-const int responsaCatalogSchemaVersion = 6;
+const int responsaCatalogSchemaVersion = 7;

@@ -49,6 +49,7 @@ class HttpApi {
       '/catalog/browse': _service.browse,
       '/catalog/books': _service.books,
       '/book/open': _service.open,
+      '/reference/open': _service.openReference,
       '/text/search': _service.searchText,
       '/responsa/show': _service.showResponsa,
     };
@@ -265,7 +266,13 @@ class HttpApi {
 
   static Future<void> _sendError(HttpResponse response, ApiError error) async {
     try {
-      await _sendJson(response, error.status, {'error': error.toJson()});
+      // `message` ו-`severity` גם ברמה העליונה: פעולת `localService.post`
+      // של אוצריא מציגה אותם למשתמש כמות שהם.
+      await _sendJson(response, error.status, {
+        'error': error.toJson(),
+        'message': error.message,
+        'severity': 'error',
+      });
     } catch (_) {
       // כותרות כבר נשלחו (באמצע הזרמה) או שהלקוח התנתק; אין למי לדווח.
     }

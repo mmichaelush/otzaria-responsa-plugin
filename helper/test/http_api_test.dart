@@ -280,6 +280,19 @@ void main() {
       expect(backend.openCalls.single, ['רא"ש יבמות', 'רא"ש על יבמות']);
     });
 
+    test('מפתח כמספר, ו-notify מחזיר הודעה שלמה', () async {
+      final result = await call(
+        'POST',
+        '/book/open',
+        body: {'key': 1524, 'notify': true},
+      );
+      expect(result.status, 200);
+      expect(backend.openCalls.single, ['רא"ש יבמות', 'רא"ש על יבמות']);
+      final json = result.json as Map;
+      expect(json['message'], contains('נפתח בבר אילן'));
+      expect(json['severity'], 'success');
+    });
+
     test('מפתח לא מוכר', () async {
       final result = await call('POST', '/book/open', body: {'key': '404'});
       expect(result.status, 404);
@@ -400,6 +413,82 @@ void main() {
       final result = await call('POST', '/text/search', body: {'q': 'שבת'});
       expect(result.status, 502);
       expect(errorCode(result.json), 'dialogNotFound');
+    });
+
+    group('notify (פעולת localService.post של אוצריא)', () {
+      test('הצלחה: משפט שלם עם המספר, בדרגת הצלחה', () async {
+        backend.onSearch = (_) async => const ResponsaSearchReport(
+          ok: true,
+          outcome: ResponsaSearchOutcome(
+            ResponsaSearchState.found,
+            count: 2543,
+            broughtToFront: true,
+          ),
+        );
+        final result = await call(
+          'POST',
+          '/text/search',
+          body: {'q': 'נר שבת', 'notify': true},
+        );
+        expect(result.status, 200);
+        expect(result.json, containsPair('severity', 'success'));
+        expect(
+          result.json,
+          containsPair('message', 'בר אילן מצא 2,543 תוצאות עבור "נר שבת".'),
+        );
+      });
+
+      test('שאלה של בר אילן: הודעת מידע, עם הערה על טקסט שקוצר', () async {
+        backend.onSearch = (_) async => const ResponsaSearchReport(
+          ok: true,
+          outcome: ResponsaSearchOutcome(
+            ResponsaSearchState.asked,
+            broughtToFront: true,
+          ),
+        );
+        final long = List.filled(15, 'שבת').join(' ');
+        final result = await call(
+          'POST',
+          '/text/search',
+          body: {'q': long, 'notify': true},
+        );
+        final json = result.json as Map;
+        expect(json['severity'], 'info');
+        expect(json['message'], contains('שואל אם לחפש בכל המאגרים'));
+        expect(json['message'], endsWith('רק את תחילת הטקסט שסומן.'));
+      });
+
+      test('בלי notify: message נשאר הסיבה בלבד, בלי severity', () async {
+        backend.onSearch = (_) async => const ResponsaSearchReport(
+          ok: true,
+          outcome: ResponsaSearchOutcome(
+            ResponsaSearchState.refused,
+            message: 'נמצאו מעל 32000 תוצאות.',
+            broughtToFront: true,
+          ),
+        );
+        final result = await call('POST', '/text/search', body: {'q': 'של'});
+        final json = result.json as Map;
+        expect(json['message'], 'נמצאו מעל 32000 תוצאות.');
+        expect(json.containsKey('severity'), isFalse);
+      });
+
+      test('שגיאה: message ו-severity גם ברמה העליונה', () async {
+        backend.onSearch = (_) async => const ResponsaSearchReport(
+          ok: false,
+          failure: ResponsaFailure.searchDialogNotFound,
+          message: 'x',
+        );
+        final result = await call(
+          'POST',
+          '/text/search',
+          body: {'q': 'שבת', 'notify': true},
+        );
+        final json = result.json as Map;
+        expect(json['severity'], 'error');
+        expect(json['message'], errorMessage(json));
+        expect(json['message'], isNotEmpty);
+      });
     });
 
     test('חיפוש בזמן פתיחה: busy', () async {
@@ -581,6 +670,88 @@ void main() {
         final result = await call('POST', '/text/search', body: body);
         expect(errorCode(result.json), 'badRequest', reason: '$body');
       }
+    });
+  });
+
+  group('מקום מדויק', () {
+    setUp(() => start());
+
+    test('health מכריז על היכולת', () async {
+      final json = (await call('GET', '/health')).json as Map;
+      expect(json['capabilities'], contains('locate'));
+    });
+
+    test('תוצאה אחת: נפתחת, וההפניה מנוקה מניקוד ומקף', () async {
+      final result = await call(
+        'POST',
+        '/reference/open',
+        body: {'ref': '  בְּרֵאשִׁית  ב־ג ', 'notify': true},
+      );
+      expect(result.status, 200);
+      expect(backend.locateCalls.single, (
+        reference: 'בראשית ב ג',
+        index: null,
+      ));
+      final json = result.json as Map;
+      expect(json['opened'], isTrue);
+      expect(json['severity'], 'success');
+      expect(json['message'], contains('נפתח בבר אילן'));
+    });
+
+    test('כמה תוצאות: חוזרות לבחירה, ושום דבר אינו נפתח', () async {
+      backend.onLocate = (reference, index) async => const ResponsaOpenReport(
+        ok: true,
+        choices: ['תורה בראשית ב ג', 'רש"י בראשית ב ג'],
+      );
+      final result = await call(
+        'POST',
+        '/reference/open',
+        body: {'ref': 'בראשית ב ג'},
+      );
+      expect(result.json, {
+        'ok': true,
+        'opened': false,
+        'ref': 'בראשית ב ג',
+        'choices': ['תורה בראשית ב ג', 'רש"י בראשית ב ג'],
+      });
+    });
+
+    test('בחירה: האינדקס עובר כמו שהוא', () async {
+      await call(
+        'POST',
+        '/reference/open',
+        body: {'ref': 'בראשית ב ג', 'index': 1},
+      );
+      expect(backend.locateCalls.single.index, 1);
+    });
+
+    test('מקום שבר אילן לא זיהה: 404 עם דוגמאות לכתיבה', () async {
+      backend.onLocate = (reference, index) async => const ResponsaOpenReport(
+        ok: false,
+        failure: ResponsaFailure.referenceNotParsed,
+        message: 'x',
+      );
+      final result = await call(
+        'POST',
+        '/reference/open',
+        body: {'ref': 'ספר שאינו קיים ב'},
+      );
+      expect(result.status, 404);
+      expect(errorCode(result.json), 'referenceNotFound');
+      expect(errorMessage(result.json), contains('"בראשית ב ג"'));
+    });
+
+    test('בלי עברית, אינדקס שלילי או הפניה ארוכה: 400', () async {
+      for (final body in <Map<String, Object?>>[
+        {'ref': 'Genesis 2:3'},
+        {'ref': 'בראשית', 'index': -1},
+        {'ref': 'בראשית', 'index': 'א'},
+        {'ref': 'א' * (HelperService.maxReferenceLength + 1)},
+      ]) {
+        final result = await call('POST', '/reference/open', body: body);
+        expect(result.status, 400, reason: '$body');
+      }
+      expect(backend.locateCalls, isEmpty);
     });
   });
 

@@ -354,6 +354,7 @@ class ResponsaAutomation {
     ResponsaDeadline deadline, {
     String? expectedTitle,
     int? resultIndex,
+    bool checkReference = true,
   }) {
     final ladder = [
       for (final reference in references)
@@ -474,6 +475,7 @@ class ResponsaAutomation {
       selectedResult: chosen,
       usedRef: usedRef,
       expectedTitle: expectedTitle,
+      checkReference: checkReference,
     );
     if (failed.isNotEmpty) {
       throw ResponsaAutomationException(
@@ -515,11 +517,15 @@ class ResponsaAutomation {
 
   /// הבדיקות שכותרת החלון לא עברה; ריק = הספר הנכון. כל הרפיה כאן היא ספר
   /// שגוי שמדווח כהצלחה.
+  ///
+  /// [checkReference] כבוי במקום שהמשתמש כתב (`בראשית ב ג`): הוא בחר את
+  /// התוצאה בעצמו, והכותרת כתובה אחרת (`בראשית פרק ב פסוק ג`).
   static List<String> verifyOpened({
     required String window,
     required String selectedResult,
     required String usedRef,
     String? expectedTitle,
+    bool checkReference = true,
   }) {
     final failed = <String>[
       if (ResponsaHebrew.matchLevel(selectedResult, window) ==
@@ -528,7 +534,8 @@ class ResponsaAutomation {
       // המקום היחיד שמהדורה נבדקת - שאר ההשוואות מתעלמות מסוגריים בכוונה.
       if (ResponsaHebrew.editionsConflict(selectedResult, window))
         'selectedEdition',
-      if (!ResponsaHebrew.coversTitle(usedRef, window)) 'requestedRef',
+      if (checkReference && !ResponsaHebrew.coversTitle(usedRef, window))
+        'requestedRef',
     ];
     if (expectedTitle != null) {
       final expected = ResponsaNames.withoutQualifier(expectedTitle);

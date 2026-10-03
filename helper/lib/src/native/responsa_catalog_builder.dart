@@ -9,7 +9,15 @@ class ResponsaBookRow {
   /// השרשרת מהשורש ועד הספר עצמו, כולל.
   final List<ResponsaChainNode> chain;
 
-  ResponsaBookRow({required this.chain})
+  /// המקטע הראשון בספר, בעדיפות למקום (`כלל א` ולא `מפתח עניינים`). יחידה
+  /// שבר אילן אינו מכיר בשמה (`גינת ורדים כללים`) נפתחת רק דרכו.
+  final String? anchor;
+
+  /// הספר יושב בתוך ספר אחר בקטלוג (`כללים` בתוך `גינת ורדים`). שם החיבור
+  /// לבדו פותח אז את המקטע הראשון של הספר שמעליו, והאימות פוסל אותו.
+  final bool nestedInBook;
+
+  ResponsaBookRow({required this.chain, this.anchor, this.nestedInBook = false})
     : assert(chain.isNotEmpty, 'שרשרת ריקה אינה ספר');
 
   /// שם הצומת בעץ, כפי שהוא. זהו שם היחידה — `אבות`, לא `הון עשיר אבות`.
@@ -113,19 +121,41 @@ class ResponsaCatalogBuilder {
     r"|הקדמ|פתיחה|תוכן|מפתח|ברייתא|נוסחא|סי'|עמ'|חלק [א-ת]'?$)",
   );
 
+  /// מקטעים שהמקום בהם הוא נקודת כניסה טובה לספר: מילת מקום ומספר.
+  static final RegExp _positionName = RegExp(
+    r'^(כלל|סימן|פרק|דף|עמוד|שער|הלכה|מאמר|פרשה|מערכה|אות|סעיף|משנה) '
+    r'''[א-ת]+['"]?[א-ת]*''',
+  );
+
+  /// `פרק א - השותפות בעסק` ← `פרק א`: התיאור אינו חלק מההפניה.
+  static String _anchorOf(String name) {
+    final core = ResponsaNames.coreOf(name);
+    return _positionName.firstMatch(core)?.group(0) ?? core;
+  }
+
+  /// `*` שבראש השם (`*סימן רצז`) מסמן הערה של בר אילן, ואינו חלק מהשם.
   static bool isSection(String name, int param) =>
-      ((param >> 16) & _sectionPlaneBits) != 0 || _sectionName.hasMatch(name);
+      ((param >> 16) & _sectionPlaneBits) != 0 ||
+      _sectionName.hasMatch(name.startsWith('*') ? name.substring(1) : name);
 
   /// ספר = הצומת הגבוה ביותר שתוכנו מקטעים ושיושב תחת צומת חיבור (בלי התנאי
   /// קטגוריות כמו `שולחן ערוך` נראות כספרים). כלל מבני, כי עומק הספר משתנה.
   static List<ResponsaBookRow> classify(Iterable<ResponsaTreeNode> nodes) {
     final found = <({int order, ResponsaBookRow row})>[];
     final stack =
-        <({ResponsaTreeNode node, int order, bool hasSectionChild})>[];
+        <
+          ({
+            ResponsaTreeNode node,
+            int order,
+            bool hasSectionChild,
+            String? anchor,
+          })
+        >[];
     var scanned = 0;
 
     void emit(
-      ({ResponsaTreeNode node, int order, bool hasSectionChild}) entry,
+      ({ResponsaTreeNode node, int order, bool hasSectionChild, String? anchor})
+      entry,
     ) {
       final node = entry.node;
       if (node.level == 0 || !entry.hasSectionChild) return;
@@ -140,7 +170,10 @@ class ResponsaCatalogBuilder {
         (level: node.level, param: node.param, name: node.name),
       ];
       if (ResponsaStructure.decompose(chain) == null) return;
-      found.add((order: entry.order, row: ResponsaBookRow(chain: chain)));
+      found.add((
+        order: entry.order,
+        row: ResponsaBookRow(chain: chain, anchor: entry.anchor),
+      ));
     }
 
     void closeTo(int level) {
@@ -153,9 +186,24 @@ class ResponsaCatalogBuilder {
       closeTo(node.level);
       if (stack.isNotEmpty && isSection(node.name, node.param)) {
         final last = stack.removeLast();
-        stack.add((node: last.node, order: last.order, hasSectionChild: true));
+        final candidate = _anchorOf(node.name);
+        final keep =
+            last.anchor != null &&
+            (_positionName.hasMatch(last.anchor!) ||
+                !_positionName.hasMatch(candidate));
+        stack.add((
+          node: last.node,
+          order: last.order,
+          hasSectionChild: true,
+          anchor: keep || candidate.isEmpty ? last.anchor : candidate,
+        ));
       }
-      stack.add((node: node, order: scanned++, hasSectionChild: false));
+      stack.add((
+        node: node,
+        order: scanned++,
+        hasSectionChild: false,
+        anchor: null,
+      ));
     }
     closeTo(0);
 
@@ -169,7 +217,27 @@ class ResponsaCatalogBuilder {
       if (identity != null && !seen.add(identity)) continue;
       unique.add(entry.row);
     }
-    return unique;
+    final paths = {for (final row in unique) row.refPath};
+    return [
+      for (final row in unique)
+        _hasBookAbove(row, paths)
+            ? ResponsaBookRow(
+                chain: row.chain,
+                anchor: row.anchor,
+                nestedInBook: true,
+              )
+            : row,
+    ];
+  }
+
+  static bool _hasBookAbove(ResponsaBookRow row, Set<String> paths) {
+    for (var length = row.chain.length - 1; length > 1; length--) {
+      final above = [
+        for (final node in row.chain.take(length)) node.name,
+      ].join(ResponsaTreeReader.pathSeparator);
+      if (paths.contains(above)) return true;
+    }
+    return false;
   }
 
   /// השם המלא בלי תוויות מיון: השם הקצר שייך לכמה מחברים, ותוויות אינן חלק
@@ -188,15 +256,27 @@ class ResponsaCatalogBuilder {
     final names = book.nameNodes;
     final head = names.first;
     final work = names.sublist(book.workOffset);
+    // ספר בתוך ספר (`גינת ורדים כללים`): המנתח אינו מכיר את שם היחידה, ושם
+    // החיבור לבדו פותח את המקטע הראשון של הספר שמעליו — והאימות פוסל אותו
+    // אחרי כחמש שניות. לכן מקום בתוך היחידה במקום שם החיבור. ביחידה רגילה
+    // (`רש"י בראשית`) הצירוף `רש"י פרק א` עמום, ולכן רק כאן.
+    final nested = book.nestedInBook && work.length > 1;
+    final anchor = nested ? book.anchor : null;
+    final bareWork = !nested;
     final candidates = <List<String>>[
       // החיבור בלי השם שמעליו — עוזר כשהמנתח אינו מכיר את הצירוף.
       work,
+      // יחידה שהמנתח אינו מכיר בשמה (`גינת ורדים כללים`): מקום בתוכה.
+      if (anchor != null) ...[
+        [...work, anchor],
+        [work.first, anchor],
+      ],
       // ראש השם והיחידה בלבד: צמתי ביניים כמו `חידושים על הגמרא` אינם
       // מוכרים למנתח (`חידושי הגר"ח מגילה`).
       if (names.length > 1) [head, names.last],
       // המנתח דוחה חלק מהצירופים המלאים של חיבור + ספר + יחידה.
       if (work.length > 2) [work.first, work.last],
-      [work.first],
+      if (bareWork) [work.first],
     ];
     // שם החיבור בלי התחום שנדבק לו - אחרונות כי הן מקצרות את שם החיבור,
     // ולכן המסוכנות ביותר.
@@ -207,7 +287,7 @@ class ResponsaCatalogBuilder {
       )) ...[
         if (unit != null)
           ResponsaNames.referenceOf([shortened, ResponsaNames.coreOf(unit)]),
-        shortened,
+        if (bareWork) shortened,
       ],
     ];
 

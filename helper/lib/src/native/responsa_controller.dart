@@ -60,6 +60,10 @@ class ResponsaOpenReport {
 
   final bool broughtToFront;
 
+  /// מקום מדויק עם כמה תוצאות ([ResponsaController.locate] בלי אינדקס): לא
+  /// נפתח דבר, ואלה התוצאות לבחירה, בשפת התוכנה.
+  final List<String> choices;
+
   const ResponsaOpenReport({
     required this.ok,
     this.failure,
@@ -69,6 +73,7 @@ class ResponsaOpenReport {
     this.triedRefs = const [],
     this.openedWindows = const [],
     this.broughtToFront = false,
+    this.choices = const [],
   });
 }
 
@@ -217,6 +222,64 @@ class ResponsaController {
           openedWindows: List.of(_openedWindows),
         ),
       );
+      _keepOpenedWindows(report.openedWindows);
+      return report;
+    } finally {
+      _busy = false;
+    }
+  }
+
+  /// מקום מדויק שהמשתמש כתב (`בראשית ב ג`), בעמוד כתיבת המקורות של בר אילן.
+  /// בלי [index] ועם יותר מתוצאה אחת — מחזיר את התוצאות ב-`choices`, בלי
+  /// לפתוח. עם [index] — פותח את התוצאה הזו. [listOnly] — לעולם אינו פותח,
+  /// גם בתוצאה אחת (לכלי מדידה).
+  Future<ResponsaOpenReport> locate(
+    String reference, {
+    int? index,
+    String? installPath,
+    bool listOnly = false,
+  }) async {
+    if (!Platform.isWindows) {
+      return const ResponsaOpenReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: 'פתיחה בבר אילן נתמכת ב-Windows בלבד.',
+      );
+    }
+    if (_busy) {
+      return const ResponsaOpenReport(
+        ok: false,
+        failure: ResponsaFailure.busy,
+        message: 'פעולה אחרת בבר אילן כבר מתבצעת. יש להמתין לסיומה.',
+      );
+    }
+    _busy = true;
+    try {
+      if (await _launchFailure(installPath) case final message?) {
+        return ResponsaOpenReport(
+          ok: false,
+          failure: ResponsaFailure.responsaNotRunning,
+          message: message,
+        );
+      }
+      final request = _LocateRequest(
+        reference: reference,
+        index: index,
+        installPath: installPath,
+        openedWindows: List.of(_openedWindows),
+        listOnly: listOnly,
+      );
+      final ResponsaOpenReport report;
+      try {
+        report = await Isolate.run(() => _locateInIsolate(request));
+      } catch (error, stackTrace) {
+        logLine('ResponsaController: isolate failed: $error\n$stackTrace');
+        return ResponsaOpenReport(
+          ok: false,
+          failure: ResponsaFailure.unexpected,
+          message: 'הפתיחה בבר אילן נכשלה באופן בלתי צפוי: $error',
+        );
+      }
       _keepOpenedWindows(report.openedWindows);
       return report;
     } finally {
@@ -428,6 +491,65 @@ class ResponsaController {
     }
   }
 
+  static ResponsaOpenReport _locateInIsolate(_LocateRequest request) {
+    final (:automation, :message) = _attach(
+      request.installPath,
+      request.openedWindows,
+    );
+    if (automation == null) {
+      return ResponsaOpenReport(
+        ok: false,
+        failure: ResponsaFailure.responsaNotRunning,
+        message: message,
+      );
+    }
+    final deadline = ResponsaDeadline(openBudget);
+    try {
+      var index = request.index;
+      if (index == null) {
+        final parsed = automation.parseReference(request.reference, deadline);
+        if (parsed.results.isEmpty) {
+          throw ResponsaAutomationException(
+            ResponsaFailure.referenceNotParsed,
+            'בר אילן לא זיהה את המקום "${request.reference}"',
+            {'ref': request.reference},
+          );
+        }
+        if (parsed.results.length > 1 || request.listOnly) {
+          return ResponsaOpenReport(
+            ok: true,
+            usedRef: request.reference,
+            choices: parsed.results,
+            openedWindows: automation.openedWindows,
+          );
+        }
+        index = 0;
+      }
+      final outcome = automation.openBook(
+        [request.reference],
+        deadline,
+        resultIndex: index,
+        checkReference: false,
+      );
+      return ResponsaOpenReport(
+        ok: true,
+        window: outcome.window,
+        usedRef: outcome.usedRef,
+        triedRefs: outcome.triedRefs,
+        openedWindows: automation.openedWindows,
+        broughtToFront: outcome.broughtToFront,
+      );
+    } on ResponsaAutomationException catch (error) {
+      return ResponsaOpenReport(
+        ok: false,
+        failure: error.failure,
+        message: error.message,
+        triedRefs: [request.reference],
+        openedWindows: automation.openedWindows,
+      );
+    }
+  }
+
   static ResponsaShowReport _showInIsolate(String? installPath) {
     final (:automation, :message) = _attach(installPath, const []);
     if (automation == null) {
@@ -493,6 +615,22 @@ class _OpenRequest {
     this.expectedTitle,
     this.installPath,
     this.openedWindows = const [],
+  });
+}
+
+class _LocateRequest {
+  final String reference;
+  final int? index;
+  final String? installPath;
+  final List<String> openedWindows;
+  final bool listOnly;
+
+  const _LocateRequest({
+    required this.reference,
+    this.index,
+    this.installPath,
+    this.openedWindows = const [],
+    this.listOnly = false,
   });
 }
 
