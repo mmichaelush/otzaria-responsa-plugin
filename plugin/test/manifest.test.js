@@ -54,6 +54,8 @@ function assertServiceAction(contribution, path) {
   assert.equal(action.args.path, path);
   assert.ok(routes.has(path), 'השירות מכיר את ' + path);
   assert.equal(action.args.body.notify, true);
+  // הגדרת "הפעלת בר אילן" עוברת גם בלי התוסף; מפתח שלא נשמר = null = מפעיל.
+  assert.deepEqual(action.args.body.autoStart, { $storage: Settings.KEYS.autoStart });
   assert.ok(action.args.timeoutMs >= 115000, 'פתיחה וחיפוש עשויים להפעיל את בר אילן (עד 115 שניות)');
   const when = conditions(contribution.when);
   assert.deepEqual(when[Settings.KEYS.welcomeSeen], { equals: true }, 'אחרי ההבהרה על הרישיון');
@@ -70,9 +72,42 @@ test('פריט התפריט, הקיצור שלו והמתג שמסתיר אות�
   assert.ok(shortcut && shortcut.key, 'יש קיצור מקלדת לחיפוש');
 });
 
-test('הפקודה של קיצור המקלדת היא זו שהמנוע מכיר', () => {
+test('הפקודות של קיצורי המקלדת הן אלה שהבקר מכיר, והקיצורים שונים זה מזה', () => {
   const commands = startup.shortcuts.filter((s) => s.command).map((s) => s.command);
-  assert.deepEqual(commands, [Domain.Command.openPanel]);
+  assert.deepEqual(commands.sort(), Object.values(Domain.Command).sort());
+  for (const command of commands) {
+    assert.ok(command === Domain.Command.openPanel || Domain.COMMAND_TABS[command], command);
+  }
+  const keys = startup.shortcuts.map((s) => s.key).filter(Boolean);
+  assert.equal(new Set(keys).size, keys.length);
+});
+
+test('"איתור המקום בבר אילן" פותח את הלשונית, באותו מתג של הלחיצה הימנית', () => {
+  const item = startup.contextMenuItems.find((i) => i.id === Domain.LOCATE_MENU_ITEM);
+  assert.ok(item, 'פריט האיתור במניפסט');
+  assert.equal(item.openPlugin, true);
+  assert.equal(item.action, undefined, 'בוחרים בין המקורות בלשונית, ולכן לא פעולה ישירה');
+  assert.equal(item.onClickEvent, undefined, 'האירוע הוא contextMenu.itemClicked');
+  const when = conditions(item.when);
+  assert.deepEqual(when[Settings.KEYS.contextMenu], { notEquals: false });
+  assert.deepEqual(when[Settings.KEYS.welcomeSeen], { equals: true });
+  // אוצריא מגבילה כל תוסף לשני פריטים עליונים בתפריט.
+  assert.ok(startup.contextMenuItems.length <= 2);
+});
+
+test('שורת דיאלוג החיפוש: כבויה כברירת מחדל, ומנתבת את החיפוש לתוסף', () => {
+  const [item, ...rest] = startup.searchDialogItems;
+  assert.equal(rest.length, 0);
+  assert.equal(item.type, 'checkbox');
+  // הסימון נשמר בין חיפושים, וכשהוא מסומן אוצריא אינה מחפשת בעצמה.
+  assert.equal(item.defaultValue, false);
+  assert.equal(item.openPluginOnSubmit, true);
+  assert.match(item.title, /במקום באוצריא/);
+  assert.deepEqual(item.visibleInModes, ['exact', 'advanced'], 'אין בבר אילן חיפוש מקורב');
+  const when = conditions(item.when);
+  assert.deepEqual(when[Settings.KEYS.searchDialog], { notEquals: false });
+  assert.deepEqual(when[Settings.KEYS.welcomeSeen], { equals: true });
+  assert.ok(manifest.permissions.includes('search.dialog'));
 });
 
 test('ספק חיפוש הספרייה מתאים לקוד, ופותח דרך השירות', () => {

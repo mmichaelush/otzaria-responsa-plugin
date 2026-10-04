@@ -17,7 +17,9 @@
     "app.startup_contributions",
     "app.shortcuts",
     "reader.context_menu",
+    "search.dialog",
     "library.books.provide",
+    "library.content.read",
     "navigation.write",
     "ui.create_shortcut",
     "feedback.send_email",
@@ -57,12 +59,41 @@
               "path": "/text/search",
               "body": {
                 "q": { "$selection": "selectedText" },
-                "notify": true
+                "notify": true,
+                "autoStart": { "$storage": "responsa_auto_start" }
               },
               "pendingMessage": "מחפש בבר אילן…",
               "unavailableMessage": "שירות בר אילן אינו פועל. כדי לבדוק מה חסר, פותחים את לשונית \"בר אילן\".",
               "timeoutMs": 120000
             }
+          }
+        },
+        {
+          "id": "responsa-locate-here",
+          "title": "איתור המקום בבר אילן",
+          "icon": "document_search_24_regular",
+          "openPlugin": true,
+          "when": {
+            "all": [
+              { "storage": { "key": "responsa_context_menu", "notEquals": false } },
+              { "storage": { "key": "responsa_welcome_seen", "equals": true } }
+            ]
+          }
+        }
+      ],
+      "searchDialogItems": [
+        {
+          "id": "responsa-search-dialog",
+          "type": "checkbox",
+          "title": "חיפוש בבר אילן במקום באוצריא",
+          "defaultValue": false,
+          "openPluginOnSubmit": true,
+          "visibleInModes": ["exact", "advanced"],
+          "when": {
+            "all": [
+              { "storage": { "key": "responsa_search_dialog", "notEquals": false } },
+              { "storage": { "key": "responsa_welcome_seen", "equals": true } }
+            ]
           }
         }
       ],
@@ -86,7 +117,8 @@
               "path": "/book/open",
               "body": {
                 "key": { "$book": "id" },
-                "notify": true
+                "notify": true,
+                "autoStart": { "$storage": "responsa_auto_start" }
               },
               "pendingMessage": "פותח בבר אילן…",
               "unavailableMessage": "שירות בר אילן אינו פועל. כדי לבדוק מה חסר, פותחים את לשונית \"בר אילן\".",
@@ -106,6 +138,24 @@
           "id": "responsa-open-panel",
           "label": "פתיחת לשונית בר אילן",
           "command": "responsa.openPanel"
+        },
+        {
+          "id": "responsa-open-books",
+          "label": "בר אילן: ספרים",
+          "key": "ctrl+alt+r",
+          "command": "responsa.openBooks"
+        },
+        {
+          "id": "responsa-open-text",
+          "label": "בר אילן: חיפוש בטקסט",
+          "key": "ctrl+alt+t",
+          "command": "responsa.openText"
+        },
+        {
+          "id": "responsa-open-locate",
+          "label": "בר אילן: איתור מקום",
+          "key": "ctrl+alt+l",
+          "command": "responsa.openLocate"
         }
       ]
     }

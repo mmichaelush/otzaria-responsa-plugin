@@ -20,7 +20,6 @@
   const app = new App(bridge, view);
   view.bind(app.actions);
   const on = app.runtime.on;
-  const engine = app.engine;
 
   // הערכה והפלטפורמה מגיעות ב-plugin.boot (אין לקרוא ל-app.getTheme בטעינה).
   // boot חוזר רק מרענן את המצב, ולכן בטוח.
@@ -32,7 +31,11 @@
   on('plugin.resumed', () => app.resume());
   on('plugin.page_opened', (detail) => app.pageOpened(detail));
 
-  // קיצור "פתיחת לשונית בר אילן". לחיצה ימנית ופתיחה מהספרייה אינן מגיעות
-  // לכאן: אוצריא פונה בהן לשירות בעצמה (`localService.post` במניפסט).
-  on('app.command', (payload) => engine.command(payload));
+  // קיצורי המקלדת, "איתור המקום בבר אילן" בלחיצה ימנית, ו"חיפוש בבר אילן"
+  // בדיאלוג החיפוש: אוצריא פותחת את הלשונית ומוסרת אליה את הבקשה. "חיפוש
+  // בבר אילן" בלחיצה ימנית ופתיחה מהספרייה אינם מגיעים לכאן: אוצריא פונה
+  // בהם לשירות בעצמה (`localService.post` במניפסט).
+  on('app.command', (payload) => app.command(payload));
+  on('contextMenu.itemClicked', (payload) => app.contextMenuClicked(payload));
+  on('search.requested', (payload) => app.searchRequested(payload));
 })();

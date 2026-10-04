@@ -64,7 +64,214 @@
     return name ? name + ' ' : '';
   }
 
-  const api = { MAX_LENGTH, MAX_HISTORY, EXAMPLES, normalize, validate, remember, startFrom };
+  // ------------------------------------------------ מספר שפתוח באוצריא
+
+  /** כמה הפניות לנסות, מהמדויקת ועד הכללית (כל ניסיון כשלוש שניות). */
+  const MAX_READER_REFS = 3;
+
+  /**
+   * מילים שבר אילן מוסיף לשם המקור (`תלמוד בבלי מסכת ברכות`) ואינן מבדילות
+   * בין ספר לפירושו. מילה אחרי "פרשת" היא שם הפרשה, וגם היא אינה מבדילה.
+   */
+  const NEUTRAL_WORDS = ['תלמוד', 'בבלי', 'מסכת', 'ספר', 'תורה', 'נביאים', 'כתובים', 'פרשת'];
+
+  /** מילה שפותחת את המקום בתוך שם המקור (`... מסכת ברכות דף ב`). */
+  const PLACE_WORDS = ['פרק', 'פסוק', 'דף', 'עמוד', 'סימן', 'סעיף', 'הלכה', 'משנה', 'אות'];
+
+  /** מילה להשוואה: בלי גרשיים ובלי אותיות סופיות. */
+  function wordKey(word) {
+    return word
+      .replace(/["']/g, '')
+      .replace(/ך/g, 'כ')
+      .replace(/ם/g, 'מ')
+      .replace(/ן/g, 'נ')
+      .replace(/ף/g, 'פ')
+      .replace(/ץ/g, 'צ');
+  }
+
+  const NEUTRAL = new Set(NEUTRAL_WORDS.map(wordKey));
+  const PLACE = new Set(PLACE_WORDS.map(wordKey));
+  const PARASHA = wordKey('פרשת');
+
+  function words(text) {
+    return normalize(text)
+      .split(' ')
+      .map(wordKey)
+      .filter((word) => LETTER.test(word));
+  }
+
+  /**
+   * שם ספר של אוצריא בצורה שבר אילן מכיר: `רש"י על בראשית` ← `רש"י בראשית`,
+   * `משנה תורה, הלכות שבת` ← `רמב"ם הלכות שבת`. סוגריים בסוף (מהדורה) נמחקים.
+   */
+  function readerBook(title) {
+    return normalize(title)
+      .replace(/\s*\([^)]*\)\s*$/, '')
+      .replace(/[,;]/g, ' ')
+      .replace(/^משנה תורה(?= |$)/, 'רמב"ם')
+      .replace(/ על /g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /** מילה שפותחת כותרת של מקום (`סימן לב`, `דף ב.`), ואחריה מספר. */
+  const HEADING_START = /^(פרק|פסוק|דף|עמוד|סימן|סעיף|ס"ק|הלכה|משנה|שער|אות|כלל|מאמר|פרשה|חלק|תשובה) \S+/;
+
+  /** מקף עם רווחים מפריד בין המקום לתיאור (`סימן לב - ראובן שלח…`). */
+  const DESCRIPTION = /\s[-–—]\s/;
+
+  /** כותרת שאינה מקום (`הלכות שבת`, `אורח חיים`) נחתכת: שם, לא משפט. */
+  const MAX_HEADING_WORDS = 4;
+
+  /**
+   * כותרת אחת מהמקום באוצריא ← החלק שבר אילן מבין: תיאור אחרי מקף נמחק,
+   * וגם סוגריים עגולים (סוגריים מרובעים — רק הסימנים: `סימן [ב]`); כותרת של מקום נשארת מילה ומספר (`סימן לב`); דף
+   * בנקודה או בנקודתיים הופך לעמוד (`דף ב:` ← `דף ב עמוד ב`).
+   */
+  function readerHeading(heading) {
+    let text = normalize(heading)
+      .split(DESCRIPTION)[0]
+      .replace(/\[([^\]]*)\]/g, '$1')
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const amud = text.match(/^דף\s+([א-ת"']+)\s*([.:])$/);
+    if (amud) return 'דף ' + amud[1] + ' עמוד ' + (amud[2] === '.' ? 'א' : 'ב');
+    text = text
+      .replace(/ ע"א$/, ' עמוד א')
+      .replace(/ ע"ב$/, ' עמוד ב')
+      .replace(/[.,;:]+$/, '')
+      .trim();
+    const place = text.match(/^(?:דף \S+ עמוד [אב]|(?:פרק|פסוק|דף|עמוד|סימן|סעיף|ס"ק|הלכה|משנה|שער|אות|כלל|מאמר|פרשה|חלק|תשובה) \S+)/);
+    if (place) text = place[0].replace(/[.,;:]+$/, '');
+    else text = text.split(' ').slice(0, MAX_HEADING_WORDS).join(' ');
+    return LETTER.test(text) ? text : '';
+  }
+
+  /**
+   * `currentRef` של אוצריא ← כותרות. אוצריא מחברת את הכותרות ב-", ", אבל
+   * יש כותרות שהתיאור שלהן מכיל פסיקים (`סימן לב - ראובן…, והסחורה…`).
+   * לכן חתיכה שבאה אחרי תיאור, ואינה פותחת במילת מקום, היא המשך התיאור.
+   */
+  function splitPlace(place) {
+    const headings = [];
+    let inDescription = false;
+    for (const piece of String(place || '').split(',')) {
+      const text = piece.trim();
+      if (!text) continue;
+      if (inDescription && !HEADING_START.test(normalize(text))) continue;
+      headings.push(text);
+      inDescription = DESCRIPTION.test(' ' + text + ' ');
+    }
+    return headings;
+  }
+
+  /**
+   * הכותרות של שורה [index] לפי תוכן העניינים של אוצריא (`library.getBookToc`:
+   * `[{text, index, level}]` בסדר הספר), כמו `refFromTocList` באוצריא: לכל
+   * רמה הכותרת האחרונה שלפני השורה. כך המקום הוא של השורה שסומנה, ולא של
+   * השורה הראשונה במסך (`currentRef`).
+   */
+  function headingsAt(toc, index) {
+    if (!Array.isArray(toc) || !Number.isInteger(index) || index < 0) return null;
+    const levels = [];
+    for (const entry of toc) {
+      if (!entry || typeof entry.text !== 'string' || !Number.isInteger(entry.index)) continue;
+      if (entry.index > index) break;
+      if (!Number.isInteger(entry.level) || entry.level <= 0 || entry.level > 20) continue;
+      while (levels.length < entry.level - 1) levels.push('');
+      levels[entry.level - 1] = entry.text;
+      levels.length = entry.level;
+    }
+    const headings = levels.map((text) => text.trim()).filter(Boolean);
+    return headings.length ? headings : null;
+  }
+
+  /**
+   * המקום בספר שפתוח באוצריא ← הפניות לבר אילן, מהמדויקת ועד הכללית: אם
+   * "סימן א סעיף ב" לא נמצא, מנסים "סימן א". [place] — כותרות (`headingsAt`),
+   * או `currentRef` של לחיצה ימנית. `null` כשאין שם ספר; `refs` ריק כשאין
+   * מקום, או כששם הספר אינו בעברית.
+   *
+   * כותרת שהיא שם הספר עצמו (`בראשית, פרק ב`) נמחקת, וכך גם פרשה: בר אילן
+   * ממספר פרקים בלי קשר לפרשה.
+   */
+  function fromReader(book, place) {
+    const title = readerBook(book);
+    if (!title) return null;
+    if (!LETTER.test(title)) return { title, refs: [] };
+    const own = new Set(words(title));
+    const parts = (Array.isArray(place) ? place : splitPlace(place))
+      .map(readerHeading)
+      .filter(
+        (part) =>
+          part && !part.startsWith('פרשת ') && !words(readerBook(part)).every((word) => own.has(word)),
+      );
+    const refs = [];
+    for (let count = parts.length; count > 0 && refs.length < MAX_READER_REFS; count--) {
+      const ref = normalize(title + ' ' + parts.slice(0, count).join(' '));
+      // ארוכה מהמותר: הייתה נחתכת באמצע מילה. הכללית שאחריה קצרה יותר.
+      if (ref.length >= MAX_LENGTH || refs.includes(ref)) continue;
+      refs.push(ref);
+    }
+    return { title, refs };
+  }
+
+  /**
+   * המקורות שבר אילן מצא, לפי ההתאמה לספר שפתוח באוצריא. `preferred` —
+   * המקורות שכל מילות שם הספר בהם, מהקרוב ביותר; `best` — מקור יחיד שבשמו
+   * (עד המקום) אין שום מילה מעבר לספר, להפניה ולמילים כלליות (`תלמוד בבלי
+   * מסכת`), או `null`. כך `ברכות` בוחר את הגמרא ולא את רש"י, ו`רש"י ברכות`
+   * את רש"י.
+   */
+  function rankChoices(choices, title, ref) {
+    const own = words(title);
+    const known = new Set([...own, ...words(ref)]);
+    const scored = [];
+    (Array.isArray(choices) ? choices : []).forEach((choice, index) => {
+      const tokens = words(choice);
+      const present = new Set(tokens);
+      if (!own.every((word) => present.has(word))) return;
+      const placeAt = tokens.findIndex((word, i) => i > 0 && PLACE.has(word));
+      const name = placeAt === -1 ? tokens : tokens.slice(0, placeAt);
+      let extra = 0;
+      name.forEach((word, i) => {
+        if (known.has(word) || NEUTRAL.has(word) || name[i - 1] === PARASHA) return;
+        extra++;
+      });
+      scored.push({ index, extra });
+    });
+    scored.sort((a, b) => a.extra - b.extra || a.index - b.index);
+    const exact = scored.filter((entry) => entry.extra === 0);
+    return {
+      preferred: scored.map((entry) => entry.index),
+      best: exact.length === 1 ? exact[0].index : null,
+    };
+  }
+
+  /** סדר ההצגה: המועדפים קודם, ואחריהם השאר בסדר של בר אילן. */
+  function displayOrder(count, preferred) {
+    const first = (Array.isArray(preferred) ? preferred : []).filter((index) => index < count);
+    const chosen = new Set(first);
+    const rest = [];
+    for (let index = 0; index < count; index++) if (!chosen.has(index)) rest.push(index);
+    return [...first, ...rest];
+  }
+
+  const api = {
+    MAX_LENGTH,
+    MAX_HISTORY,
+    MAX_READER_REFS,
+    EXAMPLES,
+    normalize,
+    validate,
+    remember,
+    startFrom,
+    headingsAt,
+    fromReader,
+    rankChoices,
+    displayOrder,
+  };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaLocate = api;
 })(typeof self !== 'undefined' ? self : globalThis);

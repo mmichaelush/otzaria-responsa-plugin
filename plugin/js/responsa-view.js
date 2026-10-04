@@ -24,22 +24,7 @@
     { id: 'help', label: N('עזרה'), iconName: 'question_circle_24_regular' },
   ]);
 
-  /**
-   * מסכים שבהם אין עם מה לחפש: אין שירות, אין הרשאה, אין בר אילן. בהם גם
-   * "חיפוש בטקסט" ו"איתור מקום" מציגות את מה שחסר. בלי רשימת ספרים (או
-   * בזמן קריאה) אפשר לחפש בטקסט ולאתר מקום, כי אלה אינם נשענים עליה.
-   */
-  const SETUP_SCREENS = new Set([
-    Screen.loading,
-    Screen.unsupported,
-    Screen.permissionDenied,
-    Screen.serviceMissing,
-    Screen.serviceError,
-    Screen.serviceOutdated,
-    Screen.pluginOutdated,
-    Screen.portTaken,
-    Screen.notInstalled,
-  ]);
+  const SETUP_SCREENS = Domain.SETUP_SCREENS;
 
   /** אזורים נגללים, שמקום הגלילה בהם נשמר כשהלשונית נבנית מחדש. */
   const SCROLLERS = '.app-content, .dialog-body, .log-list';

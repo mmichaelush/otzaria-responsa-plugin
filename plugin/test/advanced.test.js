@@ -276,3 +276,62 @@ test('describe: מילה מוחרגת בין שתי מילים היא חוליה
   assert.match(lines[0], /נר.*לא המילה .*חנוכה.*שבת/);
   assert.equal(lines.filter((line) => /^בלי מקורות/.test(line)).length, 0);
 });
+
+// ------------------------------------------- מדיאלוג החיפוש של אוצריא
+
+test('fromOtzariaSearch: מדויק — חיפוש רגיל; מרווח במתקדם — בונה, באותו מרחק', () => {
+  const base = { ...emptyQuery(), scope: { mode: 'pick', items: [{ type: 'category', path: 'שו"ת', name: 'שו"ת' }] } };
+  const exact = Advanced.fromOtzariaSearch(base, { query: 'נֵר, שַׁבָּת', mode: 'exact', distance: 0 });
+  assert.equal(exact.query.mode, 'simple');
+  assert.equal(exact.query.simpleText, 'נר שבת');
+  assert.equal(exact.approximate, false);
+  assert.deepEqual(exact.query.scope, base.scope, 'התחום שבחורים בלשונית נשאר');
+
+  const near = Advanced.fromOtzariaSearch(base, { query: 'נר שבת חנוכה', mode: 'advanced', distance: 2 });
+  assert.equal(near.query.mode, 'builder');
+  // באוצריא "2" = עד שתי מילים ביניהן; בבר אילן [1:3] = עד המילה השלישית.
+  assert.equal(buildQuery(near.query), 'נר [1:3] שבת [1:3] חנוכה');
+  assert.equal(near.approximate, false);
+});
+
+test('fromOtzariaSearch: מה שאין בבר אילן מסומן כקירוב; בלי עברית — null', () => {
+  const base = emptyQuery();
+  assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר', mode: 'fuzzy', distance: 1 }).approximate, true);
+  // "כל אחת מהמילים" ← מילה אחת עם חלופות, בדיוק.
+  const any = Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', distance: 0, wordMatchMode: 'anyWord' });
+  assert.equal(buildQuery(any.query), '(נר/שבת)');
+  assert.equal(any.approximate, false);
+  // "באותה פסקה" ← בכל סדר בטווח הרחב ביותר: קירוב.
+  const paragraph = Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', proximityScope: 'sameParagraph' });
+  assert.equal(buildQuery(paragraph.query), Advanced.MAX_DISTANCE + ': נר שבת');
+  assert.equal(paragraph.approximate, true);
+  // סינון קטגוריות, אפשרויות מילה ותווים כלליים של אוצריא אינם עוברים.
+  for (const extra of [{ facets: ['/תנך'] }, { wordOptions: { 'נר_0': { 'קידומות': true } } }, { query: 'נר*' }]) {
+    assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר', mode: 'exact', ...extra }).approximate, true);
+  }
+  // מרווח מעבר לטווח של בר אילן נחתך: קירוב.
+  assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', distance: 99 }).approximate, true);
+  // ברירות המחדל שאוצריא שולחת (נמצא בבדיקה חיה): כל הספרייה ואפשרויות כבויות.
+  const defaults = Advanced.fromOtzariaSearch(base, {
+    query: 'נר שבת',
+    mode: 'exact',
+    distance: 0,
+    facets: ['/'],
+    wordOptions: { 'נר_0': { 'קידומות דקדוקיות': false }, 'שבת_1': {} },
+  });
+  assert.equal(defaults.approximate, false);
+  assert.equal(
+    Advanced.fromOtzariaSearch(base, { query: 'נר', mode: 'exact', alternativeWords: { 0: [] }, customSpacing: {} }).approximate,
+    false,
+  );
+  // במצב מדויק המרווח והמדיניות אינם חלים.
+  assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'exact', distance: 5, wordMatchMode: 'anyWord' }).approximate, false);
+  const negative = Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', distance: 1, negativeQuery: 'חנוכה' });
+  assert.equal(negative.query.mode, 'builder');
+  assert.equal(negative.approximate, true);
+  // מילה אחת עם מרווח: אין בין מה למדוד, ולכן רגיל — וזה קירוב.
+  assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר', mode: 'advanced', distance: 3 }).approximate, true);
+  assert.equal(Advanced.fromOtzariaSearch(base, { query: 'abc' }), null);
+  assert.equal(Advanced.fromOtzariaSearch(base, null), null);
+  assert.equal(validate(Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'exact' }).query), null);
+});

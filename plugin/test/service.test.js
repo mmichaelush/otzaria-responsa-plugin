@@ -213,3 +213,22 @@ test('watchBuild: signal עוצר את ההאזנה מיד, גם בלי מקטע
   const watching = service.watchBuild(() => controller.abort(), controller.signal);
   assert.equal(await watching, null);
 });
+
+test('"הפעלת בר אילן" כבויה: autoStart: false בפתיחה, בחיפוש ובאיתור, ולא בשאר', async () => {
+  const { bridge, service } = await connected({
+    '/book/open': reply(200, { ok: true }),
+    '/text/search': reply(200, { ok: true }),
+    '/reference/open': reply(200, { ok: true, opened: true }),
+    '/catalog/search': reply(200, { total: 0, results: [] }),
+  });
+  service.autoStart = false;
+  await service.open('7');
+  await service.advancedSearch({ q: 'נר', advanced: true });
+  await service.locate('בראשית ב ג', 2);
+  await service.search('נר');
+  const bodies = Object.fromEntries(bridge.requests.filter((r) => r.body).map((r) => [r.path, r.body]));
+  assert.deepEqual(bodies['/book/open'], { key: '7', autoStart: false });
+  assert.equal(bodies['/text/search'].autoStart, false);
+  assert.deepEqual(bodies['/reference/open'], { ref: 'בראשית ב ג', index: 2, autoStart: false });
+  assert.equal('autoStart' in bodies['/catalog/search'], false);
+});

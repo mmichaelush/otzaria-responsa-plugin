@@ -58,8 +58,26 @@
   /** פריט "חיפוש בבר אילן" בתפריט הלחיצה הימנית (manifest.json). */
   const CONTEXT_MENU_ITEM = 'responsa-search';
 
+  /**
+   * פריט "איתור המקום בבר אילן" בתפריט הלחיצה הימנית. הוא פותח את הלשונית
+   * (`openPlugin`), כי בר אילן מוצא לרוב כמה מקורות, ובוחרים ביניהם כאן.
+   */
+  const LOCATE_MENU_ITEM = 'responsa-locate-here';
+
   /** פקודות מקיצורי המקלדת (manifest.json). */
-  const Command = Object.freeze({ openPanel: 'responsa.openPanel' });
+  const Command = Object.freeze({
+    openPanel: 'responsa.openPanel',
+    openBooks: 'responsa.openBooks',
+    openText: 'responsa.openText',
+    openLocate: 'responsa.openLocate',
+  });
+
+  /** הלשונית שכל פקודה פותחת. "פתיחת לשונית בר אילן" — האחרונה שהייתה פתוחה. */
+  const COMMAND_TABS = Object.freeze({
+    [Command.openBooks]: 'books',
+    [Command.openText]: 'text',
+    [Command.openLocate]: 'locate',
+  });
 
   /** המסכים האפשריים. בכל רגע מוצג בדיוק אחד. */
   const Screen = Object.freeze({
@@ -77,6 +95,23 @@
     buildFailed: 'buildFailed',
     ready: 'ready',
   });
+
+  /**
+   * מסכים שבהם אין עם מה לחפש: אין שירות, אין הרשאה, אין בר אילן. בהם גם
+   * "חיפוש בטקסט" ו"איתור מקום" מציגות את מה שחסר. בלי רשימת ספרים (או
+   * בזמן קריאה) אפשר לחפש בטקסט ולאתר מקום, כי אלה אינם נשענים עליה.
+   */
+  const SETUP_SCREENS = new Set([
+    Screen.loading,
+    Screen.unsupported,
+    Screen.permissionDenied,
+    Screen.serviceMissing,
+    Screen.serviceError,
+    Screen.serviceOutdated,
+    Screen.pluginOutdated,
+    Screen.portTaken,
+    Screen.notInstalled,
+  ]);
 
   function formatCount(value) {
     return new Intl.NumberFormat(I18n.locale()).format(value);
@@ -174,7 +209,7 @@
       },
       {
         id: 'catalog',
-        label: t('רשימת הספרים נקראה מבר אילן (פעם אחת, כחמש דקות)'),
+        label: t('רשימת הספרים נקראה מבר אילן (פעם אחת, כמה דקות)'),
         state: status ? state(Boolean(status.catalog && status.catalog.exists)) : 'unknown',
       },
     ];
@@ -285,7 +320,9 @@
 
   /**
    * מה להציג בסרגל ההתקדמות. `fraction` הוא `null` כשאין מכנה אמין, ואז
-   * הסרגל אינו קובע אחוז.
+   * הסרגל אינו קובע אחוז. `scanned` סופר שורות בעץ של בר אילן (קטגוריות,
+   * ספרים ופרקים), ולא ספרים: 465,701 שורות ב-CD25 לכשמונת אלפים ספרים.
+   * לכן הטקסט אומר "שורות", כדי שלא ייראה כמו מספר הספרים.
    */
   function buildProgress(progress, elapsedMs) {
     const stage = (progress && progress.stage) || 'starting';
@@ -295,11 +332,11 @@
     let detail = '';
     if (stage === 'classifying') {
       fraction = 0.99;
-      detail = t('נקראו {count} רשומות', { count: formatCount(scanned) });
+      detail = t('נקראו {count} שורות מהעץ של בר אילן (קטגוריות, ספרים ופרקים)', { count: formatCount(scanned) });
     } else if (expected > 0 && scanned > 0) {
       // לעולם לא 100% לפני הסיום: המכנה הוא הערכה מהקריאה הקודמת.
       fraction = Math.min(scanned / expected, 0.98);
-      detail = t('נקראו {count} מתוך כ-{total} רשומות', {
+      detail = t('נקראו {count} מתוך כ-{total} שורות בעץ של בר אילן (קטגוריות, ספרים ופרקים)', {
         count: formatCount(scanned),
         total: formatCount(expected),
       });
@@ -631,10 +668,13 @@
     LIBRARY_PROVIDER,
     STARTUP_PERMISSION,
     CONTEXT_MENU_ITEM,
+    LOCATE_MENU_ITEM,
+    COMMAND_TABS,
     Links,
     SUPPORT_EMAIL,
     Command,
     Screen,
+    SETUP_SCREENS,
     formatCount,
     booksLabel,
     breadcrumbs,

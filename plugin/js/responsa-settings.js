@@ -9,6 +9,13 @@
     language: 'responsa_language',
     libraryBooks: 'responsa_library_books',
     contextMenu: 'responsa_context_menu',
+    /** השורה "חיפוש בבר אילן" בדיאלוג החיפוש של אוצריא. */
+    searchDialog: 'responsa_search_dialog',
+    /**
+     * הפעלת בר אילן כשהוא סגור. נשלח בכל בקשה (`autoStart`), גם מפעולות
+     * הלחיצה של אוצריא (`$storage`), כי השירות אינו שומר הגדרות.
+     */
+    autoStart: 'responsa_auto_start',
     /** מה נשלח לאחרונה לחיפוש הספרייה: `{ builtAt, count }`. */
     librarySync: 'responsa_library_sync',
     /** המשתמש סגר את ההערה על ההרשאה "הוספת רכיבים לתוכנה". */
@@ -42,6 +49,8 @@
     language: 'auto',
     libraryBooks: true,
     contextMenu: true,
+    searchDialog: true,
+    autoStart: true,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
@@ -59,6 +68,9 @@
         typeof value.libraryBooks === 'boolean' ? value.libraryBooks : DEFAULTS.libraryBooks,
       contextMenu:
         typeof value.contextMenu === 'boolean' ? value.contextMenu : DEFAULTS.contextMenu,
+      searchDialog:
+        typeof value.searchDialog === 'boolean' ? value.searchDialog : DEFAULTS.searchDialog,
+      autoStart: typeof value.autoStart === 'boolean' ? value.autoStart : DEFAULTS.autoStart,
       startupNotice: value.startupNotice === true,
       welcomeSeen: value.welcomeSeen === true,
       browsePath:
@@ -94,6 +106,8 @@
         'language',
         'libraryBooks',
         'contextMenu',
+        'searchDialog',
+        'autoStart',
         'startupNotice',
         'welcomeSeen',
         'browsePath',

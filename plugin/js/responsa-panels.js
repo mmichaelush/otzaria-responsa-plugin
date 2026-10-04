@@ -176,8 +176,8 @@
     const allowed = has(model, 'reader.context_menu') && !blocked;
     return switchRow({
       iconName: 'search_24_regular',
-      title: t('"חיפוש בבר אילן" בלחיצה ימנית'),
-      subtitle: t('בספר פתוח: מסמנים מילה או משפט, לוחצים לחיצה ימנית ובוחרים "חיפוש בבר אילן". בר אילן נפתח עם תוצאות החיפוש.'),
+      title: t('בר אילן בלחיצה ימנית'),
+      subtitle: t('בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "חיפוש בבר אילן" מחפש את הטקסט המסומן, ו"איתור המקום בבר אילן" פותח בבר אילן את המקום של השורה המסומנת.'),
       note: allowed
         ? has(model, 'app.shortcuts')
           ? t('קיצור מקלדת: {shortcut}. אפשר לשנות אותו בהגדרות אוצריא ← קיצורי מקשים.', {
@@ -193,6 +193,43 @@
       disabled: !allowed,
       key: 'setting-context-menu',
       onToggle: (value) => actions.setSetting('contextMenu', value),
+    });
+  }
+
+  function searchDialogRow(model, actions) {
+    const blocked = Domain.lacksStartupPermission(model.permissions);
+    const allowed = has(model, 'search.dialog') && !blocked;
+    return switchRow({
+      iconName: 'search_info_24_regular',
+      title: t('בר אילן בדיאלוג החיפוש'),
+      subtitle: t('בדיאלוג החיפוש של אוצריא, תחת "אפשרויות נוספות", תופיע התיבה "חיפוש בבר אילן במקום באוצריא". כשהיא מסומנת, החיפוש נשלח לבר אילן במקום לאוצריא, ולשונית התוסף נפתחת.'),
+      note: allowed
+        ? null
+        : blocked
+          ? Domain.startupPermissionHint()
+          : t('כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "רכיבים בחלון החיפוש".'),
+      checked: allowed && model.settings.searchDialog,
+      disabled: !allowed,
+      key: 'setting-search-dialog',
+      onToggle: (value) => actions.setSetting('searchDialog', value),
+    });
+  }
+
+  /** השירות שולח את ההגדרה לבר אילן רק מגרסה שמכירה אותה (`autoStart`). */
+  function autoStartRow(model, actions) {
+    const supported = Domain.serviceCan(model.health, 'autoStart');
+    return switchRow({
+      iconName: 'open_24_regular',
+      title: t('הפעלת בר אילן כשהוא סגור'),
+      subtitle: t('לפני פתיחת ספר, חיפוש או איתור מקום, התוסף מפעיל את בר אילן אם הוא סגור. כשהמתג כבוי, פותחים את בר אילן בעצמכם קודם. חל גם על הלחיצה הימנית ועל מסך הספרייה.'),
+      note:
+        supported || !model.health
+          ? null
+          : t('שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן בר אילן תמיד מופעל. כדאי להוריד את הגרסה החדשה.'),
+      checked: model.settings.autoStart,
+      disabled: Boolean(model.health) && !supported,
+      key: 'setting-auto-start',
+      onToggle: (value) => actions.setSetting('autoStart', value),
     });
   }
 
@@ -213,7 +250,7 @@
       infoRow(
         'arrow_sync_24_regular',
         t('קריאת הרשימה מחדש'),
-        t('כשהותקנה מהדורה חדשה של בר אילן, או כשספר מסוים לא נפתח. לוקח כחמש דקות, והרשימה הקיימת נשארת בשימוש עד שהחדשה מוכנה.'),
+        t('כשהותקנה מהדורה חדשה של בר אילן, או כשספר מסוים לא נפתח. לוקח כמה דקות, והרשימה הקיימת נשארת בשימוש עד שהחדשה מוכנה.'),
         button('tonal', t('קריאה מחדש'), actions.rebuild, {
           key: 'settings-rebuild',
           disabled:
@@ -264,11 +301,12 @@
         { class: 'page-body' },
         section(
           t('שילוב באוצריא'),
-          // הלחיצה הימנית והספרייה פונות לשירות דרך אוצריא, בלי שהתוסף רץ.
-          t('עוד שתי דרכים להגיע לספרי בר אילן, שעובדות גם כשהלשונית "בר אילן" סגורה.'),
+          t('דרכים להגיע לבר אילן מתוך אוצריא עצמה, גם כשהלשונית "בר אילן" סגורה.'),
           librarySearchRow(model, actions),
           contextMenuRow(model, actions),
+          searchDialogRow(model, actions),
         ),
+        section(t('בר אילן'), null, autoStartRow(model, actions)),
         section(
           t('שפה'),
           null,
@@ -315,7 +353,7 @@
         [
           t('מתקינים את "שירות בר אילן לאוצריא": בלשונית "ספרים" יש כפתור "הורדת המתקין". המתקין מוסיף לאוצריא גם את התוסף, ואינו דורש הרשאות מנהל.'),
           t('בהגדרות אוצריא ← כלים ← בר אילן מדליקים את "הוספת רכיבים לתוכנה", בשביל החיפוש בלחיצה ימנית וספרי בר אילן במסך הספרייה.'),
-          t('בלשונית "ספרים" לוחצים "התחלה", והתוסף קורא את רשימת הספרים (כחמש דקות).'),
+          t('בלשונית "ספרים" לוחצים "התחלה", והתוסף קורא את רשימת הספרים (כמה דקות).'),
         ],
         t('התוסף עובד גם בלי אינטרנט: הכול קורה במחשב שלכם.'),
       ),
@@ -389,7 +427,7 @@
         'arrow_sync_24_regular',
         t('קריאת רשימת הספרים'),
         [
-          t('בפעם הראשונה התוסף קורא את רשימת הספרים מבר אילן — כחמש דקות, פעם אחת.'),
+          t('בפעם הראשונה התוסף קורא את רשימת הספרים מבר אילן — כמה דקות, פעם אחת.'),
           t('בזמן הקריאה בר אילן עובד לבד: אל תלחצו בו ואל תסגרו אותו. אפשר להמשיך לעבוד באוצריא.'),
           t('אחרי התקנת מהדורה חדשה של בר אילן: לשונית "הגדרות" ← "קריאה מחדש".'),
         ],
@@ -630,6 +668,8 @@
         ? [t('חיפוש הספרייה'), onOff(startup && model.settings.libraryBooks)]
         : null,
       [t('לחיצה ימנית'), onOff(startup && model.settings.contextMenu)],
+      [t('דיאלוג החיפוש'), onOff(startup && model.settings.searchDialog)],
+      [t('הפעלת בר אילן כשהוא סגור'), onOff(model.settings.autoStart)],
       [t('הוספת רכיבים לתוכנה'), yesNo(startup)],
       [t('פורט השירות'), model.servicePort ? String(model.servicePort) : '—', 'ltr'],
     ].filter(Boolean);

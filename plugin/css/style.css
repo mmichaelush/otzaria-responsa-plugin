@@ -1980,6 +1980,17 @@ span.breadcrumb {
   overflow-wrap: anywhere;
 }
 
+/* מקור שמתאים לספר שפתוח באוצריא (לחיצה ימנית ← "איתור המקום בבר אילן"). */
+.choice-row.is-preferred .choice-text {
+  font-weight: 600;
+}
+
+.choice-note {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9em;
+  color: var(--color-on-surface-variant);
+}
+
 .locate-page .faq-item {
   margin-top: var(--space-5);
 }

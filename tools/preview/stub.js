@@ -30,7 +30,7 @@
     startedAt: new Date(Date.now() - 150000).toISOString(),
     stage: 'scanning',
     scanned: 612000,
-    expected: 1251889,
+    expected: 465701,
     sectionsDone: 9,
     sectionsTotal: 20,
   };
@@ -144,6 +144,7 @@
                     'showResponsa',
                     'notify',
                     'locate',
+                    'autoStart',
                   ],
             };
       case '/status':
@@ -267,6 +268,7 @@
               'app.startup_contributions',
               'app.shortcuts',
               'reader.context_menu',
+              'search.dialog',
               'navigation.write',
               'ui.create_shortcut',
               'feedback.send_email',
@@ -332,6 +334,41 @@
         const input = document.querySelector('.locate-input');
         input.value = loc;
         input.dispatchEvent(new Event('input'));
+      }, 300);
+    }
+    // `reader=<ספר>|<מקום>`: לחיצה ימנית בספר ← "איתור המקום בבר אילן".
+    // השדה חייב להראות את ההפניה שנשלחה (`value` אינו ב-markup).
+    const reader = params.get('reader');
+    if (reader) {
+      const [currentBook, currentRef] = reader.split('|');
+      setTimeout(() => {
+        (listeners['contextMenu.itemClicked'] || []).forEach((cb) =>
+          cb({ itemId: 'responsa-locate-here', currentBook, currentRef }),
+        );
+        setTimeout(() => {
+          // בלי שירות הלשונית מראה מה חסר, ואין שדה.
+          const input = document.querySelector('.locate-input');
+          if (!input) return;
+          const value = input.value;
+          if (!value.startsWith(window.ResponsaLocate.fromReader(currentBook, currentRef).title)) {
+            console.error('Error: the reader place did not reach the field: "' + value + '"');
+          }
+        }, 600);
+      }, 300);
+    }
+    // `otzsearch=<מילים>`: "חיפוש בבר אילן" מסומן בדיאלוג החיפוש של אוצריא.
+    const otzsearch = params.get('otzsearch');
+    if (otzsearch) {
+      setTimeout(() => {
+        (listeners['search.requested'] || []).forEach((cb) =>
+          cb({ itemId: 'responsa-search-dialog', request: { query: otzsearch, mode: 'exact', distance: 0 } }),
+        );
+        setTimeout(() => {
+          const input = document.querySelector('[data-focus-key="adv-simple"]');
+          if (!input || input.value !== otzsearch) {
+            console.error('Error: the Otzaria search did not reach the field: "' + (input && input.value) + '"');
+          }
+        }, 600);
       }, 300);
     }
     if (params.get('guide')) {

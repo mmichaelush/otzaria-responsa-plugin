@@ -1,6 +1,6 @@
 // מה שהלשונית עושה מול אוצריא ולא מול המסך: שליחת רשימת הספרים לחיפוש
-// הספרייה, שמירת הפורט של השירות, כותרת פריט התפריט בשפה הנוכחית, ופקודות
-// מקיצורי מקלדת. "חיפוש בבר אילן" בלחיצה ימנית ופתיחה מחיפוש הספרייה אינם
+// הספרייה, שמירת הפורט של השירות, כותרות פריטי התפריט בשפה הנוכחית, והבאת
+// הלשונית לחזית אחרי קיצור מקלדת. "חיפוש בבר אילן" בלחיצה ימנית ופתיחה מחיפוש הספרייה אינם
 // כאן: אוצריא פונה בהם לשירות בעצמה (`localService.post` במניפסט), בלי
 // להעיר את התוסף.
 (function (root) {
@@ -29,6 +29,8 @@
       this.now = opts.now || (() => Date.now());
       this.log = opts.log || (root.ResponsaLog && root.ResponsaLog.shared) || console;
       this.syncing = null;
+      /** ה-`enabled` של השליחה שרצה עכשיו (`syncing`). */
+      this.syncingEnabled = null;
       this.syncFailedAt = null;
       /** מה שכבר נשמר בהפעלה הזו: פורט, `null` כשנמחק, `undefined` — עוד לא. */
       this.savedPort = undefined;
@@ -89,24 +91,32 @@
     }
 
     /**
-     * הכותרת בתפריט הלחיצה הימנית מגיעה מהמניפסט בעברית. אוצריא אינה
-     * מתרגמת אותה, ולכן היא מעודכנת לשפה הנוכחית. אין הרשאה — הכותרת נשארת.
+     * הכותרות בתפריט הלחיצה הימנית מגיעות מהמניפסט בעברית. אוצריא אינה
+     * מתרגמת אותן, ולכן הן מעודכנות לשפה הנוכחית. אין הרשאה — הן נשארות.
      */
     patchContextMenuTitle() {
-      // בלי "הוספת רכיבים לתוכנה" הפריט לא נרשם, ואוצריא עונה `not_found`.
+      // בלי "הוספת רכיבים לתוכנה" הפריטים לא נרשמים, ואוצריא עונה `not_found`.
       // כשההרשאה נדלקת, `permissionsChanged` קורא לכאן שוב.
       if (Domain.lacksStartupPermission(this.permissions)) return Promise.resolve(null);
-      return this.runtime.callSoft('reader.updateContextMenuItem', {
-        id: Domain.CONTEXT_MENU_ITEM,
-        patch: { title: t('חיפוש בבר אילן') },
-      });
+      return Promise.all([
+        this.runtime.callSoft('reader.updateContextMenuItem', {
+          id: Domain.CONTEXT_MENU_ITEM,
+          patch: { title: t('חיפוש בבר אילן') },
+        }),
+        this.runtime.callSoft('reader.updateContextMenuItem', {
+          id: Domain.LOCATE_MENU_ITEM,
+          patch: { title: t('איתור המקום בבר אילן') },
+        }),
+      ]);
     }
 
     // ---------------------------------------------------------- פקודות
 
-    /** `app.command` מקיצור מקלדת. */
-    async command(payload) {
-      if (!payload || payload.command !== Domain.Command.openPanel) return;
+    /**
+     * מביא את הלשונית לחזית, אחרי קיצור מקלדת: אוצריא מוסרת את הפקודה גם
+     * ללשונית שפתוחה ברקע, בלי להציג אותה.
+     */
+    async showSelf() {
       const opened = await this.runtime.callSoft('plugin.openSelf', {});
       if (opened === null) {
         await this.runtime.notify.info(
@@ -118,9 +128,10 @@
     // ------------------------------------------------- חיפוש הספרייה
 
     /**
-     * שולח לאוצריא את רשימת הספרים, כשהיא שונה ממה שנשלח. המתג בהגדרות
-     * שולט בהצגה דרך `when`, ולכן הרשימה נשלחת גם כשהוא כבוי: הדלקה מציגה
-     * אותה מיד. [force] — שליחה גם כשנראה שאין צורך.
+     * שולח לאוצריא את רשימת הספרים, כשהיא שונה ממה שנשלח. [enabled] (המתג
+     * "ספרי בר אילן בחיפוש הספרייה", ברירת מחדל `true`) כבוי: הרשימה נמחקת
+     * מאוצריא, כדי ששמות ספרי בר אילן לא יישמרו אצלה כשהמשתמש אינו רוצה
+     * בהם. [force] — שליחה גם כשנראה שאין צורך.
      */
     syncLibrary(status, options) {
       // בלי "הוספת רכיבים לתוכנה" אוצריא אינה רושמת את הספק, והשליחה נדחית.
@@ -130,11 +141,19 @@
       ) {
         return Promise.resolve(false);
       }
-      if (this.syncing) return this.syncing;
-      this.syncing = this._syncLibrary(status, options).finally(() => {
-        this.syncing = null;
-      });
-      return this.syncing;
+      const enabled = !(options && options.enabled === false);
+      // אותה בקשה שכבר רצה מצטרפת אליה; מתג שהתהפך בינתיים רץ אחריה.
+      if (this.syncing && this.syncingEnabled === enabled) return this.syncing;
+      const previous = this.syncing || Promise.resolve();
+      const task = previous
+        .catch(() => {})
+        .then(() => this._syncLibrary(status, { ...(options || {}), enabled }))
+        .finally(() => {
+          if (this.syncing === task) this.syncing = null;
+        });
+      this.syncing = task;
+      this.syncingEnabled = enabled;
+      return task;
     }
 
     async _syncLibrary(status, options) {
@@ -145,6 +164,7 @@
       } catch (_) {
         synced = null;
       }
+      if (options.enabled === false) return this._clearLibrary(synced);
       if (!force && !Domain.needsLibrarySync(status, synced, this.pluginVersion)) return false;
       if (!force && this.syncFailedAt !== null && this.now() - this.syncFailedAt < LIBRARY_RETRY_MS) {
         return false;
@@ -171,6 +191,23 @@
         // כשל כאן אינו חוסם דבר: החיפוש בדף עובד, ובעוד כמה דקות ננסה שוב.
         this.log.warn('שליחת רשימת הספרים לחיפוש הספרייה נכשלה; ניסיון נוסף בעוד עשר דקות', error);
         this.syncFailedAt = this.now();
+        return false;
+      }
+    }
+
+    /** המתג כבוי: רשימה ריקה לאוצריא, פעם אחת. */
+    async _clearLibrary(synced) {
+      if (synced && synced.count === 0) return false;
+      try {
+        await this.runtime.call('library.setProviderBooks', { provider: Domain.LIBRARY_PROVIDER, books: [] });
+        await this.runtime.callSoft('storage.set', {
+          key: KEYS.librarySync,
+          value: { builtAt: null, count: 0, pluginVersion: this.pluginVersion },
+        });
+        this.log.info('ספרי בר אילן הוסרו מחיפוש הספרייה');
+        return true;
+      } catch (error) {
+        this.log.warn('הסרת ספרי בר אילן מחיפוש הספרייה נכשלה', error);
         return false;
       }
     }

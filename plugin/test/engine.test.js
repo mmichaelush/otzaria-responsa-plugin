@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadPlugin } = require('./helpers/load');
 
-const { Engine: EngineModule, Settings, Service } = loadPlugin();
+const { Engine: EngineModule, Settings, Service, Domain } = loadPlugin();
 const { Engine } = EngineModule;
 const { ServiceError } = Service;
 
@@ -113,17 +113,26 @@ test('שירות לפני 0.5.0: הפורט נמחק, כדי שאוצריא לא
   assert.equal(stored[Settings.KEYS.servicePort], 39700);
 });
 
-test('פקודת פתיחת הלשונית; בלי ההרשאה מקבלים הסבר', async () => {
+test('הבאת הלשונית לחזית; בלי ההרשאה מקבלים הסבר', async () => {
   const withPermission = setup({ answers: { 'plugin.openSelf': true } });
-  await withPermission.engine.command({ command: 'responsa.openPanel' });
+  await withPermission.engine.showSelf();
   assert.deepEqual(withPermission.runtime.toasts, []);
 
   const without = setup({ answers: { 'plugin.openSelf': new Error('permission_denied') } });
-  await without.engine.command({ command: 'responsa.openPanel' });
+  await without.engine.showSelf();
   assert.equal(without.runtime.toasts[0][0], 'info');
+});
 
-  await without.engine.command({ command: 'other' });
-  assert.equal(without.runtime.toasts.length, 1);
+test('כותרות שני פריטי התפריט מתעדכנות לשפה, רק כשהם רשומים', async () => {
+  const { engine, runtime } = setup({ permissions: ['app.startup_contributions'] });
+  await engine.patchContextMenuTitle();
+  const ids = runtime.calls
+    .filter((call) => call.method === 'reader.updateContextMenuItem')
+    .map((call) => call.payload.id);
+  assert.deepEqual(ids, [Domain.CONTEXT_MENU_ITEM, Domain.LOCATE_MENU_ITEM]);
+
+  const blocked = setup({ permissions: [] });
+  assert.equal(await blocked.engine.patchContextMenuTitle(), null);
 });
 
 const readyStatus = { catalog: { exists: true, bookCount: 2, builtAt: '2026-09-29T10:00:00Z' } };
@@ -207,6 +216,8 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     language: 'auto',
     libraryBooks: false,
     contextMenu: true,
+    searchDialog: true,
+    autoStart: true,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
@@ -349,3 +360,27 @@ test('כותרת הפריט: בלי "הוספת רכיבים לתוכנה" הפ�
   assert.equal(runtime.calls.some((c) => c.method === 'reader.updateContextMenuItem'), false);
 });
 
+
+test('המתג "ספרי בר אילן בחיפוש הספרייה" כבוי: הרשימה נמחקת מאוצריא פעם אחת, ודלוק — נשלחת שוב', async () => {
+  const stored = {};
+  const { engine, runtime } = setup({
+    permissions: LIBRARY_PERMISSIONS,
+    pluginVersion: '0.5.0',
+    answers: {
+      'storage.get': ({ key }) => stored[key] ?? null,
+      'storage.set': ({ key, value }) => ((stored[key] = value), true),
+      'library.setProviderBooks': ({ books }) => ({ count: books.length }),
+    },
+    service: { exportCatalog: async () => exported },
+  });
+  const sent = () => runtime.calls.filter((c) => c.method === 'library.setProviderBooks').map((c) => c.payload.books.length);
+  assert.equal(await engine.syncLibrary(readyStatus), true);
+  assert.equal(await engine.syncLibrary(readyStatus, { enabled: false }), true);
+  assert.equal(await engine.syncLibrary(readyStatus, { enabled: false }), false, 'כבר נמחקה');
+  assert.equal(await engine.syncLibrary(readyStatus, { enabled: true }), true);
+  assert.deepEqual(sent(), [2, 0, 2]);
+
+  // מתג שהתהפך בזמן שליחה: רץ אחריה, ולא מצטרף אליה.
+  await Promise.all([engine.syncLibrary(readyStatus, { force: true }), engine.syncLibrary(readyStatus, { enabled: false })]);
+  assert.deepEqual(sent(), [2, 0, 2, 2, 0]);
+});

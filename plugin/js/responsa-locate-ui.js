@@ -74,9 +74,14 @@
     );
   }
 
-  /** המקורות שבר אילן מצא, לבחירה. */
+  /**
+   * המקורות שבר אילן מצא, לבחירה. מלחיצה ימנית בספר — המקורות שמתאימים לו
+   * ראשונים (`preferred`). המפתח של כל שורה הוא המיקום ברשימה של בר אילן,
+   * כי לפיו השירות פותח.
+   */
   function choicesView(state, actions) {
     if (!state.choices) return null;
+    const preferred = new Set(state.preferred || []);
     return el(
       'section',
       { class: 'locate-choices', 'aria-labelledby': 'locate-choices-title' },
@@ -88,10 +93,17 @@
           ref: state.ref,
         }),
       ),
+      preferred.size && state.readerTitle
+        ? el(
+            'p',
+            { class: 'choice-note' },
+            t('המקורות של "{book}", הספר שפתוח באוצריא, ראשונים ברשימה.', { book: state.readerTitle }),
+          )
+        : null,
       el(
         'ol',
         { class: 'choice-list' },
-        state.choices.map((choice, index) =>
+        Locate.displayOrder(state.choices.length, state.preferred).map((index) =>
           el(
             'li',
             {},
@@ -99,7 +111,7 @@
               'button',
               {
                 type: 'button',
-                class: 'choice-row',
+                class: 'choice-row' + (preferred.has(index) ? ' is-preferred' : ''),
                 dir: 'rtl',
                 disabled: state.running,
                 'aria-busy': state.openingIndex === index ? 'true' : null,
@@ -109,7 +121,7 @@
               state.openingIndex === index
                 ? el('span', { class: 'spinner', 'aria-hidden': 'true' })
                 : icon('book_open_24_regular'),
-              el('span', { class: 'choice-text' }, choice),
+              el('span', { class: 'choice-text' }, state.choices[index]),
             ),
           ),
         ),
@@ -155,6 +167,7 @@
                 el('li', {}, t('אפשר לכתוב גם את שם היחידה: "פרק", "דף", "סימן", "סעיף", "הלכה".')),
                 el('li', {}, t('כשבר אילן מוצא כמה מקורות, למשל החומש ומפרשיו, בוחרים מהרשימה.')),
                 el('li', {}, t('מהרשימה בלשונית "ספרים": "פתיחה במקום מסוים" ממלא כאן את שם הספר.')),
+                el('li', {}, t('מספר פתוח באוצריא: מסמנים מילה, לוחצים לחיצה ימנית ובוחרים "איתור המקום בבר אילן". המקום של השורה המסומנת נכתב כאן ונפתח בבר אילן.')),
               ),
             ),
           ),

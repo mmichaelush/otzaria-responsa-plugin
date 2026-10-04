@@ -1085,6 +1085,244 @@ test('"פתיחה במקום מסוים" מספר ברשימה: שם הספר ב
   app.suspend();
 });
 
+// ------------------------------------- מאוצריא: לחיצה ימנית, דיאלוג החיפוש, קיצורים
+
+const located = (window) => reply(200, { ok: true, opened: true, window, broughtToFront: true });
+const notFound = reply(404, { error: { code: 'referenceNotFound', message: 'בר אילן לא מצא את המקום.' } });
+const fromReader = (currentBook, currentRef) => ({ itemId: Domain.LOCATE_MENU_ITEM, currentBook, currentRef });
+
+test('"איתור המקום בבר אילן": המקום שבספר נכתב בשדה ונפתח', async () => {
+  const { app, bridge, view } = await bootAdvanced({ '/reference/open': located('בראשית פרשת בראשית פרק ב') });
+  await app.contextMenuClicked(fromReader('בראשית', 'בראשית, פרק ב'));
+  assert.equal(app.model.tab, 'locate');
+  assert.deepEqual(requests(bridge, '/reference/open')[0].body, { ref: 'בראשית פרק ב' });
+  assert.equal(view.inputs['locate-input'], 'בראשית פרק ב');
+  assert.equal(app.model.locate.status.kind, 'success');
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן": מקום שבר אילן אינו מכיר — ההפניה הכללית, בלי הודעת שגיאה בדרך', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/reference/open': (params) => (JSON.parse(params.body).ref.endsWith('סעיף ב') ? notFound : located('סימן א')),
+  });
+  await app.contextMenuClicked(fromReader('שולחן ערוך, אורח חיים', 'סימן א - השכמת הבוקר, סעיף ב'));
+  assert.deepEqual(
+    requests(bridge, '/reference/open').map((r) => r.body.ref),
+    ['שולחן ערוך אורח חיים סימן א סעיף ב', 'שולחן ערוך אורח חיים סימן א'],
+  );
+  assert.equal(app.model.locate.status.kind, 'success');
+  assert.equal(app.model.locate.text, 'שולחן ערוך אורח חיים סימן א');
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן": אף הפניה לא נמצאה — ההסבר של השירות על האחרונה', async () => {
+  const { app, bridge } = await bootAdvanced({ '/reference/open': notFound });
+  await app.contextMenuClicked(fromReader('שו"ת אבני נזר', 'חלק אורח חיים, סימן א'));
+  assert.equal(requests(bridge, '/reference/open').length, 2);
+  assert.equal(app.model.locate.status.kind, 'error');
+  assert.match(app.model.locate.status.text, /לא מצא/);
+  assert.equal(app.model.locate.running, false);
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן": מקור יחיד שמתאים לספר נפתח מיד, מתוך כמה', async () => {
+  const choices = ['רש"י מסכת ברכות דף ב עמוד א', 'תלמוד בבלי מסכת ברכות דף ב עמוד א', 'תוספות מסכת ברכות דף ב עמוד א'];
+  const { app, bridge } = await bootAdvanced({
+    '/reference/open': (params) =>
+      JSON.parse(params.body).index === undefined
+        ? reply(200, { ok: true, opened: false, ref: 'ברכות דף ב עמוד א', choices })
+        : located(choices[JSON.parse(params.body).index]),
+  });
+  await app.contextMenuClicked(fromReader('ברכות', 'ברכות, דף ב.'));
+  assert.deepEqual(requests(bridge, '/reference/open')[1].body, { ref: 'ברכות דף ב עמוד א', index: 1 });
+  assert.match(app.model.locate.status.text, /תלמוד בבלי/);
+  // הרשימה נשארת, כדי שאפשר יהיה לבחור מקור אחר.
+  assert.deepEqual(app.model.locate.preferred, [1, 0, 2]);
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן": בלי מקור ודאי — המתאימים לספר ראשונים, והפוקוס עליהם', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/reference/open': reply(200, {
+      ok: true,
+      opened: false,
+      ref: 'בראשית פרק ב',
+      choices: ['שמות פרק ב', 'רש"י בראשית פרק ב', 'רמב"ן בראשית פרק ב'],
+    }),
+  });
+  await app.contextMenuClicked(fromReader('בראשית', 'פרק ב'));
+  assert.equal(requests(bridge, '/reference/open').length, 1);
+  assert.deepEqual(app.model.locate.preferred, [1, 2]);
+  assert.equal(app.model.locate.readerTitle, 'בראשית');
+  assert.equal(view.sheetFocus, 'locate-choice-1');
+  // איתור ידני אחריו אינו מדרג: אין ספר שפתוח באוצריא.
+  app.actions.locateText('שמות ב');
+  await app.actions.runLocate();
+  assert.equal(app.model.locate.preferred, null);
+  assert.equal(app.model.locate.readerTitle, null);
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן": בלי מקום — שם הספר בשדה והסבר; פריט אחר אינו מטופל כאן', async () => {
+  const { app, bridge, view } = await bootAdvanced({ '/reference/open': located('x') });
+  await app.contextMenuClicked({ itemId: 'other', currentBook: 'בראשית', currentRef: 'פרק ב' });
+  assert.equal(app.model.tab, 'books');
+  await app.contextMenuClicked(fromReader('אבות', ''));
+  assert.equal(app.model.tab, 'locate');
+  assert.equal(view.inputs['locate-input'], 'אבות ');
+  assert.equal(app.model.locate.status.kind, 'info');
+  assert.equal(requests(bridge, '/reference/open').length, 0);
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן" לפני סוף הטעינה: מחכה לה; בלי שירות — רק ממלא את השדה', async () => {
+  const { app, bridge } = setup({ '/health': advancedHealth, '/status': reply(200, ready), '/reference/open': located('x') });
+  const pending = app.contextMenuClicked(fromReader('בראשית', 'פרק ב'));
+  await tick();
+  assert.equal(requests(bridge, '/reference/open').length, 0);
+  await app.boot(windows);
+  await pending;
+  assert.equal(requests(bridge, '/reference/open').length, 1);
+  app.suspend();
+
+  const missing = new App(new FakeBridge({}), new FakeView());
+  await missing.boot(windows);
+  await missing.contextMenuClicked(fromReader('בראשית', 'פרק ב'));
+  assert.equal(missing.model.locate.text, 'בראשית פרק ב');
+  assert.equal(missing.model.locate.running, false);
+  missing.suspend();
+});
+
+test('"איתור המקום בבר אילן": המקום של השורה המסומנת, מתוכן העניינים; בלי הרשאה — מה שאוצריא שלחה', async () => {
+  const { app, bridge } = await bootAdvanced({ '/reference/open': located('x') });
+  bridge.methods['library.getBookToc'] = () => [
+    { text: 'שולחן ערוך אורח חיים', index: 0, level: 1 },
+    { text: 'סימן א - השכמת הבוקר', index: 1, level: 2 },
+    { text: 'סימן ב - דין לבישת בגדיו', index: 30, level: 2 },
+  ];
+  // השורה הראשונה במסך בסימן א, והסימון בסימן ב.
+  await app.contextMenuClicked({
+    ...fromReader('שולחן ערוך אורח חיים', 'שולחן ערוך אורח חיים, סימן א - השכמת הבוקר'),
+    currentBookId: 'שולחן ערוך אורח חיים',
+    currentIndex: 31,
+    id: 77,
+    type: 'text',
+  });
+  const toc = bridge.calls.find((c) => c.method === 'library.getBookToc').payload;
+  assert.deepEqual(toc, { bookId: 'שולחן ערוך אורח חיים', id: 77, type: 'text' });
+  assert.equal(requests(bridge, '/reference/open')[0].body.ref, 'שולחן ערוך אורח חיים סימן ב');
+
+  bridge.methods['library.getBookToc'] = { error: { code: 'error.permission_denied' } };
+  await app.contextMenuClicked({ ...fromReader('שולחן ערוך אורח חיים', 'סימן א - השכמת הבוקר'), currentIndex: 31 });
+  assert.equal(requests(bridge, '/reference/open')[1].body.ref, 'שולחן ערוך אורח חיים סימן א');
+  app.suspend();
+});
+
+test('בקשה מאוצריא בזמן שפעולה רצה מחכה לה, ואינה נזרקת', async () => {
+  let release;
+  const { app, bridge } = await bootAdvanced({
+    '/text/search': () =>
+      requests(bridge, '/text/search').length === 1
+        ? new Promise((resolve) => {
+            release = () => resolve(reply(200, { ok: true, outcome: 'found', count: 1, query: 'x', advanced: true }));
+          })
+        : reply(200, { ok: true, outcome: 'found', count: 2, query: 'y', advanced: true }),
+    '/reference/open': located('x'),
+  });
+  app.advancedSet({ simpleText: 'נר' });
+  const first = app.runAdvanced();
+  await until(() => typeof release === 'function');
+  const second = app.searchRequested({ request: { query: 'שבת', mode: 'exact' } });
+  await tick();
+  assert.equal(requests(bridge, '/text/search').length, 1);
+  release();
+  await first;
+  await second;
+  assert.deepEqual(requests(bridge, '/text/search').map((r) => r.body.q), ['נר', 'שבת']);
+
+  // אותו דבר באיתור: שתי לחיצות ימניות ברצף רצות אחת אחרי השנייה.
+  await Promise.all([
+    app.contextMenuClicked(fromReader('בראשית', 'פרק א')),
+    app.contextMenuClicked(fromReader('שמות', 'פרק ב')),
+  ]);
+  assert.deepEqual(requests(bridge, '/reference/open').map((r) => r.body.ref), ['בראשית פרק א', 'שמות פרק ב']);
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן" מספר בלי שם בעברית: הסבר, ובלי בקשה', async () => {
+  const { app, bridge } = await bootAdvanced({ '/reference/open': located('x') });
+  await app.contextMenuClicked(fromReader('My notes', 'Chapter 1'));
+  assert.match(app.model.locate.status.text, /אין שם בעברית/);
+  assert.equal(requests(bridge, '/reference/open').length, 0);
+  app.suspend();
+});
+
+test('חיפוש מדיאלוג החיפוש של אוצריא: המילים בשדה, והחיפוש רץ', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 12, query: 'נר שבת', advanced: true }),
+  });
+  await app.searchRequested({ itemId: 'responsa-search-dialog', request: { query: 'נר שבת', mode: 'exact', distance: 0 } });
+  assert.equal(app.model.tab, 'text');
+  assert.equal(view.inputs['adv-simple'], 'נר שבת');
+  const body = requests(bridge, '/text/search')[0].body;
+  assert.equal(body.q, 'נר שבת');
+  assert.equal(body.advanced, true);
+  assert.equal(app.model.advanced.status.kind, 'success');
+  assert.doesNotMatch(app.model.advanced.status.text, /קרוב לזה/);
+  app.suspend();
+});
+
+test('חיפוש מדיאלוג החיפוש: מרווח הופך לבונה; מקורב — חיפוש רגיל עם הסבר', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }),
+  });
+  await app.searchRequested({ request: { query: 'נר שבת', mode: 'advanced', distance: 2 } });
+  assert.equal(requests(bridge, '/text/search')[0].body.q, 'נר [1:3] שבת');
+  await app.searchRequested({ request: { query: 'נר שבת', mode: 'fuzzy', distance: 1 } });
+  assert.equal(requests(bridge, '/text/search')[1].body.q, 'נר שבת');
+  assert.match(app.model.advanced.status.text, /קרוב לזה שנשלח/);
+  await app.searchRequested({ request: { query: 'abc' } });
+  assert.equal(requests(bridge, '/text/search').length, 2);
+  assert.equal(app.model.advanced.status.kind, 'error');
+  app.suspend();
+});
+
+test('קיצורי מקלדת: כל פקודה פותחת את הלשונית שלה ומביאה את התוסף לחזית', async () => {
+  const { app, bridge } = await bootAdvanced({});
+  await app.command({ command: Domain.Command.openLocate });
+  assert.equal(app.model.tab, 'locate');
+  await app.command({ command: Domain.Command.openText });
+  assert.equal(app.model.tab, 'text');
+  await app.command({ command: Domain.Command.openPanel });
+  assert.equal(app.model.tab, 'text', '"פתיחת לשונית בר אילן" אינה מחליפה לשונית');
+  await app.command({ command: 'other' });
+  assert.equal(bridge.calls.filter((c) => c.method === 'plugin.openSelf').length, 3);
+  app.suspend();
+});
+
+test('"הפעלת בר אילן כשהוא סגור" כבוי: כל פעולה שולחת autoStart: false; דלוק — השדה נעדר', async () => {
+  const stored = { responsa_auto_start: false };
+  const context = setup({
+    '/health': advancedHealth,
+    '/status': reply(200, ready),
+    '/reference/open': located('x'),
+    '/book/open': reply(200, { ok: true, window: 'x', broughtToFront: true }),
+  });
+  const { app, bridge } = context;
+  bridge.methods['storage.get'] = ({ key }) => stored[key] ?? null;
+  bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
+  await app.boot(windows);
+  app.actions.locateText('בראשית ב ג');
+  await app.actions.runLocate();
+  await app.open(book);
+  assert.equal(requests(bridge, '/reference/open')[0].body.autoStart, false);
+  assert.equal(requests(bridge, '/book/open')[0].body.autoStart, false);
+  await app.setSetting('autoStart', true);
+  await app.actions.runLocate();
+  assert.equal('autoStart' in requests(bridge, '/reference/open')[1].body, false);
+  app.suspend();
+});
+
 test('פנייה במייל: נפתחת תוכנת הדואר עם הכתובת; בלעדיה — הכתובת להעתקה', async () => {
   const { app, bridge } = await bootAdvanced({});
   await app.actions.writeEmail();

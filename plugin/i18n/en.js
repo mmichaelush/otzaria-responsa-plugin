@@ -26,6 +26,39 @@
     'הדיווח לא נשלח. אפשר לנסות שוב מאוחר יותר.': 'The report was not sent. Please try again later.',
     'לא ניתן לפתוח את הדפדפן. הכתובת: {url}': 'The browser could not be opened. The address is: {url}',
 
+    // ---- שילוב באוצריא: לחיצה ימנית, דיאלוג החיפוש, הפעלת בר אילן
+    'בחיפוש שהגיע מאוצריא אין מילים בעברית.':
+      'The search that came from Otzaria has no Hebrew words.',
+    'לא כל אפשרויות החיפוש של אוצריא קיימות בבר אילן, ולכן החיפוש כאן קרוב לזה שנשלח ולא זהה לו.':
+      'Not every Otzaria search option exists in Bar-Ilan, so this search is close to the one sent, not identical.',
+    'המקום בספר לא התקבל מאוצריא. משלימים כאן את המקום, למשל פרק או סימן.':
+      'Otzaria did not send the place in the book. Complete the place here, for example a chapter or a section.',
+    'שם הספר לא התקבל מאוצריא. כותבים כאן שם ספר ומקום בו.':
+      'Otzaria did not send the book name. Write a book name and a place in it here.',
+    'איתור המקום בבר אילן':
+      'Find this place in Bar-Ilan',
+    'המקורות של "{book}", הספר שפתוח באוצריא, ראשונים ברשימה.':
+      'Sources from "{book}", the book open in Otzaria, are listed first.',
+    'מספר פתוח באוצריא: מסמנים מילה, לוחצים לחיצה ימנית ובוחרים "איתור המקום בבר אילן". המקום של השורה המסומנת נכתב כאן ונפתח בבר אילן.':
+      'From a book open in Otzaria: select a word, right-click and choose "Find this place in Bar-Ilan" (איתור המקום בבר אילן). The place of the selected line is filled in here and opened in Bar-Ilan.',
+    'בר אילן בדיאלוג החיפוש':
+      'Bar-Ilan in the search dialog',
+    'בדיאלוג החיפוש של אוצריא, תחת "אפשרויות נוספות", תופיע התיבה "חיפוש בבר אילן במקום באוצריא". כשהיא מסומנת, החיפוש נשלח לבר אילן במקום לאוצריא, ולשונית התוסף נפתחת.':
+      'The Otzaria search dialog will show, under "More options" (אפשרויות נוספות), the box "Search in Bar-Ilan instead of Otzaria" (חיפוש בבר אילן במקום באוצריא). When it is checked, the search goes to Bar-Ilan instead of Otzaria, and the plugin tab opens.',
+    'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "רכיבים בחלון החיפוש".':
+      'To turn it on: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → turn on "Search window components" (רכיבים בחלון החיפוש).',
+    'הפעלת בר אילן כשהוא סגור':
+      'Start Bar-Ilan when it is closed',
+    'לפני פתיחת ספר, חיפוש או איתור מקום, התוסף מפעיל את בר אילן אם הוא סגור. כשהמתג כבוי, פותחים את בר אילן בעצמכם קודם. חל גם על הלחיצה הימנית ועל מסך הספרייה.':
+      'Before opening a book, searching or finding a place, the plugin starts Bar-Ilan if it is closed. When this is off, open Bar-Ilan yourself first. This also applies to the right-click menu and the library screen.',
+    'שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן בר אילן תמיד מופעל. כדאי להוריד את הגרסה החדשה.':
+      'The Bar-Ilan service on this computer is old and does not know this setting, so Bar-Ilan is always started. Downloading the new version is recommended.',
+    'דיאלוג החיפוש':
+      'Search dialog',
+
+    'לספר הזה אין שם בעברית, ובבר אילן מחפשים לפי שם בעברית. כותבים כאן שם ספר ומקום בו.':
+      'This book has no Hebrew name, and Bar-Ilan looks books up by their Hebrew name. Write a book name and a place in it here.',
+
     // ---- תוויות ומספרים
     'ספר אחד': 'one book',
     '{count} ספרים': '{count} books',
@@ -41,8 +74,10 @@
     'קורא את רשימת הספרים מבר אילן…': 'Reading the book list from Bar-Ilan…',
     'מסדר את הספרים לפי קטגוריות…': 'Sorting the books into categories…',
     'מכין את בר אילן…': 'Preparing Bar-Ilan…',
-    'נקראו {count} רשומות': '{count} entries read',
-    'נקראו {count} מתוך כ-{total} רשומות': '{count} of about {total} entries read',
+    'נקראו {count} שורות מהעץ של בר אילן (קטגוריות, ספרים ופרקים)':
+      '{count} rows of the Bar-Ilan tree read (categories, books and chapters)',
+    'נקראו {count} מתוך כ-{total} שורות בעץ של בר אילן (קטגוריות, ספרים ופרקים)':
+      '{count} of about {total} rows of the Bar-Ilan tree read (categories, books and chapters)',
     'חלק {done} מתוך {total}': 'Part {done} of {total}',
     'פחות מדקה': 'less than a minute left',
     'נותרה כדקה': 'about a minute left',
@@ -107,9 +142,10 @@
     'ספרי בר אילן בחיפוש הספרייה': 'Bar-Ilan books in library search',
     'ספרי בר אילן יופיעו בתוצאות "איתור ספר או מחבר" במסך הספרייה של אוצריא, ולחיצה עליהם תפתח אותם בבר אילן.':
       'Bar-Ilan books appear in the "Find a book or author" (איתור ספר או מחבר) results of the Otzaria library, and clicking one opens it in Bar-Ilan.',
-    '"חיפוש בבר אילן" בלחיצה ימנית': '"Search in Bar-Ilan" on right-click',
-    'בספר פתוח: מסמנים מילה או משפט, לוחצים לחיצה ימנית ובוחרים "חיפוש בבר אילן". בר אילן נפתח עם תוצאות החיפוש.':
-      'In an open book: select a word or a sentence, right-click and choose "Search in Bar-Ilan". Bar-Ilan opens with the results.',
+    'בר אילן בלחיצה ימנית':
+      'Bar-Ilan in the right-click menu',
+    'בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "חיפוש בבר אילן" מחפש את הטקסט המסומן, ו"איתור המקום בבר אילן" פותח בבר אילן את המקום של השורה המסומנת.':
+      'In an open book, select a word and right-click: "Search in Bar-Ilan" (חיפוש בבר אילן) searches for the selected text, and "Find this place in Bar-Ilan" (איתור המקום בבר אילן) opens the place of the selected line in Bar-Ilan.',
     'קיצור מקלדת: {shortcut}. אפשר לשנות אותו בהגדרות אוצריא ← קיצורי מקשים.':
       'Keyboard shortcut: {shortcut}. You can change it in Otzaria settings → Keyboard shortcuts.',
     'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "פריטים בתפריט הטקסט".':
@@ -124,8 +160,8 @@
     'מהדורת בר אילן: {version}': 'Bar-Ilan edition {version}',
     'רשימת הספרים': 'Book list',
     'קריאה מחדש': 'Read again',
-    'כשהותקנה מהדורה חדשה של בר אילן, או כשספר מסוים לא נפתח. לוקח כחמש דקות, והרשימה הקיימת נשארת בשימוש עד שהחדשה מוכנה.':
-      'Use this after installing a new Bar-Ilan edition, or when a book will not open. It takes about five minutes, and the current list stays in use until the new one is ready.',
+    'כשהותקנה מהדורה חדשה של בר אילן, או כשספר מסוים לא נפתח. לוקח כמה דקות, והרשימה הקיימת נשארת בשימוש עד שהחדשה מוכנה.':
+      'When a new Bar-Ilan edition was installed, or when a book does not open. It takes a few minutes, and the current list stays in use until the new one is ready.',
     'קיצור דרך בשולחן העבודה': 'Desktop shortcut',
     'לחיצה כפולה עליו פותחת את אוצריא ישר בלשונית בר אילן.':
       'Double-clicking it opens Otzaria directly in the Bar-Ilan tab.',
@@ -135,7 +171,8 @@
     'הוספה': 'Add',
     'כמו באוצריא': 'Same as Otzaria',
     'שילוב באוצריא': 'Otzaria integration',
-    'עוד שתי דרכים להגיע לספרי בר אילן, שעובדות גם כשהלשונית "בר אילן" סגורה.': 'Two more ways to reach Bar-Ilan books, which work even when the "Bar-Ilan" tab is closed.',
+    'דרכים להגיע לבר אילן מתוך אוצריא עצמה, גם כשהלשונית "בר אילן" סגורה.':
+      'Ways to reach Bar-Ilan from Otzaria itself, even when the "Bar-Ilan" tab is closed.',
     'שפה': 'Language',
     'שפת התוסף': 'Plugin language',
     'קיצורי דרך': 'Shortcuts',
@@ -158,8 +195,8 @@
     'ניקוד, טעמים ופיסוק מוסרים לפני החיפוש; נשלחות עד עשר מילים.':
       'Vowels, cantillation marks and punctuation are removed first; up to ten words are sent.',
     'קריאת רשימת הספרים': 'Reading the book list',
-    'בפעם הראשונה התוסף קורא את רשימת הספרים מבר אילן — כחמש דקות, פעם אחת.':
-      'The first time, the plugin reads the book list from Bar-Ilan: about five minutes, once.',
+    'בפעם הראשונה התוסף קורא את רשימת הספרים מבר אילן — כמה דקות, פעם אחת.':
+      'The first time, the plugin reads the book list from Bar-Ilan — a few minutes, once.',
 
     // ---- עזרה: פתרון בעיות
     'כתוב שצריך להתקין רכיב': 'It says a component must be installed',
@@ -259,8 +296,8 @@
     'התוסף עובד עם תוכנת פרויקט השו"ת של בר אילן, ולא מצא אותה במחשב הזה. אחרי שתותקן, המסך יתעדכן מעצמו.':
       'The plugin works with the Bar-Ilan Responsa Project and did not find it on this computer. Once it is installed, this screen updates by itself.',
     'הכנה חד-פעמית': 'One-time setup',
-    'כדי להציג כאן את ספרי בר אילן, התוסף צריך לקרוא פעם אחת את רשימת הספרים מהתוכנה. זה לוקח כחמש דקות.':
-      'To show Bar-Ilan books here, the plugin needs to read the book list from the program once. It takes about five minutes.',
+    'כדי להציג כאן את ספרי בר אילן, התוסף צריך לקרוא פעם אחת את רשימת הספרים מהתוכנה. זה לוקח כמה דקות.':
+      'To show the Bar-Ilan books here, the plugin needs to read the book list from the program once. It takes a few minutes.',
     'התחלה': 'Start',
     'נמצא במחשב: פרויקט השו"ת, מהדורה {version}.': 'Found on this computer: the Responsa Project, edition {version}.',
     'קריאת רשימת הספרים לא הושלמה': 'Reading the book list did not finish',
@@ -334,7 +371,8 @@
     '"שירות בר אילן לאוצריא" מותקן ופועל': 'The "Bar-Ilan service for Otzaria" is installed and running',
     'ההרשאה "הוספת רכיבים לתוכנה" דלוקה (לחיפוש בלחיצה ימנית ובמסך הספרייה)': 'The "Add components to the app" (הוספת רכיבים לתוכנה) permission is on (for right-click search and the library screen)',
     'ההרשאה "הוספת רכיבים לתוכנה" דלוקה (לחיפוש בלחיצה ימנית)': 'The "Add components to the app" (הוספת רכיבים לתוכנה) permission is on (for right-click search)',
-    'רשימת הספרים נקראה מבר אילן (פעם אחת, כחמש דקות)': 'The book list was read from Bar-Ilan (once, about five minutes)',
+    'רשימת הספרים נקראה מבר אילן (פעם אחת, כמה דקות)':
+      'The book list was read from Bar-Ilan (once, a few minutes)',
     'התקנה והכנה, פעם אחת': 'One-time installation and setup',
     'התוסף עובד גם בלי אינטרנט: הכול קורה במחשב שלכם.': 'The plugin works without internet too: everything happens on your computer.',
     'המדריך המלא באתר': 'The full guide online',
@@ -565,7 +603,8 @@
     'חסר המקום בספר. כותבים אחרי שם הספר את הפרק, הדף או הסימן, למשל "{example}".': 'The location in the book is missing. After the book name, write the chapter, page or section, e.g. "{example}".',
     'מתקינים את "שירות בר אילן לאוצריא": בלשונית "ספרים" יש כפתור "הורדת המתקין". המתקין מוסיף לאוצריא גם את התוסף, ואינו דורש הרשאות מנהל.': 'Install the "Bar-Ilan service for Otzaria": the "Books" tab has a "Download the installer" button. The installer also adds the plugin to Otzaria, and does not need administrator rights.',
     'בהגדרות אוצריא ← כלים ← בר אילן מדליקים את "הוספת רכיבים לתוכנה", בשביל החיפוש בלחיצה ימנית וספרי בר אילן במסך הספרייה.': 'In Otzaria settings → Tools → Bar-Ilan, turn on "Add components to the app", for right-click search and Bar-Ilan books on the library screen.',
-    'בלשונית "ספרים" לוחצים "התחלה", והתוסף קורא את רשימת הספרים (כחמש דקות).': 'In the "Books" tab click "Start", and the plugin reads the book list (about five minutes).',
+    'בלשונית "ספרים" לוחצים "התחלה", והתוסף קורא את רשימת הספרים (כמה דקות).':
+      'In the "Books" tab, click "Start", and the plugin reads the book list (a few minutes).',
     'ספרים: חיפוש ספר ופתיחתו': 'Books: finding a book and opening it',
     'בלשונית "ספרים" מקלידים שם ספר, שם מחבר, או שניהם יחד.': 'In the "Books" tab, type a book name, an author name, or both.',
     'לוחצים על "פתיחה בבר אילן" ליד הספר. בר אילן נפתח (או עולה לחזית) עם הספר, תוך שניות ספורות.': 'Click "Open in Bar-Ilan" next to the book. Bar-Ilan opens (or comes to the front) with the book within a few seconds.',

@@ -194,6 +194,75 @@
       .filter((word) => LETTER.test(word));
   }
 
+  /**
+   * חיפוש מדיאלוג החיפוש של אוצריא (`search.requested`, בחוזה של
+   * `search.query`) ← חיפוש כאן, מעל [query] הנוכחי (התחום והאפשרויות
+   * נשארים). `null` כשאין מילה עברית. `approximate` — חלק מהבקשה לא עבר
+   * כמו שהוא, וההודעה אומרת זאת:
+   * - מרווח במצב מתקדם (כל המילים) ← בונה, "עד N+1 מילים אחריה": באוצריא
+   *   המרווח הוא המילים *שבין* המילים;
+   * - "כל אחת מהמילים" ← מילה אחת עם חלופות (עד MAX_ALTERNATIVES);
+   * - "באותה פסקה" / "תחת אותה כותרת" ← בכל סדר, בטווח הרחב ביותר (קירוב);
+   * - כל השאר ← חיפוש רגיל. קירוב גם כשנשלחו סינון קטגוריות, אפשרויות
+   *   מילה, חלופות, מרווחים ידניים, שלילה או תווים כלליים, שאין להם מקבילה כאן.
+   */
+  function fromOtzariaSearch(query, request) {
+    const source = request && typeof request === 'object' ? request : {};
+    const found = simpleWords(source.query).slice(0, MAX_TERMS);
+    if (!found.length) return null;
+    const advanced = source.mode === 'advanced';
+    const rawDistance = Number.parseInt(source.distance, 10) || 0;
+    const scope = advanced ? source.proximityScope || 'wordDistance' : 'wordDistance';
+    const match = advanced ? source.wordMatchMode || 'all' : 'all';
+    // אוצריא שולחת גם ברירות מחדל: `facets: ['/']` (כל הספרייה) ואפשרויות
+    // כבויות. רק סינון אמיתי ואפשרות דלוקה הם משהו שלא עבר.
+    const filled = (value) =>
+      Boolean(value) &&
+      typeof value === 'object' &&
+      Object.values(value).some((entry) =>
+        entry && typeof entry === 'object' ? filled(entry) : Array.isArray(entry) ? entry.length > 0 : Boolean(entry),
+      );
+    const lost =
+      source.mode === 'fuzzy' ||
+      simpleWords(source.query).length > MAX_TERMS ||
+      /[*?~]/.test(String(source.query || '')) ||
+      (typeof source.negativeQuery === 'string' && LETTER.test(source.negativeQuery)) ||
+      (Array.isArray(source.facets) && source.facets.some((facet) => facet !== '/')) ||
+      filled(source.wordOptions) ||
+      filled(source.options) ||
+      filled(source.alternativeWords) ||
+      filled(source.customSpacing);
+    const base = normalize(query);
+    const builder = (fields) => ({ ...base, mode: Mode.builder, anyOrder: false, ...fields });
+    if (found.length > 1 && match === 'anyWord' && found.length <= MAX_ALTERNATIVES) {
+      return { query: builder({ terms: [{ ...newTerm(), words: found }], gaps: [] }), approximate: lost };
+    }
+    if (found.length > 1 && match === 'all' && scope !== 'wordDistance') {
+      return {
+        query: builder({
+          terms: found.map((word) => newTerm(word)),
+          gaps: found.slice(1).map(() => newGap()),
+          anyOrder: true,
+          within: MAX_DISTANCE,
+        }),
+        approximate: true,
+      };
+    }
+    if (found.length > 1 && match === 'all' && advanced && rawDistance > 0) {
+      return {
+        query: builder({
+          terms: found.map((word) => newTerm(word)),
+          gaps: found.slice(1).map(() => ({ kind: 'after', distance: Math.min(rawDistance + 1, MAX_DISTANCE) })),
+        }),
+        approximate: lost || rawDistance + 1 > MAX_DISTANCE,
+      };
+    }
+    return {
+      query: { ...base, mode: Mode.simple, simpleText: found.join(' ') },
+      approximate: lost || match !== 'all' || (advanced && rawDistance > 0),
+    };
+  }
+
   /** השאילתה בתחביר של בר אילן. מילה ריקה מדולגת, יחד עם המרחק שלפניה. */
   function buildQuery(query) {
     if (query.mode === Mode.simple) return simpleWords(query.simpleText).join(' ');
@@ -589,6 +658,7 @@
     buildQuery,
     describe,
     setMode,
+    fromOtzariaSearch,
     displayQuery,
     termText,
     validate,

@@ -110,6 +110,10 @@
           ref: '',
           running: false,
           choices: null,
+          /** `Locate.rankChoices`: המקורות שמתאימים לספר שפתוח באוצריא, ראשונים. */
+          preferred: null,
+          /** שם הספר שהאיתור הגיע ממנו (לחיצה ימנית), או `null`. */
+          readerTitle: null,
           openingIndex: null,
           status: null,
           history: [],
@@ -146,6 +150,20 @@
       /** אייקוני אוצריא והסמל של בר אילן: לכל גרסת שירות, עד שלושה ניסיונות. */
       this.icons = { version: null, attempts: 0, loaded: false };
       this.actions = this._actions();
+      /**
+       * הטעינה הראשונה (הגדרות ומצב השירות) הסתיימה. אירועים שפותחים את
+       * הלשונית (לחיצה ימנית, דיאלוג החיפוש, קיצור) מגיעים מיד אחרי
+       * `plugin.boot`, ומחכים לה כדי לא לפעול על הגדרות ברירת המחדל.
+       */
+      this.ready = new Promise((resolve) => {
+        this._markReady = resolve;
+      });
+      /**
+       * החיפוש והאיתור שרצים עכשיו. בקשה מאוצריא שמגיעה בזמן הזה מחכה להם:
+       * דיאלוג החיפוש כבר נסגר בלי לחפש, ובקשה שנזרקת הייתה נעלמת.
+       */
+      this.advancedTask = null;
+      this.locateTask = null;
       // גופן האייקונים של אוצריא נטען: כל מה שעל המסך מצויר מחדש.
       if (Icons.onChange) {
         Icons.onChange(() => {
@@ -167,6 +185,14 @@
     // ---------------------------------------------------- מחזור חיים
 
     async boot(payload) {
+      try {
+        await this._boot(payload);
+      } finally {
+        this._markReady();
+      }
+    }
+
+    async _boot(payload) {
       const info = payload || {};
       const app = info.app || {};
       applyTheme(info.theme);
@@ -179,6 +205,7 @@
       this.engine.pluginVersion = this.model.pluginVersion;
       if (Array.isArray(info.permissions)) this._setPermissions(info.permissions);
       this.model.settings = await this.settings.load();
+      this.service.autoStart = this.model.settings.autoStart;
       this.model.browse = { ...this.model.browse, path: this.model.settings.browsePath };
       this.model.advanced.query = Advanced.normalize(this.model.settings.advancedQuery || Advanced.emptyQuery());
       this.model.locate.history = this.model.settings.locateHistory.slice();
@@ -220,6 +247,70 @@
       else if (view === 'help') this.openHelp(param.tab);
       else if (view === 'welcome') this.openSheet('welcome');
       else if (Settings.TABS.includes(view)) this.selectTab(view);
+    }
+
+    /** `app.command` מקיצור מקלדת: לשונית מסוימת, או הלשונית כפי שהייתה. */
+    async command(payload) {
+      const command = payload && payload.command;
+      const tab = Domain.COMMAND_TABS[command];
+      if (!tab && command !== Domain.Command.openPanel) return;
+      await this.ready;
+      if (tab) this.selectTab(tab);
+      await this.engine.showSelf();
+    }
+
+    /**
+     * `contextMenu.itemClicked`: "איתור המקום בבר אילן" מספר שפתוח באוצריא.
+     * המקום הוא של השורה שסומנה, מתוכן העניינים; בלי ההרשאה לכך — הכותרת
+     * שאוצריא שולחת, של השורה הראשונה במסך.
+     */
+    async contextMenuClicked(payload) {
+      if (!payload || payload.itemId !== Domain.LOCATE_MENU_ITEM) return;
+      await this.ready;
+      const headings = await this._readerHeadings(payload);
+      await this.locateFromReader(payload.currentBook, headings || payload.currentRef);
+    }
+
+    /** הכותרות של השורה שסומנה (`Locate.headingsAt`), או `null`. */
+    async _readerHeadings(payload) {
+      const index = payload.currentIndex;
+      if (!Number.isInteger(index) || index < 0) return null;
+      const selection = payload.selection || {};
+      const toc = await this.runtime.callSoft('library.getBookToc', {
+        bookId: payload.currentBookId || payload.currentBook,
+        ...(payload.id !== undefined ? { id: payload.id } : {}),
+        ...(payload.type ? { type: payload.type } : {}),
+        ...(payload.source ? { source: payload.source } : {}),
+        ...(selection.bookUid ? { bookUid: selection.bookUid } : {}),
+      });
+      return Locate.headingsAt(toc, index);
+    }
+
+    /** מחכה לפעולה ב-[key] (`advancedTask`, `locateTask`) עד שאין כזו. */
+    async _idle(key) {
+      while (this[key]) {
+        try {
+          await this[key];
+        } catch (_) {
+          // הכשל כבר מוצג במסך של אותה פעולה.
+        }
+      }
+    }
+
+    /** רושם את [task] ב-[key] עד שהיא מסתיימת. */
+    async _track(key, task) {
+      this[key] = task;
+      try {
+        return await task;
+      } finally {
+        if (this[key] === task) this[key] = null;
+      }
+    }
+
+    /** `search.requested`: "חיפוש בבר אילן" מסומן בדיאלוג החיפוש של אוצריא. */
+    async searchRequested(payload) {
+      await this.ready;
+      await this.searchFromOtzaria(payload && payload.request);
     }
 
     /** אוצריא מקפיאה לשונית שאינה מוצגת; הבנייה ממשיכה בשירות. */
@@ -310,7 +401,7 @@
         this._watchBuild({ attachOnly: true });
       }
       if (screen === Screen.ready && !this.model.buildActive && Domain.serviceCan(health, 'export')) {
-        this.engine.syncLibrary(status);
+        this.engine.syncLibrary(status, { enabled: this.model.settings.libraryBooks });
       }
       if (health) this._loadIcons(health);
       if (screen === Screen.ready && Domain.serviceCan(health, 'browse')) {
@@ -819,9 +910,14 @@
       this.view.focusPage(this.model);
     }
 
-    async runAdvanced() {
+    runAdvanced() {
+      if (this.model.advanced.running) return this.advancedTask || Promise.resolve();
+      return this._track('advancedTask', this._runAdvanced());
+    }
+
+    async _runAdvanced() {
       const state = this.model.advanced;
-      if (state.running || !Domain.serviceCan(this.model.health, 'advancedSearch')) return;
+      if (!Domain.serviceCan(this.model.health, 'advancedSearch')) return;
       const query = Advanced.withAvailableScope(state.query, Domain.catalogReady(this.model.status));
       const problem = Advanced.validate(query);
       state.problem = problem;
@@ -853,6 +949,42 @@
         state.running = false;
         this._renderPage();
         if (state.status) this.view.announce(state.status.text);
+      }
+    }
+
+    /**
+     * חיפוש מדיאלוג החיפוש של אוצריא: המילים נכנסות ללשונית "חיפוש בטקסט"
+     * ורצות מיד, בתחום ובאפשרויות שכבר בחורים בה. כשמשהו חסר (שירות,
+     * הרשאה) הלשונית מראה אותו, והמילים כבר בשדה.
+     */
+    async searchFromOtzaria(request) {
+      this.selectTab('text');
+      const state = this.model.advanced;
+      await this._idle('advancedTask');
+      const mapped = Advanced.fromOtzariaSearch(state.query, request);
+      if (!mapped) {
+        state.status = { kind: 'error', text: t('בחיפוש שהגיע מאוצריא אין מילים בעברית.') };
+        this._renderPage();
+        this.view.announce(state.status.text);
+        return;
+      }
+      state.problem = null;
+      this._editAdvanced(mapped.query);
+      // שדה שרק הערך שלו השתנה אינו נבנה מחדש (refreshPage משווה מבנה).
+      this.view.setInputValue('adv-simple', mapped.query.simpleText);
+      mapped.query.terms.forEach((term, index) => this.view.setInputValue('adv-word-' + index + '-0', term.words[0]));
+      if (Domain.SETUP_SCREENS.has(this.model.screen)) return;
+      this.log.info('חיפוש מדיאלוג החיפוש של אוצריא' + (mapped.approximate ? ' (בקירוב)' : ''));
+      await this.runAdvanced();
+      if (mapped.approximate && state.status && state.status.kind === 'success') {
+        state.status = {
+          ...state.status,
+          text:
+            state.status.text +
+            ' ' +
+            t('לא כל אפשרויות החיפוש של אוצריא קיימות בבר אילן, ולכן החיפוש כאן קרוב לזה שנשלח ולא זהה לו.'),
+        };
+        this._renderPage();
       }
     }
 
@@ -918,6 +1050,8 @@
       const state = this.model.locate;
       state.text = text;
       state.choices = null;
+      state.preferred = null;
+      state.readerTitle = null;
       state.status = null;
       this.view.refreshPage(this.model, this.actions);
       this.view.setInputValue('locate-input', text);
@@ -936,36 +1070,118 @@
         this.view.announce(problem);
         return;
       }
-      const ref = Locate.normalize(state.text);
-      Object.assign(state, { text: ref, ref, running: true, openingIndex: null, status: null, choices: null });
+      await this._track('locateTask', this._locateRef(Locate.normalize(state.text)));
+    }
+
+    /**
+     * "איתור המקום בבר אילן" מספר שפתוח באוצריא: ההפניה המדויקת, ואם בר
+     * אילן אינו מכיר אותה — כללית יותר (`Locate.fromReader`). מקור יחיד
+     * שמתאים לספר נפתח מיד; כמה — לבחירה, המתאימים ראשונים.
+     */
+    async locateFromReader(book, place) {
+      this.selectTab('locate');
+      const state = this.model.locate;
+      await this._idle('locateTask');
+      const reader = Locate.fromReader(book, place);
+      if (!reader || !reader.refs.length) {
+        const hebrew = Boolean(reader && /[א-ת]/.test(reader.title));
+        this._fillLocate(hebrew ? Locate.startFrom(reader.title) : '');
+        state.status = {
+          kind: 'info',
+          text: !reader
+            ? t('שם הספר לא התקבל מאוצריא. כותבים כאן שם ספר ומקום בו.')
+            : hebrew
+              ? t('המקום בספר לא התקבל מאוצריא. משלימים כאן את המקום, למשל פרק או סימן.')
+              : t('לספר הזה אין שם בעברית, ובבר אילן מחפשים לפי שם בעברית. כותבים כאן שם ספר ומקום בו.'),
+        };
+        this._renderPage();
+        this.view.announce(state.status.text);
+        return;
+      }
+      if (Domain.SETUP_SCREENS.has(this.model.screen) || !Domain.serviceCan(this.model.health, 'locate')) {
+        // הלשונית מראה מה חסר; המקום כבר בשדה, לכשיתוקן.
+        this._fillLocate(reader.refs[0]);
+        return;
+      }
+      await this._track('locateTask', this._locateLadder(reader));
+    }
+
+    async _locateLadder(reader) {
+      for (let i = 0; i < reader.refs.length; i++) {
+        const last = i === reader.refs.length - 1;
+        const outcome = await this._locateRef(reader.refs[i], { reader, last });
+        if (outcome !== 'notFound') return;
+      }
+    }
+
+    /**
+     * מאתר [ref] ומחזיר 'opened' | 'choices' | 'notFound' | 'failed'. עם
+     * [reader] (`Locate.fromReader`) המקורות מדורגים לפי הספר, ו"לא נמצא"
+     * שאינו [last] אינו מוצג: ההפניה הכללית הבאה מנסה במקומו.
+     */
+    async _locateRef(ref, options) {
+      const opts = options || {};
+      const reader = opts.reader || null;
+      const state = this.model.locate;
+      Object.assign(state, {
+        text: ref,
+        ref,
+        running: true,
+        openingIndex: null,
+        status: null,
+        choices: null,
+        preferred: null,
+        readerTitle: reader ? reader.title : null,
+      });
       this._renderPage();
-      this.log.info('איתור מקום: ' + ref);
+      if (reader) this.view.setInputValue('locate-input', ref);
+      this.log.info('איתור מקום: ' + ref + (reader ? ' (מספר שפתוח באוצריא)' : ''));
+      let outcome = 'failed';
+      let best = null;
       try {
         const result = await this.service.locate(ref);
         if (result && result.opened === false && Array.isArray(result.choices)) {
           state.choices = result.choices;
+          if (reader) {
+            const ranked = Locate.rankChoices(result.choices, reader.title, ref);
+            state.preferred = ranked.preferred;
+            best = ranked.best;
+          }
+          outcome = 'choices';
           this.log.info('איתור מקום: ' + result.choices.length + ' מקורות לבחירה');
         } else {
           this._located(ref, result);
+          outcome = 'opened';
         }
       } catch (error) {
-        state.status = { kind: 'error', text: Domain.errorMessage(error) };
-      } finally {
-        state.running = false;
-        this._renderPage();
-        if (state.choices) {
-          this.view.announce(t('נמצאו {count} מקורות. בוחרים את המקור לפתיחה.', {
-            count: Domain.formatCount(state.choices.length),
-          }));
-          this.view.focusInSheet('locate-choice-0');
-        } else if (state.status) {
-          this.view.announce(state.status.text);
+        outcome = error && error.code === 'referenceNotFound' ? 'notFound' : 'failed';
+        if (outcome === 'failed' || !reader || opts.last) {
+          state.status = { kind: 'error', text: Domain.errorMessage(error) };
         }
       }
+      state.running = false;
+      if (outcome === 'notFound' && reader && !opts.last) return outcome;
+      this._renderPage();
+      if (best !== null) {
+        await this._openLocateChoice(best);
+      } else if (state.choices) {
+        this.view.announce(t('נמצאו {count} מקורות. בוחרים את המקור לפתיחה.', {
+          count: Domain.formatCount(state.choices.length),
+        }));
+        this.view.focusInSheet('locate-choice-' + Locate.displayOrder(state.choices.length, state.preferred)[0]);
+      } else if (state.status) {
+        this.view.announce(state.status.text);
+      }
+      return outcome;
     }
 
     /** בחירה מהמקורות שבר אילן מצא. */
-    async openLocateChoice(index) {
+    openLocateChoice(index) {
+      if (this.model.locate.running) return Promise.resolve();
+      return this._track('locateTask', this._openLocateChoice(index));
+    }
+
+    async _openLocateChoice(index) {
       const state = this.model.locate;
       if (state.running || !state.choices || !state.choices[index]) return;
       state.running = true;
@@ -979,6 +1195,9 @@
         // דבר לא נפתח.
         if (result && result.opened === false && Array.isArray(result.choices)) {
           state.choices = result.choices;
+          state.preferred = state.readerTitle
+            ? Locate.rankChoices(result.choices, state.readerTitle, state.ref).preferred
+            : null;
           state.status = { kind: 'info', text: t('בר אילן ענה הפעם ברשימה אחרת. בוחרים שוב את המקור.') };
           refreshed = true;
         } else {
@@ -991,7 +1210,9 @@
         state.openingIndex = null;
         this._renderPage();
         if (state.status) this.view.announce(state.status.text);
-        if (refreshed) this.view.focusInSheet('locate-choice-0');
+        if (refreshed) {
+          this.view.focusInSheet('locate-choice-' + Locate.displayOrder(state.choices.length, state.preferred)[0]);
+        }
       }
     }
 
@@ -1066,7 +1287,12 @@
     async setSetting(name, value) {
       try {
         this.model.settings = await this.settings.set(name, value);
+        this.service.autoStart = this.model.settings.autoStart;
         this.log.info('הגדרה: ' + name + ' = ' + JSON.stringify(value));
+        // כבוי: הרשימה נמחקת מאוצריא; דלוק: נשלחת שוב.
+        if (name === 'libraryBooks' && Domain.serviceCan(this.model.health, 'export') && !this.model.buildActive) {
+          this.engine.syncLibrary(this.model.status, { enabled: this.model.settings.libraryBooks });
+        }
       } catch (error) {
         this.log.warn('שמירת ההגדרה ' + name + ' נכשלה', error);
         await this.runtime.notify.error(t('ההגדרה לא נשמרה. אפשר לנסות שוב.'));

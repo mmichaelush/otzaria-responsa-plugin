@@ -49,6 +49,16 @@
       /** ה-`/health` האחרון: היכולות של השירות שבמחשב. */
       this.health = null;
       this.sleep = opts.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+      /**
+       * "הפעלת בר אילן כשהוא סגור" (הגדרות). רק `false` נשלח: בלעדיו השירות
+       * מפעיל, וכך גם שירות ישן שאינו מכיר את השדה.
+       */
+      this.autoStart = true;
+    }
+
+    /** [body] של פעולה שעשויה להפעיל את בר אילן, עם ההגדרה. */
+    _launching(body) {
+      return this.autoStart ? body : { ...body, autoStart: false };
     }
 
     /**
@@ -120,12 +130,12 @@
 
     /** פתיחה יכולה לכלול הפעלה של בר אילן, ולכן החסם הארוך ביותר. */
     open(key) {
-      return this.request('POST', '/book/open', { key }, MAX_STREAM_MS);
+      return this.request('POST', '/book/open', this._launching({ key }), MAX_STREAM_MS);
     }
 
     /** כמו פתיחה: עשוי להפעיל את בר אילן. */
     searchText(text) {
-      return this.request('POST', '/text/search', { q: text }, MAX_STREAM_MS);
+      return this.request('POST', '/text/search', this._launching({ q: text }), MAX_STREAM_MS);
     }
 
     /**
@@ -133,7 +143,7 @@
      * אילן, `options`, `scope`). בחירת קטגוריות בבר אילן מאריכה אותו.
      */
     advancedSearch(body) {
-      return this.request('POST', '/text/search', body, MAX_STREAM_MS);
+      return this.request('POST', '/text/search', this._launching(body), MAX_STREAM_MS);
     }
 
     /**
@@ -142,7 +152,7 @@
      */
     locate(ref, index) {
       const body = typeof index === 'number' ? { ref, index } : { ref };
-      return this.request('POST', '/reference/open', body, MAX_STREAM_MS);
+      return this.request('POST', '/reference/open', this._launching(body), MAX_STREAM_MS);
     }
 
     /** "פתיחת בר אילן": מפעיל אותו אם צריך ומביא אותו לחזית. */
