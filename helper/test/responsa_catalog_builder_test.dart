@@ -161,6 +161,27 @@ void main() {
       expect(rows.last.anchor, 'כלל א');
     });
 
+    // ערכים מהעץ של CD25. הבדיקה המלאה מול העץ כולו: live_prune_check_test.
+    test('הסריקה אינה נכנסת לפרק, לפסוק ולכלל, אבל כן לקבוצה ולקטגוריה', () {
+      expect(
+        ResponsaCatalogBuilder.mayContainBooks(302579713),
+        isFalse,
+      ); // פרק א
+      expect(
+        ResponsaCatalogBuilder.mayContainBooks(319488001),
+        isFalse,
+      ); // פסוק א
+      expect(
+        ResponsaCatalogBuilder.mayContainBooks(319356929),
+        isFalse,
+      ); // *כלל א
+      // `הלכות גיטין` מכיל את הספר `סדר הגט`.
+      expect(ResponsaCatalogBuilder.mayContainBooks(537329668), isTrue);
+      // `משנה` נראה כמקטע בשמו, אבל הוא קטגוריה של מסכתות.
+      expect(ResponsaCatalogBuilder.mayContainBooks(131073), isTrue);
+      expect(ResponsaCatalogBuilder.mayContainBooks(262912), isTrue); // בראשית
+    });
+
     test('`*` בראש השם אינו מבטל את זיהוי המקטע', () {
       expect(ResponsaCatalogBuilder.isSection('*סימן רצז', 0), isTrue);
       expect(ResponsaCatalogBuilder.isSection('סימן רצז', 0), isTrue);

@@ -137,6 +137,18 @@ class ResponsaCatalogBuilder {
   static String _withoutNote(String name) =>
       name.startsWith('*') ? name.substring(1) : name;
 
+  /// מקטע במישור 0x1000 (פרק, סימן, פסוק, דף) מכיל רק מקטעים, ואין תחתיו
+  /// ספר. הסריקה אינה נכנסת אליו, ולכן קוראת כ-37% מהצמתים (CD25: 110 שניות
+  /// במקום כשש דקות).
+  /// נבדק על העצים המלאים של CD25 ו-CD29 (`live_prune_check_test.dart`):
+  /// אותו קטלוג בדיוק, באותו סדר ובאותן הפניות. מישור 0x2000 (`הלכות
+  /// גיטין`) כן מכיל ספרים (`סדר הגט`), ולכן נסרק; גם בחירה לפי השם
+  /// (`isSection`) הייתה מפילה ספרים, כי `משנה` הוא גם קטגוריה.
+  static bool mayContainBooks(int param) =>
+      ((param >> 16) & _leafSectionPlane) == 0;
+
+  static const int _leafSectionPlane = 0x1000;
+
   static bool isSection(String name, int param) =>
       ((param >> 16) & _sectionPlaneBits) != 0 ||
       _sectionName.hasMatch(_withoutNote(name));

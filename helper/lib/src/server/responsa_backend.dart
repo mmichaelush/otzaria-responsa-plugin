@@ -7,6 +7,9 @@ import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 
 /// כל מה שהשירות צריך מבר אילן. מופרד מהשירות כדי שהלוגיקה שלו (חיפוש,
 /// תיאום בנייה, HTTP) תיבדק בלי Windows ובלי התוכנה.
+///
+/// בפתיחה, באיתור ובחיפוש, `autoStart: false` = לא להפעיל את בר אילן כשהוא
+/// סגור (הגדרת המשתמש בתוסף), אלא להיכשל ב-`responsaNotRunning`.
 abstract interface class ResponsaBackend {
   /// מהיר; אינו מפעיל את בר אילן.
   Future<ResponsaStatus> status();
@@ -20,6 +23,7 @@ abstract interface class ResponsaBackend {
     List<String> references, {
     String? expectedTitle,
     String? installPath,
+    bool autoStart = true,
   });
 
   /// מקום מדויק (`בראשית ב ג`). בלי [index] ועם כמה תוצאות — `choices`.
@@ -27,6 +31,7 @@ abstract interface class ResponsaBackend {
     String reference, {
     int? index,
     String? installPath,
+    bool autoStart = true,
   });
 
   /// מפעיל את בר אילן אם צריך. [query] כבר מנוקה (`ResponsaQuery`, או
@@ -35,6 +40,7 @@ abstract interface class ResponsaBackend {
     String query, {
     String? installPath,
     ResponsaSearchSetup setup = ResponsaSearchSetup.none,
+    bool autoStart = true,
   });
 
   /// מפעיל את בר אילן אם צריך ומביא אותו לחזית.
@@ -66,10 +72,12 @@ class NativeResponsaBackend implements ResponsaBackend {
     List<String> references, {
     String? expectedTitle,
     String? installPath,
+    bool autoStart = true,
   }) => _controller.openBook(
     references,
     expectedTitle: expectedTitle,
     installPath: installPath,
+    allowLaunch: autoStart,
   );
 
   @override
@@ -77,14 +85,26 @@ class NativeResponsaBackend implements ResponsaBackend {
     String reference, {
     int? index,
     String? installPath,
-  }) => _controller.locate(reference, index: index, installPath: installPath);
+    bool autoStart = true,
+  }) => _controller.locate(
+    reference,
+    index: index,
+    installPath: installPath,
+    allowLaunch: autoStart,
+  );
 
   @override
   Future<ResponsaSearchReport> searchText(
     String query, {
     String? installPath,
     ResponsaSearchSetup setup = ResponsaSearchSetup.none,
-  }) => _controller.searchText(query, installPath: installPath, setup: setup);
+    bool autoStart = true,
+  }) => _controller.searchText(
+    query,
+    installPath: installPath,
+    setup: setup,
+    allowLaunch: autoStart,
+  );
 
   @override
   Future<ResponsaShowReport> show({String? installPath}) =>

@@ -75,7 +75,7 @@ String writeCatalog(
   Directory directory, {
   List<FixtureBook>? books,
   String installPath = r'C:\ResponsaCD25',
-  int nodeCount = 1251889,
+  int nodeCount = 465701,
 }) {
   final file = p.join(directory.path, 'catalog.sqlite');
   final db = sqlite3.open(file);
@@ -111,7 +111,7 @@ String writeCatalog(
       'install_path': installPath,
       'catalog_schema_version': '2',
       'catalog_build_time': '2026-09-27T03:03:35',
-      'catalog_node_count': '$nodeCount',
+      'catalog_scanned_nodes': '$nodeCount',
     }.entries) {
       db.execute('INSERT INTO db_meta(key, value) VALUES(?, ?)', [
         entry.key,

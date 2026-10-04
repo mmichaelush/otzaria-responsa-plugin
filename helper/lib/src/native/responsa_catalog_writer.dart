@@ -146,7 +146,7 @@ class ResponsaCatalogWriter {
         ...fingerprint.toMeta(),
         'catalog_schema_version': '$responsaCatalogSchemaVersion',
         'catalog_build_time': DateTime.now().toIso8601String(),
-        'catalog_node_count': '${nodes.length}',
+        'catalog_scanned_nodes': '${nodes.length}',
         'bibliography_entries': '${bibliography.entryCount}',
         'bibliography_matched': '$described',
         'author_table_entries': '${authors.authorCount}',

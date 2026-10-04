@@ -965,7 +965,7 @@ void main() {
       final firstLine = await second.first;
       expect(firstLine['type'], 'progress');
       expect(firstLine['scanned'], 5000);
-      expect(firstLine['expected'], 1251889);
+      expect(firstLine['expected'], 465701);
       expect(backend.buildCalls, 1);
       await backend.buildEvents!.close();
       await firstDone;
@@ -1250,6 +1250,57 @@ void main() {
       final result = await call('GET', '/otzaria/icons');
       expect(result.status, 404);
       expect(errorCode(result.json), 'notFound');
+    });
+  });
+
+  group('הפעלת בר אילן (autoStart)', () {
+    setUp(() => start());
+
+    const requests = [
+      ('/book/open', {'key': '1524'}),
+      ('/text/search', {'q': 'נר שבת'}),
+      ('/reference/open', {'ref': 'בראשית ב ג'}),
+    ];
+
+    test('health מכריז על היכולת', () async {
+      final json = (await call('GET', '/health')).json as Map;
+      expect(json['capabilities'], contains('autoStart'));
+    });
+
+    test('בלי השדה, או null (מפתח שעוד לא נשמר באוצריא): מפעיל', () async {
+      for (final (path, body) in requests) {
+        expect((await call('POST', path, body: body)).status, 200);
+        expect(
+          (await call('POST', path, body: {...body, 'autoStart': null})).status,
+          200,
+        );
+      }
+      expect(backend.autoStartCalls, List.filled(6, true));
+    });
+
+    test('false עובר לבר אילן בכל שלוש הפעולות', () async {
+      for (final (path, body) in requests) {
+        final result = await call(
+          'POST',
+          path,
+          body: {...body, 'autoStart': false},
+        );
+        expect(result.status, 200, reason: path);
+      }
+      expect(backend.autoStartCalls, [false, false, false]);
+    });
+
+    test('ערך שאינו בוליאני: badRequest, ובר אילן לא נוגע', () async {
+      for (final (path, body) in requests) {
+        final result = await call(
+          'POST',
+          path,
+          body: {...body, 'autoStart': 'no'},
+        );
+        expect(result.status, 400, reason: path);
+        expect(errorCode(result.json), 'badRequest');
+      }
+      expect(backend.autoStartCalls, isEmpty);
     });
   });
 

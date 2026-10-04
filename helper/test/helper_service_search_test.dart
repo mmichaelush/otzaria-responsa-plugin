@@ -197,10 +197,13 @@ void main() {
     test('לא עלה: notRunning, עם ההודעה של הבקר', () async {
       final error = await failWith(
         ResponsaFailure.responsaNotRunning,
-        message: 'הפעלת בר אילן מתוך אוצריא כבויה בהגדרות.',
+        message: 'בר אילן סגור, והפעלתו מתוך אוצריא כבויה בהגדרות התוסף.',
       );
       expect(error.code, 'notRunning');
-      expect(error.message, 'הפעלת בר אילן מתוך אוצריא כבויה בהגדרות.');
+      expect(
+        error.message,
+        'בר אילן סגור, והפעלתו מתוך אוצריא כבויה בהגדרות התוסף.',
+      );
     });
 
     test('לא מותקן: notInstalled', () async {

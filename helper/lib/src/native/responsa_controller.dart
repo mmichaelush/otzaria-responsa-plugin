@@ -192,6 +192,7 @@ class ResponsaController {
     List<String> references, {
     String? expectedTitle,
     String? installPath,
+    bool? allowLaunch,
   }) async {
     if (!Platform.isWindows) {
       return const ResponsaOpenReport(
@@ -210,7 +211,8 @@ class ResponsaController {
     }
     _busy = true;
     try {
-      if (await _launchFailure(installPath) case final message?) {
+      if (await _launchFailure(installPath, allowLaunch: allowLaunch)
+          case final message?) {
         return ResponsaOpenReport(
           ok: false,
           failure: ResponsaFailure.responsaNotRunning,
@@ -241,6 +243,7 @@ class ResponsaController {
     String reference, {
     int? index,
     String? installPath,
+    bool? allowLaunch,
     bool listOnly = false,
   }) async {
     if (!Platform.isWindows) {
@@ -259,7 +262,8 @@ class ResponsaController {
     }
     _busy = true;
     try {
-      if (await _launchFailure(installPath) case final message?) {
+      if (await _launchFailure(installPath, allowLaunch: allowLaunch)
+          case final message?) {
         return ResponsaOpenReport(
           ok: false,
           failure: ResponsaFailure.responsaNotRunning,
@@ -297,6 +301,7 @@ class ResponsaController {
     String query, {
     String? installPath,
     ResponsaSearchSetup setup = ResponsaSearchSetup.none,
+    bool? allowLaunch,
   }) async {
     if (!Platform.isWindows) {
       return const ResponsaSearchReport(
@@ -314,7 +319,8 @@ class ResponsaController {
     }
     _busy = true;
     try {
-      if (await _launchFailure(installPath) case final message?) {
+      if (await _launchFailure(installPath, allowLaunch: allowLaunch)
+          case final message?) {
         return ResponsaSearchReport(
           ok: false,
           failure: ResponsaFailure.responsaNotRunning,
@@ -400,6 +406,7 @@ class ResponsaController {
 
   /// `null` כשהכול תקין; אחרת ההודעה למשתמש. הכשל הוא `responsaNotRunning`
   /// ולא `timeout`, שהיה מציג בטעות "התוכנה אינה מגיבה".
+  /// [allowLaunch] מגיע מהבקשה (הגדרת "הפעלת בר אילן" בתוסף), וחסר = [autoStart].
   Future<String?> _launchFailure(
     String? installPath, {
     bool? allowLaunch,

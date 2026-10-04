@@ -76,11 +76,18 @@
 { "ok": true, "service": "otzaria-responsa", "apiVersion": 1,
   "serverVersion": "0.5.0",
   "capabilities": ["catalog", "open", "icon", "searchText", "export", "browse", "otzariaIcons",
-                   "advancedSearch", "showResponsa", "notify", "locate"],
+                   "advancedSearch", "showResponsa", "notify", "locate", "autoStart"],
   "sessionId": 1 }
 ```
 
 **`capabilities`:** מאפשר לתוסף ישן לעבוד מול שירות חדש, ולהפך. יכולת שלא הוצהרה אינה נקראת.
+
+**`autoStart`** (יכולת `autoStart`, מ-0.5.0): שדה בגוף של `/book/open`, `/text/search` ו-`/reference/open`.
+- **`false`:** בר אילן סגור אינו מופעל. הפעולה נכשלת ב-`notRunning` (409), וההודעה אומרת לפתוח אותו.
+- **חסר או `null`:** מפעיל, כמו לפני 0.5.0. אוצריא שולחת את הערך מ-`$storage` (`responsa_auto_start`), והמפתח חסר עד שהמשתמש משנה את ההגדרה.
+- **כל ערך אחר:** `badRequest`, לפני כל פעולה בבר אילן.
+- **למה בכל בקשה ולא הגדרה בשירות:** הלחיצה הימנית וחיפוש הספרייה פונים לשירות בלי התוסף, והשירות אינו שומר הגדרות. ההגדרה יושבת באחסון של התוסף באוצריא, ומשם מגיעה לכל בקשה.
+- `/responsa/show` ("פתיחת בר אילן") מפעיל תמיד: המשתמש ביקש את זה במפורש.
 
 **`apiVersion` שונה מזה של התוסף:**
 - **אם הוא נמוך יותר,** התוסף מציג "צריך לעדכן את השירות".
@@ -119,15 +126,16 @@
 
 ```
 {"type":"start"}
-{"type":"progress","stage":"scanning","scanned":412000,"expected":1251889,"sectionsDone":7,"sectionsTotal":20}
+{"type":"progress","stage":"scanning","scanned":152000,"expected":465701,"sectionsDone":7,"sectionsTotal":20}
 {"type":"heartbeat"}
-{"type":"progress","stage":"classifying","scanned":1251889,"sectionsDone":0,"sectionsTotal":0}
-{"type":"done","books":8402,"scanned":1251889}
+{"type":"progress","stage":"classifying","scanned":465701,"sectionsDone":0,"sectionsTotal":0}
+{"type":"done","books":8402,"scanned":465701}
 ```
 
 - **כשל:** שורה `{"type":"error","code":"…","message":"…"}`, ואחריה הזרם נסגר.
 - **`stage`:** אחד מ-`starting`, `scanning`, `classifying`.
-- **`expected`:** מספר הצמתים מהבנייה הקודמת. בבנייה ראשונה הוא נלקח מטבלת המהדורות המוכרות (25 ו-29). במהדורה אחרת הוא חסר, ויש רק `sectionsDone`/`sectionsTotal`.
+- **`scanned`:** צמתים בעץ של בר אילן שנקראו (ספרים, קטגוריות ומקטעים), ולא ספרים. הסריקה אינה נכנסת לפרק, לסימן ולפסוק (`ResponsaCatalogBuilder.mayContainBooks`), ולכן ב-CD25 היא קוראת 465,701 מתוך 1,251,889 צמתים.
+- **`expected`:** מספר הצמתים מהבנייה הקודמת (`catalog_scanned_nodes`). בבנייה ראשונה, או אחרי קטלוג של 0.4 שסרק את העץ כולו, הוא נלקח מטבלת המהדורות המוכרות (25: 465,701; 29: 586,947). במהדורה אחרת הוא חסר, ויש רק `sectionsDone`/`sectionsTotal`.
 
 ### `POST /catalog/cancel`
 `{}` → `{"ok": true, "wasRunning": true}`
@@ -374,5 +382,5 @@
 - **תוספת לא שוברת:** שדה חדש או נקודת קצה חדשה נכנסים כ-`capability`, בלי להעלות את `apiVersion`.
   - 0.3.0: `browse` (`/catalog/browse`, ו-`path` ב-`/catalog/search`), `otzariaIcons` (`/otzaria/icons`). תוסף 0.3.0 מול שירות ישן מסתיר את העיון ומציג הערה "כדאי להוריד את הגרסה החדשה".
   - 0.4.0: `advancedSearch` (`advanced`, `options`, `scope` ב-`/text/search`), `showResponsa` (`/responsa/show`). מול שירות ישן הדיאלוג מציג "כדאי להוריד את הגרסה החדשה", וכפתור "פתיחת בר אילן" אינו מוצג.
-  - 0.5.0: `notify` (`notify: true` ב-`/text/search` וב-`/book/open`; `message` ו-`severity` ברמה העליונה של כל שגיאה), `locate` (`/reference/open`), `key` מספרי ב-`/book/open`. קטלוג בסכימה 7 (ספר בתוך ספר: ספר יחיד תחת ספר אחר, כמו "גינת ורדים כללים"), שמסמן קטלוג קודם כישן. מול שירות ישן הלשונית "איתור מקום" מציגה "כדאי להוריד את הגרסה החדשה".
+  - 0.5.0: `notify` (`notify: true` ב-`/text/search` וב-`/book/open`; `message` ו-`severity` ברמה העליונה של כל שגיאה), `locate` (`/reference/open`), `autoStart` (§4), `key` מספרי ב-`/book/open`. קטלוג בסכימה 7 (ספר בתוך ספר: ספר יחיד תחת ספר אחר, כמו "גינת ורדים כללים"), שמסמן קטלוג קודם כישן. מול שירות ישן הלשונית "איתור מקום" מציגה "כדאי להוריד את הגרסה החדשה".
 - **שדות לא מוכרים:** התוסף מתעלם משדות שאינו מכיר.

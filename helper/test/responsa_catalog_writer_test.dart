@@ -6,6 +6,7 @@ import 'package:responsa_helper/src/native/responsa_catalog_builder.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_writer.dart';
 import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_tree_reader.dart';
+import 'package:responsa_helper/src/catalog/responsa_catalog_repository.dart';
 import 'package:responsa_helper/src/catalog/responsa_catalog_schema.dart';
 import 'package:responsa_helper/src/text/responsa_structure.dart';
 import 'package:path/path.dart' as p;
@@ -142,8 +143,44 @@ void main() {
       };
       expect(meta['catalog_schema_version'], '$responsaCatalogSchemaVersion');
       expect(meta['install_path'], fingerprint.installPath);
+      // מפתח ישן (`catalog_node_count`, העץ כולו) אינו נכתב: אינו מכנה טוב.
+      expect(meta.containsKey('catalog_node_count'), isFalse);
     } finally {
       db.close();
     }
   });
+
+  // המכנה של ההתקדמות בבנייה הבאה: מה שהסריקה קראה הפעם.
+  test('מספר הצמתים שנסרקו חוזר מהקטלוג', () async {
+    final nodes = tree(['אבני נזר', 'חתם סופר']);
+    ResponsaCatalogWriter.build(
+      nodes: nodes,
+      fingerprint: fingerprint,
+      targetPath: target,
+    );
+    final repository = ResponsaCatalogRepository(target);
+    expect((await repository.info()).nodeCount, nodes.length);
+  });
+
+  test(
+    'קטלוג של 0.4 (רק `catalog_node_count`): אין מכנה מהבנייה הקודמת',
+    () async {
+      ResponsaCatalogWriter.build(
+        nodes: tree(['אבני נזר']),
+        fingerprint: fingerprint,
+        targetPath: target,
+      );
+      final db = sqlite3.sqlite3.open(target);
+      try {
+        db.execute("DELETE FROM db_meta WHERE key = 'catalog_scanned_nodes'");
+        db.execute(
+          "INSERT INTO db_meta(key, value) VALUES('catalog_node_count', '1251889')",
+        );
+      } finally {
+        db.close();
+      }
+      final repository = ResponsaCatalogRepository(target);
+      expect((await repository.info()).nodeCount, isNull);
+    },
+  );
 }

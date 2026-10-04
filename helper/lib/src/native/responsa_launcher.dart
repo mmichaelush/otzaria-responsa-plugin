@@ -80,7 +80,9 @@ class ResponsaLauncher {
       return ResponsaLaunchResult(
         running: false,
         installPath: target.installPath,
-        message: 'הפעלת בר אילן מתוך אוצריא כבויה בהגדרות.',
+        message:
+            'בר אילן סגור, והפעלתו מתוך אוצריא כבויה בהגדרות התוסף. '
+            'יש לפתוח את בר אילן ולנסות שוב.',
       );
     }
 

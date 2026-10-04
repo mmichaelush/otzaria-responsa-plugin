@@ -47,6 +47,7 @@ class HelperService {
     'showResponsa',
     'notify',
     'locate',
+    'autoStart',
   ];
 
   static const int maxPageSize = 200;
@@ -290,6 +291,7 @@ class HelperService {
     };
     if (key.isEmpty) throw const ApiError.badRequest('חסר מפתח ספר.');
     final notify = _bool(body, 'notify') ?? false;
+    final autoStart = _bool(body, 'autoStart') ?? true;
     return _exclusive(_Automation.open, () async {
       final index = await _requireIndex();
       final book = index.byKey(key);
@@ -301,6 +303,7 @@ class HelperService {
         references,
         expectedTitle: book.title,
         installPath: await store.repository.sourceInstallPath(),
+        autoStart: autoStart,
       );
       if (report.ok) {
         logLine(
@@ -344,6 +347,7 @@ class HelperService {
   Future<Map<String, Object?>> searchText(Map<String, Object?> body) async {
     final advanced = _bool(body, 'advanced') ?? false;
     final notify = _bool(body, 'notify') ?? false;
+    final autoStart = _bool(body, 'autoStart') ?? true;
     final String text;
     var truncated = false;
     var setup = ResponsaSearchSetup.none;
@@ -377,6 +381,7 @@ class HelperService {
         text,
         installPath: await store.repository.sourceInstallPath(),
         setup: setup,
+        autoStart: autoStart,
       );
       final outcome = report.outcome;
       if (report.ok &&
@@ -520,11 +525,13 @@ class HelperService {
     }
     final index = rawIndex as int?;
     final notify = _bool(body, 'notify') ?? false;
+    final autoStart = _bool(body, 'autoStart') ?? true;
     return _exclusive(_Automation.open, () async {
       final report = await _backend.locate(
         reference,
         index: index,
         installPath: await store.repository.sourceInstallPath(),
+        autoStart: autoStart,
       );
       if (report.ok && report.choices.isNotEmpty) {
         logLine('locate "$reference": ${report.choices.length} choices');

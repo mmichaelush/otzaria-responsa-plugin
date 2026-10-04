@@ -9,6 +9,7 @@ import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_author_table_reader.dart';
 import 'package:responsa_helper/src/native/responsa_automation.dart';
 import 'package:responsa_helper/src/native/responsa_bibliography_reader.dart';
+import 'package:responsa_helper/src/native/responsa_catalog_builder.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_writer.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
 import 'package:responsa_helper/src/native/responsa_instance.dart';
@@ -308,6 +309,7 @@ class ResponsaCatalogBuildService {
       final nodes = ResponsaTreeReader.walk(
         pid: instance.pid,
         treeHandle: tree,
+        descendInto: ResponsaCatalogBuilder.mayContainBooks,
         progressEvery: 2000,
         shouldStop: cancelled,
         onProgress: (count) {

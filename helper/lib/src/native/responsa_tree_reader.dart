@@ -65,9 +65,13 @@ class ResponsaTreeReader {
 
   /// זורק כשהודעה לא נענתה: היא נראית כמו "אין עוד ילדים", וסריקה קטועה
   /// הייתה נשמרת כקטלוג שלם ושוברת סימניות. ביטול אינו כשל.
+  ///
+  /// [descendInto] — האם לקרוא את צאצאי הצומת (לפי ה-`param` שלו). צומת
+  /// שאין נכנסים אליו נרשם בכל זאת, עם מספר הילדים שלו. חסר = הכול.
   static List<ResponsaTreeNode> walk({
     required int pid,
     required int treeHandle,
+    bool Function(int param)? descendInto,
     void Function(int scanned)? onProgress,
     void Function(int done, int total)? onSection,
     bool Function()? shouldStop,
@@ -84,6 +88,7 @@ class ResponsaTreeReader {
     }
     final walk = _Walk(
       session: session,
+      descendInto: descendInto,
       onProgress: onProgress,
       shouldStop: shouldStop,
       progressEvery: progressEvery,
@@ -375,6 +380,7 @@ class ResponsaTreeSession {
 /// מצב סריקה אחת: הצמתים שנאספו והקולבקים.
 class _Walk {
   final ResponsaTreeSession session;
+  final bool Function(int param)? descendInto;
   final void Function(int)? onProgress;
   final bool Function()? shouldStop;
   final int progressEvery;
@@ -387,6 +393,7 @@ class _Walk {
 
   _Walk({
     required this.session,
+    required this.descendInto,
     required this.onProgress,
     required this.shouldStop,
     required this.progressEvery,
@@ -414,6 +421,8 @@ class _Walk {
       ),
     );
     if (read.children == 0) return true;
+    // לא הורחב, ולכן גם אין מה למחוק.
+    if (!(descendInto?.call(read.param) ?? true)) return true;
 
     // חובה להרחיב לפני קריאת הילדים — העץ נטען עצלנית.
     var completed = true;

@@ -155,7 +155,9 @@ class ResponsaCatalogRepository {
         schemaVersion: int.tryParse(meta['catalog_schema_version'] ?? ''),
         installPath: meta['install_path'],
         builtAt: meta['catalog_build_time'],
-        nodeCount: int.tryParse(meta['catalog_node_count'] ?? ''),
+        // `catalog_node_count` (עד 0.4) ספר את העץ כולו, לפני שהסריקה דילגה
+        // על מקטעים, ולכן אינו מכנה טוב לסריקה של היום.
+        nodeCount: int.tryParse(meta['catalog_scanned_nodes'] ?? ''),
         fingerprint: meta,
       );
     } catch (e) {

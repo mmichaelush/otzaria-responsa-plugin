@@ -20,6 +20,9 @@ class FakeBackend implements ResponsaBackend {
   int buildCalls = 0;
   int cancelCalls = 0;
 
+  /// `autoStart` של כל פתיחה, איתור וחיפוש, לפי הסדר.
+  final List<bool> autoStartCalls = [];
+
   /// מה ש-[openBook] מחזיר. ברירת מחדל: הצלחה.
   Future<ResponsaOpenReport> Function(List<String> references)? onOpen;
   final List<List<String>> openCalls = [];
@@ -97,8 +100,10 @@ class FakeBackend implements ResponsaBackend {
     List<String> references, {
     String? expectedTitle,
     String? installPath,
+    bool autoStart = true,
   }) {
     openCalls.add(references);
+    autoStartCalls.add(autoStart);
     final handler = onOpen;
     if (handler != null) return handler(references);
     return Future.value(
@@ -116,8 +121,10 @@ class FakeBackend implements ResponsaBackend {
     String reference, {
     int? index,
     String? installPath,
+    bool autoStart = true,
   }) {
     locateCalls.add((reference: reference, index: index));
+    autoStartCalls.add(autoStart);
     final handler = onLocate;
     if (handler != null) return handler(reference, index);
     return Future.value(
@@ -135,8 +142,10 @@ class FakeBackend implements ResponsaBackend {
     String query, {
     String? installPath,
     ResponsaSearchSetup setup = ResponsaSearchSetup.none,
+    bool autoStart = true,
   }) {
     searchCalls.add((query: query, installPath: installPath, setup: setup));
+    autoStartCalls.add(autoStart);
     final handler = onSearch;
     if (handler != null) return handler(query);
     return Future.value(
