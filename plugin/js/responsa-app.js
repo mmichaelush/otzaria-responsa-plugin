@@ -9,7 +9,7 @@
   const Locate = root.ResponsaLocate;
   const I18n = root.ResponsaI18n;
   const { ServiceClient } = root.ResponsaService;
-  const { applyTheme } = root.ResponsaTheme;
+  const { applyTheme, applyAppearance } = root.ResponsaTheme;
   const { createRuntime } = root.ResponsaRuntime;
   const Settings = root.ResponsaSettings;
   const { SettingsStore } = Settings;
@@ -37,8 +37,7 @@
   /** הדיווח נחתך כאן: טקסט ארוך מזה כבר אינו תיאור של בעיה אחת. */
   const MAX_REPORT_LENGTH = 5000;
 
-  /** התיאור שהמשתמש מקליד; השאר שמור לפרטי המערכת וליומן. */
-  const MAX_REPORT_TEXT = 3000;
+  const MAX_REPORT_TEXT = Domain.MAX_REPORT_TEXT;
 
   /** כמה פעולות אחרונות מוצגות ב"מצב המערכת", וכמה נכנסות להעתקה. */
   const LOG_VIEW_ENTRIES = 40;
@@ -205,6 +204,7 @@
       this.engine.pluginVersion = this.model.pluginVersion;
       if (Array.isArray(info.permissions)) this._setPermissions(info.permissions);
       this.model.settings = await this.settings.load();
+      applyAppearance(this.model.settings);
       this.service.autoStart = this.model.settings.autoStart;
       this.model.browse = { ...this.model.browse, path: this.model.settings.browsePath };
       this.model.advanced.query = Advanced.normalize(this.model.settings.advancedQuery || Advanced.emptyQuery());
@@ -394,8 +394,10 @@
         this.model.message = build.error ? Domain.errorMessage(build.error) : t('הקריאה נכשלה.');
         this.model.errorCode = (build.error && build.error.code) || null;
       }
+      // `_show` כבר בונה או מעדכן את הלשונית; נשארו רק היומן ומסך הפתיחה.
+      this.model.log = this.log.entries('info').slice(-LOG_VIEW_ENTRIES);
       this._show(screen);
-      this._renderPage();
+      if (this.model.sheet !== null) this.view.renderSheet(this.model, this.actions);
       this._ensurePicker();
       if (build.state === 'running' && !this.buildWatch) {
         this._watchBuild({ attachOnly: true });
@@ -837,8 +839,8 @@
       const query = this.model.advanced.query;
       this.model.advanced.problem = null;
       this._editAdvanced(Advanced.setMode(query, mode));
-      if (how && how.viaKeyboard) this.view.focusInSheet('adv-kind-' + mode);
-      else this.view.focusPage(this.model);
+      // בחצים הפוקוס נשאר על הבקר (radioGroup מחזיר אותו לשם).
+      if (!how || !how.viaKeyboard) this.view.focusPage(this.model);
     }
 
     advancedWord(index, alternative, value) {
@@ -1058,9 +1060,11 @@
       this.view.focusPage(this.model);
     }
 
-    async runLocate() {
+    /** "פתיחה בבר אילן" או Enter. [text] — מה שבשדה כרגע, כשהוא ידוע. */
+    async runLocate(text) {
       const state = this.model.locate;
       if (state.running) return;
+      if (typeof text === 'string') state.text = text;
       const problem = Locate.validate(state.text);
       if (problem) {
         state.status = { kind: 'error', text: problem };
@@ -1271,8 +1275,10 @@
       this.closeSheet();
     }
 
-    /** שמירה שנכשלה אינה מפריעה: לכל היותר המסך יוצג שוב בפעם הבאה. */
-    /** גם התנאי של פריט התפריט ושל ספרי הספרייה: הם מוצגים רק אחרי ההבהרה. */
+    /**
+     * שמירה שנכשלה אינה מפריעה: לכל היותר המסך יוצג שוב בפעם הבאה. זה גם
+     * התנאי של פריט התפריט ושל ספרי הספרייה: הם מוצגים רק אחרי ההבהרה.
+     */
     _markWelcomeSeen() {
       if (this.model.settings.welcomeSeen) return;
       this.settings.set('welcomeSeen', true).then(
@@ -1288,6 +1294,7 @@
       try {
         this.model.settings = await this.settings.set(name, value);
         this.service.autoStart = this.model.settings.autoStart;
+        if (name === 'font' || name === 'scale') applyAppearance(this.model.settings);
         this.log.info('הגדרה: ' + name + ' = ' + JSON.stringify(value));
         // כבוי: הרשימה נמחקת מאוצריא; דלוק: נשלחת שוב.
         if (name === 'libraryBooks' && Domain.serviceCan(this.model.health, 'export') && !this.model.buildActive) {
@@ -1298,6 +1305,7 @@
         await this.runtime.notify.error(t('ההגדרה לא נשמרה. אפשר לנסות שוב.'));
       }
       this._renderPage();
+      if (name === 'scale') this.view.revealFocus();
     }
 
     /** הכפתור שהיה ממוקד נעלם עם ההערה: הפוקוס עובר לתיבת החיפוש. */
@@ -1505,7 +1513,7 @@
         locateExample: (value) => this.locateExample(value),
         locateRecent: (value) => this.locateRecent(value),
         locateIn: (book) => this.locateIn(book),
-        runLocate: () => this.runLocate(),
+        runLocate: (text) => this.runLocate(text),
         openLocateChoice: (index) => this.openLocateChoice(index),
         open: (book) => this.open(book),
         openHelp: (tab) => this.openHelp(tab),

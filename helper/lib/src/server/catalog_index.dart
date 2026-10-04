@@ -8,7 +8,7 @@ import 'package:responsa_helper/src/text/responsa_hebrew.dart';
 /// וסופיות לא יפספסו ספר. המחבר נמצא גם בנתיב העץ (`שו"ת > מהרש"א > ...`),
 /// ולכן הנתיב חלק ממרחב החיפוש.
 class CatalogIndex {
-  CatalogIndex(Iterable<ResponsaCatalogBook> books)
+  CatalogIndex(Iterable<ResponsaCatalogBook> books, {this.builtAt})
     : _entries = [for (final book in books) _Entry(book)] {
     for (final entry in _entries) {
       _byKey[entry.book.key] = entry.book;
@@ -20,7 +20,10 @@ class CatalogIndex {
 
   int get length => _entries.length;
 
-  /// בסדר הקטלוג.
+  /// זמן הבנייה של הקובץ שממנו נטענו הספרים (`/catalog/export`), כשידוע.
+  final String? builtAt;
+
+  /// לפי השם (`loadBooks` ממיין כך).
   Iterable<ResponsaCatalogBook> get books =>
       _entries.map((entry) => entry.book);
 

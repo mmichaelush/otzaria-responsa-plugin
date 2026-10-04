@@ -76,6 +76,8 @@ class HttpApi {
   Future<void> handle(HttpRequest request) async {
     final watch = Stopwatch()..start();
     final response = request.response;
+    // נכנס לשורת היומן: "409" לבד אינו מבדיל בין busy, wrongBook ו-windowLimit.
+    String? failure;
     response.headers
       ..set(HttpHeaders.cacheControlHeader, 'no-store')
       ..set('X-Content-Type-Options', 'nosniff');
@@ -108,8 +110,12 @@ class HttpApi {
         throw const ApiError('notFound', 404, 'נקודת קצה לא מוכרת.');
       }
     } on ApiError catch (error) {
+      failure = error.status >= 500
+          ? '${error.code}: ${error.message}'
+          : error.code;
       await _sendError(response, error);
     } catch (error, stackTrace) {
+      failure = 'internal';
       logLine(
         'HttpApi: ${request.method} ${request.uri.path}: $error\n$stackTrace',
       );
@@ -120,7 +126,7 @@ class HttpApi {
     } finally {
       logLine(
         '${request.method} ${request.uri.path} ${response.statusCode} '
-        '${watch.elapsedMilliseconds}ms',
+        '${watch.elapsedMilliseconds}ms${failure == null ? '' : ' $failure'}',
       );
     }
   }

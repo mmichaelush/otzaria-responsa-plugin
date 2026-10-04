@@ -56,6 +56,20 @@
     );
   }
 
+  /**
+   * Enter בשדה של שורה אחת מריץ את [run], כמו הכפתור שלידו. לא באמצע
+   * הרכבת אותיות (IME), ובמקלדת מסך המקש נקרא לפי [hint] ('search', 'go').
+   */
+  function onEnter(input, run, hint) {
+    input.setAttribute('enterkeyhint', hint || 'search');
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.isComposing || event.repeat) return;
+      event.preventDefault();
+      run(input.value);
+    });
+    return input;
+  }
+
   function iconButton(iconName, label, onClick, options) {
     const opts = options || {};
     return el(
@@ -396,8 +410,8 @@
     });
     input.value = model.query;
     input.addEventListener('input', () => actions.search(input.value));
+    onEnter(input, (value) => actions.search(value, { now: true }));
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') actions.search(input.value, { now: true });
       if (event.key === 'Escape' && input.value) {
         event.stopPropagation();
         input.value = '';
@@ -765,6 +779,7 @@
     el,
     button,
     iconButton,
+    onEnter,
     setBusy,
     screenView,
     readyView,

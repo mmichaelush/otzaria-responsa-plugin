@@ -7,6 +7,10 @@
   /** שמות מפתחות האחסון. מופיעים גם ב-manifest.json (`when`). */
   const KEYS = Object.freeze({
     language: 'responsa_language',
+    /** גופן התוסף: שם מ-[FONTS], או '' לגופן הממשק של אוצריא. */
+    font: 'responsa_font',
+    /** גודל התצוגה: מכפיל מ-[SCALES]. */
+    scale: 'responsa_scale',
     libraryBooks: 'responsa_library_books',
     contextMenu: 'responsa_context_menu',
     /** השורה "חיפוש בבר אילן" בדיאלוג החיפוש של אוצריא. */
@@ -45,8 +49,29 @@
 
   const LANGUAGES = Object.freeze(['auto', 'he', 'en']);
 
+  /**
+   * הגופנים המובנים של אוצריא, שהיא מזריקה לכל דף תוסף (DESIGN_GUIDE). בלי
+   * "רש"י": גופן מפרשים, ולא גופן ממשק. '' = גופן הממשק שנבחר באוצריא.
+   */
+  const FONTS = Object.freeze([
+    '',
+    'TaameyDavidCLM',
+    'FrankRuhlCLM',
+    'TaameyAshkenaz',
+    'KeterYG',
+    'Shofar',
+    'NotoSerifHebrew',
+    'Tinos',
+    'Rubik',
+  ]);
+
+  /** גדלי התצוגה, כמכפיל של גודל הממשק. */
+  const SCALES = Object.freeze([0.9, 1, 1.15, 1.3, 1.5]);
+
   const DEFAULTS = Object.freeze({
     language: 'auto',
+    font: '',
+    scale: 1,
     libraryBooks: true,
     contextMenu: true,
     searchDialog: true,
@@ -64,6 +89,8 @@
     const value = raw || {};
     return {
       language: LANGUAGES.includes(value.language) ? value.language : DEFAULTS.language,
+      font: FONTS.includes(value.font) ? value.font : DEFAULTS.font,
+      scale: SCALES.includes(value.scale) ? value.scale : DEFAULTS.scale,
       libraryBooks:
         typeof value.libraryBooks === 'boolean' ? value.libraryBooks : DEFAULTS.libraryBooks,
       contextMenu:
@@ -104,6 +131,8 @@
       };
       const names = [
         'language',
+        'font',
+        'scale',
         'libraryBooks',
         'contextMenu',
         'searchDialog',
@@ -134,7 +163,7 @@
     }
   }
 
-  const api = { KEYS, LANGUAGES, TABS, MAX_LOCATE_HISTORY, DEFAULTS, normalize, SettingsStore };
+  const api = { KEYS, LANGUAGES, FONTS, SCALES, TABS, MAX_LOCATE_HISTORY, DEFAULTS, normalize, SettingsStore };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaSettings = api;
 })(typeof self !== 'undefined' ? self : globalThis);

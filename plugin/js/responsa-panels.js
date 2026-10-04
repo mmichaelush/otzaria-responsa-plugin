@@ -103,11 +103,12 @@
   }
 
   /**
-   * בקר מקטעים של M3 (שפה): הנבחר ברקע משני ועם סימון. כמו radiogroup:
-   * עצירת Tab אחת, וחצים בין האפשרויות. בחירה בחצים מגיעה עם
-   * `{ viaKeyboard: true }`, כדי שהפוקוס יישאר על הבקר.
+   * קבוצת בחירה אחת (radiogroup): עצירת Tab אחת, וחצים בין האפשרויות.
+   * בחירה בחצים מגיעה עם `{ viaKeyboard: true }`, והפוקוס עובר לאפשרות
+   * שנבחרה אחרי שהלשונית נבנתה מחדש. [group] ו-[item] — המחלקות של הקבוצה
+   * ושל כל אפשרות; [dataOf] מוסיף data לכל אפשרות.
    */
-  function segmented(label, options, value, onSelect, keyPrefix) {
+  function radioGroup(group, item, label, options, value, onSelect, keyPrefix, dataOf) {
     const onKeydown = (event) => {
       const rtl = document.documentElement.dir !== 'ltr';
       const step = { ArrowLeft: rtl ? 1 : -1, ArrowRight: rtl ? -1 : 1, ArrowDown: 1, ArrowUp: -1 }[
@@ -115,28 +116,78 @@
       ];
       if (!step) return;
       event.preventDefault();
-      const index = options.findIndex((option) => option.value === value);
-      onSelect(options[(index + step + options.length) % options.length].value, { viaKeyboard: true });
+      // מהאפשרות שבפוקוס ולא מ-[value]: הקבוצה נבנית מחדש רק אחרי השמירה,
+      // ושתי לחיצות מהירות היו מחשבות את אותה "הבאה".
+      const focused = event.target.closest('[role="radio"]');
+      const current = focused ? focused.dataset.focusKey.slice(keyPrefix.length) : String(value);
+      const index = options.findIndex((option) => String(option.value) === current);
+      const next = options[(index + step + options.length) % options.length].value;
+      Promise.resolve(onSelect(next, { viaKeyboard: true })).then(() => {
+        // אחרי הבנייה מחדש: האפשרות שנבחרה בפועל (גם כשהשמירה נכשלה).
+        const target = document.querySelector(
+          '[data-focus-key^="' + CSS.escape(keyPrefix) + '"][aria-checked="true"]',
+        );
+        if (target) target.focus();
+      });
     };
     return el(
       'div',
-      { class: 'segmented', role: 'radiogroup', 'aria-label': label, onkeydown: onKeydown },
+      { ...group, role: 'radiogroup', 'aria-label': label, onkeydown: onKeydown },
       options.map((option) =>
         el(
           'button',
           {
             type: 'button',
-            class: 'segment',
+            ...item,
             role: 'radio',
             'aria-checked': option.value === value ? 'true' : 'false',
             tabindex: option.value === value ? '0' : '-1',
             onclick: () => onSelect(option.value),
-            dataset: { focusKey: keyPrefix + option.value },
+            dataset: { focusKey: keyPrefix + option.value, ...(dataOf ? dataOf(option) : {}) },
           },
           option.value === value ? icon('checkmark_24_regular', 'segment-check') : null,
           option.label,
         ),
       ),
+    );
+  }
+
+  /** בקר מקטעים של M3: הנבחר ברקע משני ועם סימון (כמו SegmentedControl של אוצריא). */
+  function segmented(label, options, value, onSelect, keyPrefix) {
+    return radioGroup({ class: 'segmented' }, { class: 'segment' }, label, options, value, onSelect, keyPrefix);
+  }
+
+  /** אריחים שנשברים לשורות, לבחירה מרשימה ארוכה (גופן). */
+  function optionGrid(label, options, value, onSelect, keyPrefix, dataOf) {
+    return radioGroup(
+      { class: 'option-grid' },
+      { class: 'option-tile' },
+      label,
+      options,
+      value,
+      onSelect,
+      keyPrefix,
+      dataOf,
+    );
+  }
+
+  /** שורת הגדרה שהפקד שלה מתחתיה (בחירה מכמה אפשרויות). */
+  function stackedRow(iconName, title, subtitle, control) {
+    return el(
+      'div',
+      { class: 'settings-row settings-row-stacked' },
+      el(
+        'span',
+        { class: 'settings-row-heading' },
+        icon(iconName, 'settings-row-icon'),
+        el(
+          'span',
+          { class: 'settings-row-texts' },
+          el('span', { class: 'settings-row-title' }, title),
+          subtitle ? el('span', { class: 'settings-row-subtitle' }, subtitle) : null,
+        ),
+      ),
+      control,
     );
   }
 
@@ -260,6 +311,58 @@
     ];
   }
 
+  /** השמות שאוצריא מציגה לגופנים שלה (AppFonts). */
+  const FONT_LABELS = Object.freeze({
+    '': N('כמו באוצריא'),
+    TaameyDavidCLM: N('דוד'),
+    FrankRuhlCLM: N('פרנק-רוהל'),
+    TaameyAshkenaz: N('טעמי אשכנז'),
+    KeterYG: N('כתר'),
+    Shofar: N('שופר'),
+    NotoSerifHebrew: N('נוטו'),
+    Tinos: N('טינוס'),
+    Rubik: N('רוביק'),
+  });
+
+  /** גופן, גודל תצוגה ושפה. כל שם גופן מוצג בגופן עצמו. */
+  function displayRows(model, actions) {
+    const Settings = root.ResponsaSettings;
+    const fonts = Settings.FONTS.map((value) => ({ value, label: t(FONT_LABELS[value]) }));
+    const scales = Settings.SCALES.map((value) => ({ value, label: Math.round(value * 100) + '%' }));
+    const languages = [
+      { value: 'auto', label: t('כמו באוצריא') },
+      { value: 'he', label: 'עברית' },
+      { value: 'en', label: 'English' },
+    ];
+    return [
+      stackedRow(
+        'text_font_24_regular',
+        t('גופן'),
+        t('הגופן של התוסף. "כמו באוצריא" הוא גופן הממשק שנבחר בהגדרות אוצריא.'),
+        optionGrid(
+          t('גופן'),
+          fonts,
+          model.settings.font,
+          (value) => actions.setSetting('font', value),
+          'font-',
+          (option) => ({ font: option.value || 'host' }),
+        ),
+      ),
+      stackedRow(
+        'text_font_size_24_regular',
+        t('גודל תצוגה'),
+        t('מגדיל או מקטין את כל מה שבלשונית: טקסט, כפתורים ורשימות.'),
+        segmented(t('גודל תצוגה'), scales, model.settings.scale, (value) => actions.setSetting('scale', value), 'scale-'),
+      ),
+      stackedRow(
+        'translate_24_regular',
+        t('שפת התוסף'),
+        null,
+        segmented(t('שפת התוסף'), languages, model.settings.language, actions.setLanguage, 'language-'),
+      ),
+    ];
+  }
+
   function shortcutRows(model, actions) {
     if (!has(model, 'ui.create_shortcut')) return [];
     const windows = model.platform === 'windows';
@@ -286,11 +389,6 @@
   }
 
   function settingsPage(model, actions) {
-    const languages = [
-      { value: 'auto', label: t('כמו באוצריא') },
-      { value: 'he', label: 'עברית' },
-      { value: 'en', label: 'English' },
-    ];
     const shortcuts = shortcutRows(model, actions);
     return el(
       'div',
@@ -307,20 +405,7 @@
           searchDialogRow(model, actions),
         ),
         section(t('בר אילן'), null, autoStartRow(model, actions)),
-        section(
-          t('שפה'),
-          null,
-          el(
-            'div',
-            { class: 'settings-row settings-row-stacked' },
-            el(
-              'span',
-              { class: 'settings-row-texts' },
-              el('span', { class: 'settings-row-title' }, t('שפת התוסף')),
-            ),
-            segmented(t('שפת התוסף'), languages, model.settings.language, actions.setLanguage, 'language-'),
-          ),
-        ),
+        section(t('תצוגה ושפה'), null, displayRows(model, actions)),
         section(t('רשימת הספרים'), null, catalogRows(model, actions)),
         shortcuts.length ? section(t('קיצורי דרך'), null, shortcuts) : null,
       ),
@@ -433,7 +518,7 @@
         ],
       ),
       topic('settings_24_regular', t('הגדרות'), [
-        t('בלשונית "הגדרות" מדליקים או מכבים את החיפוש בלחיצה ימנית ואת ספרי בר אילן במסך הספרייה, בוחרים שפה (עברית או English), קוראים מחדש את רשימת הספרים ויוצרים קיצור דרך.'),
+        t('בלשונית "הגדרות" מדליקים או מכבים את החיפוש בלחיצה ימנית ואת ספרי בר אילן במסך הספרייה, בוחרים גופן, גודל תצוגה ושפה (עברית או English), קוראים מחדש את רשימת הספרים ויוצרים קיצור דרך.'),
       ]),
       el(
         'div',
@@ -791,6 +876,8 @@
       class: 'report-text',
       dir: 'auto',
       rows: '5',
+      // מה שמעבר לזה לא היה נשלח; התיבה אינה מקבלת אותו מלכתחילה.
+      maxlength: String(Domain.MAX_REPORT_TEXT),
       'aria-label': t('תיאור הבעיה'),
       placeholder: t('מה ניסיתם לעשות, ומה קרה במקום?'),
       dataset: { focusKey: 'report-text' },

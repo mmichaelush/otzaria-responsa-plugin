@@ -55,6 +55,9 @@
   /** כתובת המייל לפניות ולדיווחים, מחוץ לדיווח המובנה של אוצריא. */
   const SUPPORT_EMAIL = 'michaelush613@gmail.com';
 
+  /** אורך התיאור בדיווח על בעיה; השאר שמור לפרטי המערכת וליומן. */
+  const MAX_REPORT_TEXT = 3000;
+
   /** פריט "חיפוש בבר אילן" בתפריט הלחיצה הימנית (manifest.json). */
   const CONTEXT_MENU_ITEM = 'responsa-search';
 
@@ -672,6 +675,7 @@
     COMMAND_TABS,
     Links,
     SUPPORT_EMAIL,
+    MAX_REPORT_TEXT,
     Command,
     Screen,
     SETUP_SCREENS,

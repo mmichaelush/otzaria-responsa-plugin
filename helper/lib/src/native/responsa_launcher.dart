@@ -86,27 +86,50 @@ class ResponsaLauncher {
       );
     }
 
+    // "פתיחת בר אילן" ופתיחת ספר שמגיעות יחד: הפעלה אחת, ושתיהן מחכות לה.
+    // בלי זה שתיהן ראו "סגור" והפעילו שני מופעים.
+    final wanted = target.installPath;
+    final pending = _launching[wanted];
+    if (pending != null) return pending;
+    final launch = _launch(target.executable, wanted, timeout);
+    _launching[wanted] = launch;
+    try {
+      return await launch;
+    } finally {
+      _launching.remove(wanted);
+    }
+  }
+
+  /// הפעלות שרצות עכשיו, לפי נתיב ההתקנה.
+  static final Map<String, Future<ResponsaLaunchResult>> _launching = {};
+
+  static Future<ResponsaLaunchResult> _launch(
+    String executable,
+    String installPath,
+    Duration timeout,
+  ) async {
     try {
       await Process.start(
-        target.executable,
+        executable,
         const [],
-        workingDirectory: target.installPath,
+        workingDirectory: installPath,
         mode: ProcessStartMode.detached,
       );
     } catch (error) {
       logLine('ResponsaLauncher: launch failed: $error');
       return ResponsaLaunchResult(
         running: false,
-        installPath: target.installPath,
+        installPath: installPath,
         message:
-            'לא ניתן להפעיל את בר אילן מ-${target.installPath}. '
+            'לא ניתן להפעיל את בר אילן מ-$installPath. '
             'יש לפתוח אותו ידנית ולנסות שוב.',
       );
     }
+    logLine('ResponsaLauncher: started $executable');
 
     // בודקים מופעים בלבד ולא `resolve`, שסורק את כל הכוננים - בכל 600ms
     // זו סריקה מלאה, וההתקנה כבר ידועה.
-    final wanted = target.installPath;
+    final wanted = installPath;
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(_poll);

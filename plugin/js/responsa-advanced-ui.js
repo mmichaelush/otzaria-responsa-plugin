@@ -9,7 +9,7 @@
   const Advanced = root.ResponsaAdvanced;
   const I18n = root.ResponsaI18n;
   const { icon } = root.ResponsaIcons;
-  const { el, button, iconButton } = root.ResponsaUi;
+  const { el, button, iconButton, onEnter } = root.ResponsaUi;
   const { segmented, switchRow } = root.ResponsaPanels;
   const t = (text, vars) => I18n.t(text, vars);
 
@@ -120,9 +120,7 @@
     });
     input.value = value;
     input.addEventListener('input', () => actions.advancedWord(index, alternative, input.value));
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') actions.runAdvanced();
-    });
+    onEnter(input, () => actions.runAdvanced());
     return input;
   }
 
@@ -293,9 +291,7 @@
     });
     input.value = state.query.simpleText;
     input.addEventListener('input', () => actions.advancedSet({ simpleText: input.value }, { light: true }));
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') actions.runAdvanced();
-    });
+    onEnter(input, () => actions.runAdvanced());
     return [
       el('label', { class: 'search-bar' }, icon('search_24_regular'), input),
       el(
@@ -528,23 +524,31 @@
    * "מה יחופש": ההסבר במילים, לפני הכול. מי שמכיר את התחביר רואה גם את
    * השאילתה כפי שתישלח.
    */
-  function summaryCard(state, actions, catalogReady) {
+  /** שורות "מה יחופש". גם לעדכון במקום בזמן הקלדה (`View.updateAdvanced`). */
+  function summaryLines(model) {
+    const query = model.advanced.query;
+    const text = Advanced.buildQuery(query);
+    const lines = text ? Advanced.describe(query, scopeLabel(query, Domain.catalogReady(model.status))) : [];
+    return el(
+      'div',
+      { class: 'summary-lines', 'data-role': 'adv-summary' },
+      lines.length
+        ? lines.map((line) => el('p', { class: 'summary-line' }, line))
+        : el('p', { class: 'summary-line is-empty' }, t('כותבים מילים, וכאן יוסבר מה יחופש.')),
+    );
+  }
+
+  function summaryCard(model, actions) {
+    const state = model.advanced;
     const query = state.query;
     const text = Advanced.buildQuery(query);
-    const lines = text ? Advanced.describe(query, scopeLabel(query, catalogReady)) : [];
     const advanced = query.mode !== Advanced.Mode.simple;
     return el(
       'section',
       // לא אזור חי: הוא משתנה בכל הקשה, וקורא מסך היה חוזר עליו שוב ושוב.
       { class: 'summary-card' },
       el('h3', { class: 'summary-title' }, icon('info_24_regular'), t('מה יחופש')),
-      el(
-        'div',
-        { class: 'summary-lines', 'data-role': 'adv-summary' },
-        lines.length
-          ? lines.map((line) => el('p', { class: 'summary-line' }, line))
-          : el('p', { class: 'summary-line is-empty' }, t('כותבים מילים, וכאן יוסבר מה יחופש.')),
-      ),
+      summaryLines(model),
       advanced
         ? el(
             'div',
@@ -652,7 +656,7 @@
           wordsSection(state, actions),
           scopeSection(state, actions, advanced ? 2 : null, catalogReady),
           optionsSection(state, actions, advanced ? 3 : null),
-          summaryCard(state, actions, catalogReady),
+          summaryCard(model, actions),
           advanced ? guideSection(actions) : null,
         ]
       : el(
@@ -680,7 +684,7 @@
     );
   }
 
-  const api = { textSearchPage };
+  const api = { textSearchPage, summaryLines };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaAdvancedUi = api;
 })(typeof self !== 'undefined' ? self : globalThis);

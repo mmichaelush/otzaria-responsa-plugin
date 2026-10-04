@@ -15,13 +15,16 @@
   /** מסמן מחרוזת לתרגום בלי לתרגם אותה עכשיו: התרגום בזמן הציור. */
   const N = (text) => text;
 
-  /** הלשוניות, לפי הסדר. */
+  /**
+   * הלשוניות, לפי הסדר. `short` — השם בסרגל התחתון של חלון צר, שבו לכל
+   * לשונית חמישית מהרוחב.
+   */
   const TABS = Object.freeze([
-    { id: 'books', label: N('ספרים'), iconName: 'library_24_regular' },
-    { id: 'text', label: N('חיפוש בטקסט'), iconName: 'database_search_24_regular' },
-    { id: 'locate', label: N('איתור מקום'), iconName: 'document_search_24_regular' },
-    { id: 'settings', label: N('הגדרות'), iconName: 'settings_24_regular' },
-    { id: 'help', label: N('עזרה'), iconName: 'question_circle_24_regular' },
+    { id: 'books', label: N('ספרים'), short: N('ספרים'), iconName: 'library_24_regular' },
+    { id: 'text', label: N('חיפוש בטקסט'), short: N('טקסט'), iconName: 'database_search_24_regular' },
+    { id: 'locate', label: N('איתור מקום'), short: N('איתור'), iconName: 'document_search_24_regular' },
+    { id: 'settings', label: N('הגדרות'), short: N('הגדרות'), iconName: 'settings_24_regular' },
+    { id: 'help', label: N('עזרה'), short: N('עזרה'), iconName: 'question_circle_24_regular' },
   ]);
 
   const SETUP_SCREENS = Domain.SETUP_SCREENS;
@@ -48,6 +51,10 @@
       this.tabButtons = null;
       this.openSheet = null;
       this.returnFocus = null;
+      /** ה-markup של מסך הפתיחה, כדי לא לבנות אותו מחדש בלי שינוי. */
+      this.sheetMarkup = null;
+      /** מפתח פקד שהיה מושבת ברגע הבנייה: יקבל את הפוקוס כשיחזור לפעול. */
+      this.pendingFocus = null;
       this.dialog.inert = true;
     }
 
@@ -120,13 +127,15 @@
               role: 'tab',
               id: 'main-tab-' + tab.id,
               'aria-controls': 'main-panel',
-              // בחלון צר מוצג רק האייקון, ואז זה השם היחיד של הלשונית.
+              // השם המלא גם כשבסרגל הצר מוצג המקוצר.
+              'aria-label': t(tab.label),
               title: t(tab.label),
               onclick: () => this.actions.selectTab(tab.id),
               dataset: { tab: tab.id, focusKey: 'main-tab-' + tab.id },
             },
             icon(tab.iconName),
-            Ui.el('span', { class: 'main-tab-label' }, t(tab.label)),
+            Ui.el('span', { class: 'main-tab-label', 'aria-hidden': 'true' }, t(tab.label)),
+            Ui.el('span', { class: 'main-tab-short', 'aria-hidden': 'true' }, t(tab.short)),
           ),
         );
         this.tabBar.replaceChildren(...this.tabButtons);
@@ -247,7 +256,7 @@
         }
         const retry = this.content.querySelector('[data-focus-key="retry"]');
         if (retry) Ui.setBusy(retry, model.checking, t('בודק…'), t('בדיקה חוזרת'));
-        return;
+        if (model.tab === 'books') return;
       }
       this.refreshPage(model, actions);
     }
@@ -276,6 +285,17 @@
       // מעבר בין כרטיסיות העזרה: הפוקוס עובר לכרטיסייה שנבחרה.
       const selected = onTab && this.content.querySelector('.secondary-tabs [role="tab"][aria-selected="true"]');
       if (selected) selected.focus();
+    }
+
+    /**
+     * "גודל תצוגה" מזיז את כל התוכן, והגלילה שנשמרה בפיקסלים כבר לא מתאימה:
+     * הפקד שבפוקוס (זה שנלחץ) חוזר לתצוגה. כשהוא גלוי ממילא — אין גלילה.
+     */
+    revealFocus() {
+      const focused = this.doc.activeElement;
+      if (focused && focused !== this.doc.body && this.content.contains(focused)) {
+        focused.scrollIntoView({ block: 'nearest' });
+      }
     }
 
     /**
@@ -431,10 +451,9 @@
       }
       const summary = this.content.querySelector('[data-role="adv-summary"]');
       if (summary) {
-        const fresh = root.ResponsaAdvancedUi.textSearchPage(model, this.actions).querySelector(
-          '[data-role="adv-summary"]',
-        );
-        if (fresh && fresh.textContent !== summary.textContent) summary.replaceChildren(...fresh.childNodes);
+        // רק השורות, ולא הלשונית כולה (עם בורר הקטגוריות והמקרא) בכל הקשה.
+        const fresh = root.ResponsaAdvancedUi.summaryLines(model);
+        if (fresh.textContent !== summary.textContent) summary.replaceChildren(...fresh.childNodes);
       }
       const problem = this.content.querySelector('[data-role="adv-problem"]');
       if (problem) {

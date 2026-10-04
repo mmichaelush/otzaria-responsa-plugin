@@ -61,6 +61,9 @@ class FakeView {
   refreshPage() {
     this.pageRefreshes = (this.pageRefreshes || 0) + 1;
   }
+  revealFocus() {
+    this.focusReveals = (this.focusReveals || 0) + 1;
+  }
   setInputValue(key, value) {
     this.inputs = Object.assign(this.inputs || {}, { [key]: value });
   }
@@ -481,6 +484,33 @@ test('מתג שנכשל בשמירה נשאר במצבו, עם הסבר', async 
   assert.equal(app.model.settings.contextMenu, true);
   assert.deepEqual(bridge.notifications('ui.showError'), ['ההגדרה לא נשמרה. אפשר לנסות שוב.']);
   app.suspend();
+});
+
+test('גופן וגודל תצוגה: חלים מיד כשנשמרו, ולא כשהשמירה נכשלה', async () => {
+  const props = new Map();
+  const previous = globalThis.document;
+  globalThis.document = {
+    documentElement: { dataset: {}, style: { setProperty: (k, v) => props.set(k, v), removeProperty: (k) => props.delete(k) } },
+  };
+  try {
+    const { app, view, bridge } = setup({ '/status': reply(200, ready) });
+    await app.boot(windows);
+    await app.actions.setSetting('scale', 1.3);
+    // התוכן גדל: הפקד שנלחץ חוזר לתצוגה. גופן אינו מזיז את הגלילה כך.
+    assert.equal(view.focusReveals, 1);
+    await app.actions.setSetting('font', 'Shofar');
+    assert.equal(view.focusReveals, 1);
+    assert.equal(props.get('--ui-scale'), '1.3');
+    assert.equal(props.get('--font-ui'), "'Shofar', system-ui, sans-serif");
+    bridge.methods['storage.set'] = { error: { code: 'error.internal' } };
+    await app.actions.setSetting('scale', 1.5);
+    assert.equal(app.model.settings.scale, 1.3);
+    assert.equal(props.get('--ui-scale'), '1.3');
+    await app.actions.setSetting('font', '');
+    app.suspend();
+  } finally {
+    globalThis.document = previous;
+  }
 });
 
 test('בחירת אנגלית: הדף נבנה מחדש באנגלית, ופריט התפריט מתורגם', async () => {
@@ -981,6 +1011,19 @@ test('איתור מקום: תוצאה אחת נפתחת, והמקום נשמר �
   assert.match(app.model.locate.status.text, /תורה בראשית פרק ב/);
   await until(() => Array.isArray(stored.responsa_locate_history));
   assert.deepEqual(stored.responsa_locate_history, ['בראשית ב ג']);
+  app.suspend();
+});
+
+test('איתור מקום: Enter וכפתור פותחים את מה שבשדה ברגע זה', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/reference/open': reply(200, { ok: true, opened: true, ref: 'ברכות דף ב', window: 'ברכות דף ב', broughtToFront: true }),
+  });
+  app.actions.selectTab('locate');
+  app.actions.locateText('בראשית');
+  // השדה כבר מכיל יותר ממה שהמודל ראה (למשל הדבקה שלא עוררה input).
+  await app.actions.runLocate('ברכות דף ב');
+  assert.deepEqual(requests(bridge, '/reference/open')[0].body, { ref: 'ברכות דף ב' });
+  assert.equal(app.model.locate.text, 'ברכות דף ב');
   app.suspend();
 });
 

@@ -29,6 +29,10 @@ class ResponsaInstance {
 
   String get title => ResponsaWin32.windowText(hwnd);
 
+  /// המספר האחרון שנרשם ביומן: הבחירה רצה בכל המתנה לבר אילן (כמה פעמים
+  /// בשנייה), ושורה זהה בכל סבב הציפה את היומן.
+  static int _loggedParked = 0;
+
   /// כולל חונים: לגילוי התקנה לפי מופע רץ גם חונה מעיד.
   static List<ResponsaInstance> all() => [
     for (final window in ResponsaWin32.topWindowsByClass(windowClass))
@@ -47,8 +51,13 @@ class ResponsaInstance {
         ),
     ];
     final parked = states.where((s) => !s.usable).length;
-    if (parked > 0) {
-      logLine('ResponsaInstance: $parked מופעים חונים מחוץ למסך — אינם נבחרים');
+    if (parked != _loggedParked) {
+      _loggedParked = parked;
+      if (parked > 0) {
+        logLine(
+          'ResponsaInstance: $parked מופעים חונים מחוץ למסך — אינם נבחרים',
+        );
+      }
     }
     final index = pickIndex(states);
     return index == null ? null : all[index];

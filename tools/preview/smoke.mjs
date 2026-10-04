@@ -57,6 +57,8 @@ const scenarios = [
   'scenario=serviceMissing&welcome=1&offline=1',
   'scenario=ready&details=3232&query=' + encodeURIComponent('מהרש"א'),
   'scenario=ready&page=help&tab=about&offline=1',
+  'scenario=ready&page=settings&scale=1.5&font=Shofar',
+  'scenario=ready&scale=0.9&query=' + encodeURIComponent('מהרש"א'),
 ];
 
 let failures = 0;

@@ -77,6 +77,9 @@ const shots = [
   ['narrow-settings', 'scenario=ready&page=settings', '380,820'],
   ['narrow-help', 'scenario=ready&page=help&tab=status', '380,820'],
   ['wide-results', 'scenario=ready&query=' + encodeURIComponent('מהרש"א'), '1600,900'],
+  // "גודל תצוגה" 150%: באותו חלון הפריסה עוברת לצרה כשהתוכן כבר לא נכנס.
+  ['scaled-results', 'scenario=ready&scale=1.5&query=' + encodeURIComponent('מהרש"א'), '1000,720'],
+  ['scaled-narrow', 'scenario=ready&scale=1.3&page=locate&history=1', '700,720'],
 ];
 
 // SHOTS=help-about,ready-empty מצלם רק את המסכים האלה.

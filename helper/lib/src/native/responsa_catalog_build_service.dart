@@ -36,7 +36,8 @@ enum ResponsaBuildFailure {
 class ResponsaBuildProgress {
   final ResponsaBuildStage stage;
 
-  /// כמה צמתים נסרקו עד כה. בהתקנה מלאה מדובר בכ-1.25 מיליון.
+  /// כמה צמתים נסרקו עד כה. ב-CD25 כ-466 אלף (העץ כולו כ-1.25 מיליון, אבל
+  /// פרקים וסימנים אינם נפתחים: `ResponsaCatalogBuilder.mayContainBooks`).
   final int scannedNodes;
 
   /// ענפים עליונים שנסרקו, מתוך `sectionsTotal` (0 עד תחילת הסריקה). מדד
@@ -71,8 +72,9 @@ class ResponsaBuildProgress {
       books = 0;
 }
 
-/// בניית קטלוג פרויקט השו"ת באיזולט רקע, בהליכה חיה על כ-1.25 מיליון צמתים
-/// (חמש עד שש דקות) - ולכן עם דיווח התקדמות וביטול אמיתי. רצה רק לבקשת המשתמש.
+/// בניית קטלוג פרויקט השו"ת באיזולט רקע, בהליכה חיה על עץ הספרים (ב-CD25 כ-466
+/// אלף צמתים, פחות משתי דקות) - ולכן עם דיווח התקדמות וביטול אמיתי. רצה רק
+/// לבקשת המשתמש.
 class ResponsaCatalogBuildService {
   ResponsaCatalogBuildService();
 
@@ -137,7 +139,26 @@ class ResponsaCatalogBuildService {
 
     // אין בהתקנה קובץ עם רשימת הספרים - הקטלוג נקרא מהעץ של התוכנה החיה,
     // ולכן הבנייה מעלה אותה בעצמה.
-    final launch = await ResponsaLauncher.ensureRunning();
+    // חריגה כאן (גילוי ההתקנה רץ באיזולט) הייתה נשארת לא מטופלת: הזרם לא
+    // נסגר, `_active` נשאר דלוק, וכל פתיחה הייתה נדחית ב"עסוק" עד הפעלה מחדש.
+    final ResponsaLaunchResult launch;
+    try {
+      launch = await ResponsaLauncher.ensureRunning();
+    } catch (launchError, stackTrace) {
+      logLine(
+        'ResponsaCatalogBuildService: ensureRunning: $launchError\n$stackTrace',
+      );
+      controller
+        ..add(
+          ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.internal,
+            'לא ניתן להפעיל את בר אילן: $launchError',
+          ),
+        )
+        ..close();
+      _cleanup(receive, exit, error, flag);
+      return;
+    }
     if (!launch.running) {
       controller
         ..add(

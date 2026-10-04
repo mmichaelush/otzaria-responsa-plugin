@@ -116,8 +116,8 @@ class ResponsaShowReport {
   });
 }
 
-/// הגבול בין UI אסינכרוני לאוטומציה חוסמת: כל פעולה חוסמת רצה באיזולט רקע,
-/// כי ב-Windows ה-UI isolate רץ על ה-platform thread וקריאת Win32 מקפיאה אותו.
+/// הגבול בין השרת האסינכרוני לאוטומציה החוסמת: כל פעולה חוסמת רצה באיזולט
+/// רקע, כדי שהשירות ימשיך לענות (גם ל-`/health`) בזמן שבר אילן עובד.
 class ResponsaController {
   ResponsaController({bool Function()? allowAutoStart})
     : _allowAutoStart = allowAutoStart ?? _always;

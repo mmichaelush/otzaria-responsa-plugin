@@ -214,6 +214,8 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
   const store = new Settings.SettingsStore(runtime);
   assert.deepEqual(await store.load(), {
     language: 'auto',
+    font: '',
+    scale: 1,
     libraryBooks: false,
     contextMenu: true,
     searchDialog: true,
@@ -225,6 +227,21 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     tab: 'books',
     locateHistory: [],
   });
+});
+
+test('הגדרות: גופן וגודל תצוגה רק מהרשימות', async () => {
+  const read = async (values) =>
+    new Settings.SettingsStore(fakeRuntime({ 'storage.get': ({ key }) => values[key] ?? null })).load();
+  const chosen = await read({ responsa_font: 'Shofar', responsa_scale: 1.3 });
+  assert.equal(chosen.font, 'Shofar');
+  assert.equal(chosen.scale, 1.3);
+  // "רש"י" אינו גופן ממשק, ושם שאינו גופן של אוצריא אינו נכנס ל-CSS.
+  for (const font of ['NotoRashiHebrew', "x'; color: red", 7]) {
+    assert.equal((await read({ responsa_font: font })).font, '');
+  }
+  for (const scale of [0, 1.2, '1.3', 9]) {
+    assert.equal((await read({ responsa_scale: scale })).scale, 1);
+  }
 });
 
 test('הגדרות: הלשונית האחרונה והמקומות האחרונים, בגבולות', async () => {

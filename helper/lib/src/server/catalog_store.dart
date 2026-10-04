@@ -34,9 +34,13 @@ class CatalogStore {
     return _loading = loading;
   }
 
+  /// זמן הבנייה נקרא לפני הספרים: אם הקובץ מתחלף ביניהם, הזמן ישן והספרים
+  /// חדשים, והתוסף ישלח את הרשימה לאוצריא שוב ברענון הבא — ולא להפך, שבו
+  /// רשימה ישנה הייתה נשמרת בשם הבנייה החדשה.
   Future<CatalogIndex?> _load() async {
+    final builtAt = (await repository.info()).builtAt;
     final books = await repository.loadBooks();
-    return books.isEmpty ? null : CatalogIndex(books);
+    return books.isEmpty ? null : CatalogIndex(books, builtAt: builtAt);
   }
 
   /// אחרי בנייה: זמן השינוי של קובץ שהוחלף בשינוי שם יכול להיות זהה לקודם.

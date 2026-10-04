@@ -1,6 +1,6 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
 // המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|settings|help&tab=...
-// &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&noicons=1`. ערכות הצבעים הן
+// &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&noicons=1&scale=1.3&font=Shofar`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
 (function () {
   'use strict';
@@ -209,6 +209,9 @@
   // `page=<tab>`: הלשונית שנפתחת (ספרים, חיפוש בטקסט, איתור מקום, הגדרות, עזרה).
   if (params.get('page')) storage.responsa_tab = params.get('page');
   if (params.get('history')) storage.responsa_locate_history = ['שמות רבה פרשה א', 'ברכות דף ב עמוד א'];
+  // `scale=<מכפיל>` ו-`font=<גופן>`: "גודל תצוגה" ו"גופן" מההגדרות.
+  if (params.get('scale')) storage.responsa_scale = Number(params.get('scale'));
+  if (params.get('font')) storage.responsa_font = params.get('font');
   // `adv=<name>`: חיפוש שמור, כמו אחרי עבודה בלשונית.
   const advanced = {
     simple: { mode: 'simple', simpleText: 'צער בעלי חיים', options: { abbreviations: true, showForms: false } },

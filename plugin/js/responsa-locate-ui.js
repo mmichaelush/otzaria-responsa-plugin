@@ -8,7 +8,7 @@
   const Locate = root.ResponsaLocate;
   const I18n = root.ResponsaI18n;
   const { icon } = root.ResponsaIcons;
-  const { el, button } = root.ResponsaUi;
+  const { el, button, onEnter } = root.ResponsaUi;
   const t = (text, vars) => I18n.t(text, vars);
 
   function field(state, actions) {
@@ -25,14 +25,13 @@
     });
     input.value = state.text;
     input.addEventListener('input', () => actions.locateText(input.value));
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') actions.runLocate();
-    });
+    // Enter עושה בדיוק מה שהכפתור עושה, עם הטקסט שבשדה ברגע זה.
+    onEnter(input, (value) => actions.runLocate(value), 'go');
     return el(
       'div',
       { class: 'locate-row' },
       el('label', { class: 'search-bar' }, icon('document_search_24_regular'), input),
-      button('filled', t('פתיחה בבר אילן'), actions.runLocate, {
+      button('filled', t('פתיחה בבר אילן'), () => actions.runLocate(input.value), {
         icon: 'open_24_regular',
         key: 'locate-run',
         busy: state.running && state.openingIndex === null,

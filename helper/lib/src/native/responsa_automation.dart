@@ -283,9 +283,9 @@ class ResponsaAutomation {
     }
     var count = 0;
     var waitFor = settle;
-    var limit = attempts;
+    var rounds = attempts;
     var reposted = false;
-    for (var attempt = 0; attempt < limit; attempt++) {
+    for (var attempt = 0; attempt < rounds; attempt++) {
       pause(waitFor, deadline);
       // המודאל "לא נמצאה כל תוצאה!" הוא תשובה סופית, לא כשל זמני.
       if (dismissInfoModals() > 0) {
@@ -297,9 +297,9 @@ class ResponsaAutomation {
       // קרה). `-1` = עוד מחפשת: לחיצה נוספת הייתה מריצה את החיפוש פעם
       // שנייה, וממלאת מחדש את הרשימה בזמן שקוראים אותה. אחרי הניסיון האחרון
       // הלחיצה החוזרת מקבלת המתנה משלה.
-      if (count == 0 && (attempt + 1 < limit || !reposted)) {
+      if (count == 0 && (attempt + 1 < rounds || !reposted)) {
         ResponsaWin32.postClick(search);
-        if (attempt + 1 == limit) limit++;
+        if (attempt + 1 == rounds) rounds++;
         reposted = true;
       }
       waitFor += const Duration(seconds: 1);

@@ -199,9 +199,10 @@ class HelperService {
   /// התוסף מעביר אותה לחיפוש הספרייה של אוצריא בלי אלפי בקשות.
   Future<Map<String, Object?>> export() async {
     final index = await _requireIndex();
-    final info = await store.repository.info();
+    // מאותה טעינה כמו הספרים, כדי שלא יתאר קובץ אחר (CatalogStore._load).
+    final builtAt = index.builtAt;
     return {
-      if (info.builtAt != null) 'builtAt': info.builtAt,
+      'builtAt': ?builtAt,
       'books': [
         for (final book in index.books)
           [book.key, book.title, book.author, book.contextPath],

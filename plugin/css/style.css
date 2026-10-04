@@ -4,9 +4,16 @@
  * רדיוס קשיח מחוץ להגדרות המשתנים — כך דורשת בדיקת העיצוב של החנות.
  * רק מחלקות, לא מזהים: בדיקת ה-hex תופסת גם סלקטור כמו #fade.
  * כיוונים לוגיים (inline-start/end) בלבד: הדף מתהפך לשמאל-לימין באנגלית.
+ *
+ * גדלים: הכול ב-em מ-`--font-size-base`, ש"גודל תצוגה" (הגדרות) מכפיל
+ * (`--ui-scale`). רק הפס העליון קבוע ב-px, כמו הסרגל של אוצריא שלידו.
+ * פריסה לפי רוחב: `@container shell` ב-em, ולא `@media`: כך גם הגדלה
+ * של התצוגה עוברת לפריסה הצרה כשהתוכן כבר לא נכנס.
  */
 
 :root {
+  /* פקדים מובנים (תיבות סימון, רשימות, פסי גלילה) בצבעי המצב. */
+  color-scheme: light;
   --color-primary: #6750a4;
   --color-on-primary: #ffffff;
   --color-primary-container: #eaddff;
@@ -38,38 +45,65 @@
   --color-scrim: #000000;
 
   --font-ui: 'Rubik', system-ui, sans-serif;
+  /* גופן הממשק של אוצריא, גם כשבתוסף נבחר אחר (applyFont). */
+  --font-host: 'Rubik', system-ui, sans-serif;
   /* גופן האייקונים של אוצריא, שנטען מההתקנה (ResponsaIcons.useHostFont). */
   --font-icons: OtzariaIcons, sans-serif;
-  /* גודל הממשק קבוע בכוונה: typography.fontSize הוא גופן הקריאה (עד 36px). */
-  --font-size-base: 15px;
+  /* הגופנים שבבורר "גופן" (הגדרות); כל אחד מוצג בגופן עצמו. גופן חדש נוסף
+     בשלושה מקומות: FONTS (responsa-settings.js), FONT_LABELS
+     (responsa-panels.js), ומשתנה וכלל .option-tile כאן. */
+  --font-david: 'TaameyDavidCLM', serif;
+  --font-frank: 'FrankRuhlCLM', serif;
+  --font-ashkenaz: 'TaameyAshkenaz', serif;
+  --font-keter: 'KeterYG', serif;
+  --font-shofar: 'Shofar', sans-serif;
+  --font-noto: 'NotoSerifHebrew', serif;
+  --font-tinos: 'Tinos', serif;
+  --font-rubik: 'Rubik', sans-serif;
+  /* typography.fontSize הוא גופן הקריאה (עד 36px), ולכן אינו בסיס הממשק.
+     "גודל תצוגה" בהגדרות התוסף קובע את --ui-scale (applyAppearance). */
+  --ui-scale: 1;
+  --font-size-base: calc(15px * var(--ui-scale));
 
   /* לאוצריא רדיוס אחד (AppTokens.radius = 8); השאר לכרטיסי מצב וכפתורים. */
-  --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-panel: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 28px;
   --radius-pill: 999px;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
+  /* הרווח בין שורות בכרטיס, שבו רקע הלשונית עובר כקו מפריד. 1.5px היה
+     מצויר לסירוגין כ-1 וכ-2 פיקסלים במסך רגיל. */
+  --row-gap: 1px;
+
+  --space-1: calc(4px * var(--ui-scale));
+  --space-2: calc(8px * var(--ui-scale));
+  --space-3: calc(12px * var(--ui-scale));
+  --space-4: calc(16px * var(--ui-scale));
+  --space-5: calc(24px * var(--ui-scale));
+  --space-6: calc(32px * var(--ui-scale));
 
   /* כמו ContextOverlayPanel: החלקה 300ms, שקיפות 200ms. */
   --motion: 150ms cubic-bezier(0.2, 0, 0, 1);
   --motion-sheet: 300ms cubic-bezier(0.42, 0, 0.58, 1);
   --motion-fade: 200ms linear;
 
-  /* שורות הגדרה: משטח הכרטיס של אוצריא (AppSurfaces.card). */
-  --settings-row-surface: var(--color-surface);
+  /* רקע הלשונית: רקע מסכי הלוח של אוצריא (AppSurfaces.panelBackground);
+     כרטיסים ושורות: AppSurfaces.card. כך הכרטיסים בולטים מהרקע כמו
+     בהגדרות ובספרייה של אוצריא. */
+  --page-surface: color-mix(in srgb, var(--color-surface-container-highest) 47.5%, var(--color-surface));
+  --card-surface: var(--color-surface);
+  --hover-overlay: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+@media (min-resolution: 1.5dppx) {
+  :root {
+    --row-gap: 1.5px;
+  }
 }
 
 :root[data-mode='dark'] {
-  --settings-row-surface: var(--color-surface-container);
+  color-scheme: dark;
+  --page-surface: var(--color-surface-container-lowest);
+  --card-surface: var(--color-surface-container);
 }
 
 *,
@@ -84,14 +118,22 @@ body {
   margin: 0;
 }
 
+/* הגלילה רק בתוך `.app-content`. ה-container שעל body מבטל את העברת
+   overflow מ-body לדף, ובלי זה הדף עצמו נגלל בפיקסל ומציג פס גלילה שני. */
+html {
+  overflow: hidden;
+}
+
 body {
   overflow: hidden;
   font-family: var(--font-ui);
   font-size: var(--font-size-base);
   line-height: 1.5;
   color: var(--color-on-surface);
-  background: var(--color-surface);
+  background: var(--page-surface);
   -webkit-font-smoothing: antialiased;
+  /* הרוחב שלפיו נקבעת הפריסה (@container shell), ביחידות של הממשק. */
+  container: shell / inline-size;
 }
 
 button,
@@ -165,35 +207,45 @@ textarea {
   gap: 2px;
 }
 
-@media (max-width: 600px) {
-  .topbar {
-    height: 44px;
-  }
+/* הכפתור בפס: px כמו הפס עצמו, ולא גדל עם "גודל תצוגה". */
+.topbar .button {
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
 }
 
-/* ---------- לשוניות ראשיות (M3 primary tabs) ---------- */
+.topbar .button .icon {
+  width: 20px;
+  height: 20px;
+}
 
+/* ---------- ניווט בין הלשוניות ---------- */
+
+/* רחב: שורה מתחת לפס, על רקע הלשונית ולא בתוך הפס. הנבחרת ברקע
+   secondaryContainer ובפינות של 8, כמו סרגל הניווט של אוצריא. */
 .main-tabs {
   display: flex;
   flex-shrink: 0;
+  gap: var(--space-1);
   /* safe: כשהלשוניות גולשות, הראשונה אינה נחתכת מחוץ לגלילה. */
   justify-content: center;
   justify-content: safe center;
+  padding: var(--space-2) var(--space-4);
   overflow-x: auto;
-  background: var(--color-surface-container-high);
+  scrollbar-width: none;
+  background: var(--page-surface);
   border-bottom: 1px solid var(--color-outline-variant);
 }
 
 .main-tab {
-  position: relative;
   display: inline-flex;
-  flex: 0 1 11em;
-  flex-direction: column;
-  gap: 2px;
+  flex-shrink: 0;
+  gap: var(--space-2);
   align-items: center;
   justify-content: center;
-  min-height: 3.6em;
-  padding: var(--space-1) var(--space-3);
+  min-height: 2.5em;
+  padding: 0 1em;
   font: inherit;
   font-size: 0.93em;
   font-weight: 500;
@@ -202,52 +254,106 @@ textarea {
   cursor: pointer;
   background: transparent;
   border: 0;
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--motion),
+    color var(--motion);
 }
 
 .main-tab .icon {
-  width: 1.4em;
-  height: 1.4em;
-}
-
-.main-tab[aria-selected='true'] {
-  color: var(--color-primary);
-}
-
-.main-tab[aria-selected='true']::after {
-  position: absolute;
-  inset-inline: 22%;
-  bottom: 0;
-  height: 3px;
-  content: '';
-  background: var(--color-primary);
-  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  width: 1.35em;
+  height: 1.35em;
 }
 
 .main-tab:hover {
-  background: color-mix(in srgb, var(--color-on-surface) 5%, transparent);
+  color: var(--color-on-surface);
+  background: var(--hover-overlay);
+}
+
+.main-tab[aria-selected='true'] {
+  font-weight: 600;
+  color: var(--color-on-secondary-container);
+  background: var(--color-secondary-container);
 }
 
 .main-tab:focus-visible {
   outline: 2px solid var(--color-primary);
-  outline-offset: -4px;
-  border-radius: var(--radius-sm);
+  outline-offset: 1px;
 }
 
-/* בחלון צר: רק האייקונים, ו-title נותן את השם. */
-@media (max-width: 480px) {
+.main-tab-label,
+.main-tab-short {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main-tab-short {
+  display: none;
+}
+
+/* צר (טלפון, או אוצריא בחצי מסך): סרגל ניווט תחתון, אייקון מעל שם. */
+@container shell (max-width: 40em) {
+  .topbar {
+    height: 44px;
+  }
+
+  .show-responsa-label {
+    display: none;
+  }
+
+  .main-tabs {
+    order: 2;
+    gap: 0;
+    justify-content: space-around;
+    padding: var(--space-1) var(--space-1) calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
+    /* כמו חלונית הניווט של אוצריא: בצבע הפס העליון. */
+    background: var(--color-surface-container-high);
+    border-top: 1px solid var(--color-outline-variant);
+    border-bottom: 0;
+  }
+
+  .main-tab {
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 0.15em;
+    min-width: 0;
+    min-height: 4.4em;
+    padding: var(--space-1) 0.25em;
+    font-size: 0.78em;
+  }
+
+  .main-tab .icon {
+    box-sizing: content-box;
+    width: 1.9em;
+    height: 1.9em;
+    padding: 0.2em 1.1em;
+    border-radius: var(--radius-pill);
+    transition: background var(--motion);
+  }
+
+  /* M3 NavigationBar: הגלולה מאחורי האייקון, לא כל התא. */
+  .main-tab[aria-selected='true'],
+  .main-tab:hover {
+    color: var(--color-on-surface);
+    background: transparent;
+  }
+
+  .main-tab[aria-selected='true'] .icon {
+    color: var(--color-on-secondary-container);
+    background: var(--color-secondary-container);
+  }
+
+  .main-tab:hover:not([aria-selected='true']) .icon {
+    background: var(--hover-overlay);
+  }
+
   .main-tab-label {
     display: none;
   }
 
-  .main-tab {
-    min-height: 3em;
-  }
-}
-
-/* "פתיחת בר אילן" בפס העליון: בחלון צר רק האייקון. */
-@media (max-width: 600px) {
-  .show-responsa-label {
-    display: none;
+  .main-tab-short {
+    display: block;
+    max-width: 100%;
   }
 }
 
@@ -257,15 +363,23 @@ textarea {
   margin-bottom: var(--space-4);
 }
 
+/* לשונית בלי הסבר (הגדרות): הכותרת הנסתרת אינה משאירה רווח. */
+.page-header:not(:has(.page-lead)) {
+  margin-bottom: 0;
+}
+
+/* שם הלשונית כבר מסומן בניווט; הכותרת נשארת לקורא מסך בלבד. */
 .page-title {
-  margin: 0;
-  font-size: 1.45em;
-  font-weight: 700;
-  line-height: 1.3;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .page-lead {
-  margin: var(--space-1) 0 0;
+  margin: 0;
   color: var(--color-on-surface-variant);
 }
 
@@ -289,7 +403,7 @@ textarea {
 }
 
 .content-column {
-  max-width: 880px;
+  max-width: 58em;
   margin: 0 auto;
 }
 
@@ -318,14 +432,15 @@ textarea {
   align-items: center;
   justify-content: center;
   min-height: 2.6em;
-  padding: 0 1.5em;
+  padding: 0 1.25em;
   overflow: hidden;
   font-size: 0.95em;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   border: 0;
-  border-radius: var(--radius-pill);
+  /* כמו הכפתורים של אוצריא (AppTokens.roundedShape). */
+  border-radius: var(--radius-sm);
   transition:
     background var(--motion),
     box-shadow var(--motion);
@@ -384,7 +499,7 @@ textarea {
 .button-outlined {
   color: var(--color-primary);
   background: transparent;
-  border: 1px solid var(--color-outline);
+  border: 1px solid var(--color-outline-variant);
 }
 
 .button-text {
@@ -399,24 +514,28 @@ textarea {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 2.65em;
+  height: 2.65em;
   padding: 0;
   overflow: hidden;
   color: var(--color-on-surface-variant);
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
 }
 
 .icon-button::after {
   position: absolute;
   inset: 0;
   content: '';
-  background: currentColor;
+  background: var(--color-primary);
   opacity: 0;
   transition: opacity var(--motion);
+}
+
+.icon-button:hover {
+  color: var(--color-on-surface);
 }
 
 .icon-button:hover::after {
@@ -434,29 +553,35 @@ textarea {
 }
 
 .icon-button .icon {
-  width: 24px;
-  height: 24px;
+  width: 1.6em;
+  height: 1.6em;
 }
 
 /* ---------- שדה חיפוש (M3 search bar) ---------- */
 
+/* שדה ממולא עם מסגרת עדינה, בפינות של 8 — כמו שדות החיפוש של אוצריא. */
 .search-bar {
   display: flex;
   gap: var(--space-3);
   align-items: center;
-  min-height: 3.4em;
+  min-height: 3.2em;
   padding: 0 var(--space-4);
   color: var(--color-on-surface-variant);
-  background: var(--color-surface-container-high);
-  border-radius: var(--radius-pill);
+  background: var(--card-surface);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
   transition:
-    box-shadow var(--motion),
-    background var(--motion);
+    border-color var(--motion),
+    box-shadow var(--motion);
+}
+
+.search-bar:hover {
+  border-color: var(--color-outline);
 }
 
 .search-bar:focus-within {
-  background: var(--color-surface-container-highest);
-  box-shadow: 0 0 0 2px var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .search-input {
@@ -512,16 +637,16 @@ textarea {
 
 .result {
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-container-low);
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-md);
+  background: var(--card-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-panel);
   transition:
     background var(--motion),
     border-color var(--motion);
 }
 
 .result:hover {
-  background: var(--color-surface-container);
+  border-color: var(--color-outline-variant);
 }
 
 .result:focus-within {
@@ -547,7 +672,7 @@ textarea {
 }
 
 .result.is-expanded {
-  background: var(--color-surface-container);
+  border-color: var(--color-outline-variant);
 }
 
 .details-toggle[aria-expanded='true'] {
@@ -613,7 +738,7 @@ textarea {
   margin-top: var(--space-4);
 }
 
-@media (max-width: 520px) {
+@container shell (max-width: 35em) {
   .result-row {
     flex-direction: column;
     align-items: stretch;
@@ -636,12 +761,12 @@ textarea {
 /* ---------- כרטיס מצב (הכנה, שגיאות, בנייה) ---------- */
 
 .state-card {
-  max-width: 560px;
+  max-width: 37em;
   padding: var(--space-6) var(--space-5);
-  margin: var(--space-6) auto;
+  margin: var(--space-5) auto;
   text-align: center;
-  background: var(--color-surface-container-low);
-  border-radius: var(--radius-xl);
+  background: var(--card-surface);
+  border-radius: var(--radius-panel);
 }
 
 .state-icon {
@@ -772,9 +897,8 @@ textarea {
 .rebuild-banner {
   padding: var(--space-3) var(--space-4) var(--space-2);
   margin-bottom: var(--space-4);
-  background: var(--color-surface-container-low);
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-md);
+  background: var(--card-surface);
+  border-radius: var(--radius-panel);
 }
 
 .rebuild-banner-row {
@@ -804,7 +928,7 @@ textarea {
   margin-bottom: var(--space-4);
   color: var(--color-on-tertiary-container);
   background: var(--color-tertiary-container);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-panel);
 }
 
 .notice-text {
@@ -891,11 +1015,11 @@ textarea {
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
 }
 
 .breadcrumb:hover {
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  background: var(--hover-overlay);
 }
 
 .breadcrumb:focus-visible {
@@ -912,6 +1036,11 @@ span.breadcrumb {
   font-weight: 600;
   color: var(--color-on-surface);
   cursor: default;
+}
+
+/* המקום הנוכחי הוא הכותרת שמתחת לשורה, ואינו חוזר בה. */
+.breadcrumbs li:last-child:has(span.breadcrumb) {
+  display: none;
 }
 
 .breadcrumb-separator {
@@ -949,17 +1078,16 @@ span.breadcrumb {
   color: var(--color-on-surface-variant);
 }
 
+/* כרטיס אחד עם שורות, כמו כרטיס ההגדרות: הרווח בין השורות הוא הקו. */
 .browse-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--row-gap);
   padding: 0;
   margin: 0 0 var(--space-4);
   overflow: hidden;
   list-style: none;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-md);
-}
-
-.browse-list li + li {
-  border-top: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-panel);
 }
 
 .browse-row {
@@ -973,13 +1101,13 @@ span.breadcrumb {
   color: var(--color-on-surface);
   text-align: start;
   cursor: pointer;
-  background: var(--color-surface-container-low);
+  background: var(--card-surface);
   border: 0;
   transition: background var(--motion);
 }
 
 .browse-row:hover {
-  background: var(--color-surface-container);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--card-surface));
 }
 
 .browse-row:focus-visible {
@@ -1055,7 +1183,7 @@ span.breadcrumb {
   align-items: center;
   justify-content: center;
   min-height: 3.6em;
-  padding: var(--space-3) 56px var(--space-2);
+  padding: var(--space-3) 3.75em var(--space-2);
 }
 
 .sheet-title {
@@ -1079,6 +1207,10 @@ span.breadcrumb {
   margin-top: var(--space-2);
 }
 
+.settings-section:first-child .settings-heading {
+  padding-top: var(--space-1);
+}
+
 .settings-heading {
   margin: 0;
   padding: var(--space-5) var(--space-4) var(--space-3);
@@ -1093,11 +1225,11 @@ span.breadcrumb {
   color: var(--color-on-surface-variant);
 }
 
-/* השורות מופרדות ברווח של 1.5px, שבו רקע הלוח עובר כקו מפריד. */
+/* השורות מופרדות ברווח של 1.5px, שבו רקע הלשונית עובר כקו מפריד. */
 .settings-card {
   display: flex;
   flex-direction: column;
-  gap: 1.5px;
+  gap: var(--row-gap);
   overflow: hidden;
   border-radius: var(--radius-panel);
 }
@@ -1112,18 +1244,26 @@ span.breadcrumb {
   font: inherit;
   text-align: start;
   color: var(--color-on-surface);
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border: 0;
 }
 
 .settings-row-stacked {
   flex-direction: column;
+  gap: var(--space-3);
   align-items: stretch;
 }
 
+/* בשורה שהפקד שלה מתחתיה: האייקון והטקסטים בשורה אחת מעליו. */
+.settings-row-heading {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+}
+
 .settings-row-icon {
-  width: 24px;
-  height: 24px;
+  width: 1.6em;
+  height: 1.6em;
   color: var(--color-on-surface-variant);
 }
 
@@ -1158,14 +1298,14 @@ span.breadcrumb {
   position: absolute;
   inset: 0;
   content: '';
-  background: var(--color-on-surface);
+  background: var(--color-primary);
   opacity: 0;
   transition: opacity var(--motion);
   pointer-events: none;
 }
 
 .settings-switch-row:hover::after {
-  opacity: 0.05;
+  opacity: 0.08;
 }
 
 .settings-switch-row:focus-visible {
@@ -1192,8 +1332,8 @@ span.breadcrumb {
 .switch {
   position: relative;
   flex-shrink: 0;
-  width: 52px;
-  height: 32px;
+  width: 3.45em;
+  height: 2.15em;
   background: var(--color-surface-container-highest);
   border: 2px solid var(--color-outline);
   border-radius: var(--radius-pill);
@@ -1205,8 +1345,8 @@ span.breadcrumb {
 .switch-thumb {
   position: absolute;
   top: 50%;
-  width: 16px;
-  height: 16px;
+  width: 1.05em;
+  height: 1.05em;
   background: var(--color-outline);
   border-radius: 50%;
   transition:
@@ -1214,7 +1354,7 @@ span.breadcrumb {
     width var(--motion),
     height var(--motion),
     background var(--motion);
-  inset-inline-start: 6px;
+  inset-inline-start: 0.4em;
   transform: translateY(-50%);
 }
 
@@ -1224,10 +1364,10 @@ span.breadcrumb {
 }
 
 [aria-checked='true'] > .switch .switch-thumb {
-  width: 24px;
-  height: 24px;
+  width: 1.6em;
+  height: 1.6em;
   background: var(--color-on-primary);
-  inset-inline-start: 22px;
+  inset-inline-start: 1.45em;
 }
 
 /* ---------- בקר מקטעים (M3 segmented buttons) ---------- */
@@ -1268,9 +1408,90 @@ span.breadcrumb {
   outline-offset: -3px;
 }
 
+.segment:hover:not([aria-checked='true']) {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
 .segment-check {
   width: 1.1em;
   height: 1.1em;
+}
+
+/* בורר הגופן: אריחים שנשברים לשורות, כל שם בגופן שלו. */
+.option-grid {
+  display: grid;
+  /* תשעה גופנים: 3×3 בכל רוחב, בלי שורה יתומה. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.option-tile {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  justify-content: center;
+  min-height: 2.8em;
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: 1.07em;
+  color: var(--color-on-surface);
+  cursor: pointer;
+  background: var(--color-surface);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  transition: background var(--motion);
+}
+
+.option-tile:hover:not([aria-checked='true']) {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.option-tile[aria-checked='true'] {
+  font-weight: 600;
+  color: var(--color-on-secondary-container);
+  background: var(--color-secondary-container);
+  border-color: var(--color-secondary-container);
+}
+
+.option-tile:focus-visible {
+  outline: 3px solid var(--color-secondary);
+  outline-offset: 1px;
+}
+
+.option-tile[data-font='host'] {
+  font-family: var(--font-host);
+}
+
+.option-tile[data-font='TaameyDavidCLM'] {
+  font-family: var(--font-david);
+}
+
+.option-tile[data-font='FrankRuhlCLM'] {
+  font-family: var(--font-frank);
+}
+
+.option-tile[data-font='TaameyAshkenaz'] {
+  font-family: var(--font-ashkenaz);
+}
+
+.option-tile[data-font='KeterYG'] {
+  font-family: var(--font-keter);
+}
+
+.option-tile[data-font='Shofar'] {
+  font-family: var(--font-shofar);
+}
+
+.option-tile[data-font='NotoSerifHebrew'] {
+  font-family: var(--font-noto);
+}
+
+.option-tile[data-font='Tinos'] {
+  font-family: var(--font-tinos);
+}
+
+.option-tile[data-font='Rubik'] {
+  font-family: var(--font-rubik);
 }
 
 /* ---------- דיאלוג (מסך הפתיחה) ---------- */
@@ -1282,8 +1503,8 @@ span.breadcrumb {
   z-index: 101;
   display: flex;
   flex-direction: column;
-  width: min(720px, calc(100% - 32px));
-  height: min(640px, calc(100% - 48px));
+  width: min(48em, calc(100% - 32px));
+  height: min(43em, calc(100% - 48px));
   overflow: hidden;
   background: var(--color-surface-container-high);
   border-radius: var(--radius-panel);
@@ -1309,8 +1530,8 @@ span.breadcrumb {
 .tabs {
   display: flex;
   flex-shrink: 0;
+  gap: var(--space-1);
   overflow-x: auto;
-  border-bottom: 1px solid var(--color-outline-variant);
 }
 
 .tab {
@@ -1320,7 +1541,7 @@ span.breadcrumb {
   gap: var(--space-2);
   align-items: center;
   justify-content: center;
-  min-height: 3em;
+  min-height: 2.6em;
   padding: 0 var(--space-3);
   font: inherit;
   font-weight: 500;
@@ -1329,6 +1550,8 @@ span.breadcrumb {
   cursor: pointer;
   background: transparent;
   border: 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--motion);
 }
 
 .tab .icon {
@@ -1336,33 +1559,36 @@ span.breadcrumb {
   height: 1.2em;
 }
 
+/* כמו TabBar באוצריא: הנבחרת ברקע secondaryContainer. */
 .tab[aria-selected='true'] {
-  color: var(--color-primary);
+  font-weight: 600;
+  color: var(--color-on-surface);
+  background: var(--color-secondary-container);
 }
 
-.tab[aria-selected='true']::after {
-  position: absolute;
-  inset-inline: var(--space-3);
-  bottom: 0;
-  height: 3px;
-  content: '';
-  background: var(--color-primary);
-  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-}
-
-.tab:hover {
-  background: color-mix(in srgb, var(--color-on-surface) 5%, transparent);
+.tab:hover:not([aria-selected='true']) {
+  background: var(--hover-overlay);
 }
 
 .tab:focus-visible {
   outline: 2px solid var(--color-primary);
-  outline-offset: -4px;
-  border-radius: var(--radius-sm);
+  outline-offset: 1px;
 }
 
-@media (max-width: 560px) {
-  .tab-label {
-    display: none;
+/* צר: האייקון מעל השם, ולא אייקונים בלי שם. */
+@container shell (max-width: 37em) {
+  .tab {
+    flex-direction: column;
+    gap: 0.15em;
+    min-height: 3.6em;
+    padding: var(--space-1);
+    font-size: 0.78em;
+    white-space: normal;
+  }
+
+  .tab .icon {
+    width: 1.6em;
+    height: 1.6em;
   }
 }
 
@@ -1377,6 +1603,10 @@ span.breadcrumb {
   outline: none;
 }
 
+.dialog-body > :first-child {
+  margin-top: 0;
+}
+
 .help-lead {
   margin: 0 0 var(--space-4);
   color: var(--color-on-surface-variant);
@@ -1385,7 +1615,7 @@ span.breadcrumb {
 .help-topic {
   padding: var(--space-4);
   margin-bottom: var(--space-3);
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border-radius: var(--radius-panel);
 }
 
@@ -1415,8 +1645,8 @@ span.breadcrumb {
 }
 
 .faq-item {
-  margin-bottom: 1.5px;
-  background: var(--settings-row-surface);
+  margin-bottom: var(--row-gap);
+  background: var(--card-surface);
 }
 
 .faq-item:first-child {
@@ -1428,9 +1658,40 @@ span.breadcrumb {
 }
 
 .faq-question {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
   padding: var(--space-3) var(--space-4);
   font-weight: 600;
+  list-style: none;
   cursor: pointer;
+  transition: background var(--motion);
+}
+
+.faq-question::-webkit-details-marker {
+  display: none;
+}
+
+/* חץ למטה שמתהפך כשהשאלה פתוחה, במקום המשולש של הדפדפן. */
+.faq-question::before {
+  flex-shrink: 0;
+  width: 0.45em;
+  height: 0.45em;
+  margin-top: -0.2em;
+  content: '';
+  border: solid var(--color-on-surface-variant);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  transition: transform var(--motion);
+}
+
+.faq-item[open] > .faq-question::before {
+  margin-top: 0.2em;
+  transform: rotate(-135deg);
+}
+
+.faq-question:hover {
+  background: var(--hover-overlay);
 }
 
 .faq-question:focus-visible {
@@ -1450,7 +1711,7 @@ span.breadcrumb {
   gap: var(--space-2) var(--space-5);
   padding: var(--space-4);
   margin: 0;
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border-radius: var(--radius-panel);
 }
 
@@ -1464,7 +1725,7 @@ span.breadcrumb {
 }
 
 /* בחלון צר: תווית מעל ערך, כדי שנתיב ארוך לא יישבר לשורות של מילה. */
-@media (max-width: 520px) {
+@container shell (max-width: 35em) {
   .facts {
     grid-template-columns: 1fr;
     gap: 0;
@@ -1486,7 +1747,7 @@ span.breadcrumb {
 .report-card {
   padding: var(--space-4);
   margin-bottom: var(--space-3);
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border-radius: var(--radius-panel);
 }
 
@@ -1522,9 +1783,9 @@ span.breadcrumb {
   line-height: 1.5;
   color: var(--color-on-surface);
   resize: vertical;
-  background: var(--color-surface-container-highest);
-  border: 1px solid var(--color-outline);
-  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
 }
 
 .report-text:focus {
@@ -1534,12 +1795,13 @@ span.breadcrumb {
 
 /* ---------- הבהרה (מסך הפתיחה ו"אודות") ---------- */
 
+/* קטע מודגש כמו באוצריא (AppSurfaces.panelSectionAccent): רקע עדין ומסגרת דקה. */
 .clarification {
   padding: var(--space-4);
   margin: var(--space-4) 0 var(--space-3);
   color: var(--color-on-surface);
-  background: var(--color-surface-container-highest);
-  border-inline-start: 4px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary-container) 30%, var(--card-surface));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
   border-radius: var(--radius-panel);
 }
 
@@ -1585,7 +1847,7 @@ span.breadcrumb {
   gap: var(--space-3);
   align-items: flex-start;
   padding: var(--space-3) var(--space-4);
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border-radius: var(--radius-panel);
 }
 
@@ -1612,8 +1874,8 @@ span.breadcrumb {
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3) var(--space-4);
-  margin-bottom: 1.5px;
-  background: var(--settings-row-surface);
+  margin-bottom: var(--row-gap);
+  background: var(--card-surface);
 }
 
 .checklist-item:first-child {
@@ -1669,11 +1931,11 @@ span.breadcrumb {
   align-items: center;
   width: 100%;
   padding: var(--space-3) var(--space-4);
-  margin-bottom: 1.5px;
+  margin-bottom: var(--row-gap);
   color: var(--color-on-surface);
   text-align: start;
   cursor: pointer;
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border: none;
   transition: background var(--motion);
 }
@@ -1687,7 +1949,7 @@ span.breadcrumb {
 }
 
 .link-row:hover {
-  background: var(--color-surface-container-high);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--card-surface));
 }
 
 .link-row:focus-visible {
@@ -1737,7 +1999,7 @@ span.breadcrumb {
 .log-card {
   padding: var(--space-4);
   margin-top: var(--space-4);
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border-radius: var(--radius-panel);
 }
 
@@ -1829,13 +2091,14 @@ span.breadcrumb {
   background: color-mix(in srgb, var(--color-error-container) 35%, var(--color-surface-container-low));
 }
 
-/* "מה יחופש": ההסבר במילים, לפני השאילתה עצמה. */
+/* "מה יחופש": ההסבר במילים, לפני השאילתה עצמה. קטע מודגש כמו ההבהרה. */
 .summary-card {
   padding: var(--space-4);
   margin-top: var(--space-5);
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
-  border-radius: var(--radius-md);
+  color: var(--color-on-surface);
+  background: color-mix(in srgb, var(--color-primary-container) 30%, var(--card-surface));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  border-radius: var(--radius-panel);
 }
 
 .summary-title {
@@ -1844,7 +2107,8 @@ span.breadcrumb {
   align-items: center;
   margin: 0 0 var(--space-2);
   font-size: 1.05em;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--color-primary);
 }
 
 .summary-line {
@@ -1857,7 +2121,7 @@ span.breadcrumb {
 }
 
 .summary-line.is-empty {
-  color: color-mix(in srgb, var(--color-on-secondary-container) 70%, transparent);
+  color: var(--color-on-surface-variant);
 }
 
 .summary-card .query-preview {
@@ -1875,11 +2139,21 @@ span.breadcrumb {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  align-items: center;
+  align-items: stretch;
 }
 
 .locate-row .search-bar {
   flex: 1 1 18em;
+}
+
+@container shell (max-width: 35em) {
+  .locate-row .button {
+    flex: 1 1 100%;
+  }
+
+  .settings-row {
+    gap: var(--space-3);
+  }
 }
 
 .locate-page .advanced-status {
@@ -1914,13 +2188,14 @@ span.breadcrumb {
   font-size: 0.93em;
   color: var(--color-on-surface);
   cursor: pointer;
-  background: transparent;
+  background: var(--card-surface);
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-sm);
+  transition: background var(--motion);
 }
 
 .chip:hover {
-  background: color-mix(in srgb, var(--color-on-surface) 6%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--card-surface));
 }
 
 .chip:focus-visible {
@@ -1933,16 +2208,14 @@ span.breadcrumb {
 }
 
 .choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--row-gap);
   padding: 0;
   margin: 0;
   overflow: hidden;
   list-style: none;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-md);
-}
-
-.choice-list li + li {
-  border-top: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-panel);
 }
 
 .choice-row {
@@ -1956,12 +2229,13 @@ span.breadcrumb {
   color: var(--color-on-surface);
   text-align: start;
   cursor: pointer;
-  background: var(--color-surface-container-lowest);
+  background: var(--card-surface);
   border: 0;
+  transition: background var(--motion);
 }
 
 .choice-row:hover {
-  background: color-mix(in srgb, var(--color-on-surface) 6%, var(--color-surface-container-lowest));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--card-surface));
 }
 
 .choice-row:focus-visible {
@@ -1983,6 +2257,14 @@ span.breadcrumb {
 /* מקור שמתאים לספר שפתוח באוצריא (לחיצה ימנית ← "איתור המקום בבר אילן"). */
 .choice-row.is-preferred .choice-text {
   font-weight: 600;
+}
+
+.choice-row.is-preferred {
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+[dir='rtl'] .choice-row.is-preferred {
+  box-shadow: inset -3px 0 0 var(--color-primary);
 }
 
 .choice-note {
@@ -2055,7 +2337,7 @@ span.breadcrumb {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4) var(--space-4);
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border: 1px solid transparent;
   border-radius: var(--radius-panel);
 }
@@ -2100,9 +2382,17 @@ span.breadcrumb {
   min-height: 2.6em;
   padding: 0 var(--space-3);
   color: var(--color-on-surface);
-  background: var(--color-surface-container-highest);
-  border: 1px solid var(--color-outline);
-  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--motion);
+}
+
+.term-input:hover,
+.number-input:hover,
+.select:hover,
+.manual-input:hover {
+  border-color: var(--color-outline);
 }
 
 .term-input {
@@ -2250,7 +2540,7 @@ span.breadcrumb {
 .scope-picker {
   margin-top: var(--space-3);
   overflow: hidden;
-  background: var(--settings-row-surface);
+  background: var(--card-surface);
   border-radius: var(--radius-panel);
 }
 
@@ -2320,9 +2610,10 @@ span.breadcrumb {
   display: flex;
   gap: var(--space-2);
   align-items: center;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  background: var(--color-surface-container-highest);
-  border-radius: var(--radius-panel);
+  padding: var(--space-2);
+  padding-inline-start: var(--space-4);
+  background: var(--page-surface);
+  border-radius: var(--radius-sm);
 }
 
 .query-text {
@@ -2392,9 +2683,9 @@ span.breadcrumb {
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
   margin-top: var(--space-5);
-  background: var(--color-surface-container-high);
-  border-radius: var(--radius-md);
-  box-shadow: 0 -2px 8px color-mix(in srgb, var(--color-shadow) 8%, transparent);
+  background: var(--card-surface);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 -1px 6px color-mix(in srgb, var(--color-shadow) 10%, transparent);
 }
 
 .advanced-status {
@@ -2414,7 +2705,7 @@ span.breadcrumb {
   margin-inline-start: auto;
 }
 
-@media (max-width: 520px) {
+@container shell (max-width: 35em) {
   .syntax-list {
     grid-template-columns: 1fr;
   }
@@ -2425,6 +2716,55 @@ span.breadcrumb {
 
   .gap-row {
     margin-inline-start: var(--space-2);
+  }
+}
+
+/* הסרגל הדביק נוגע בתחתית: אחרת התוכן נראה ברווח שמתחתיו. */
+.app-content:has(.advanced-footer) {
+  padding-bottom: 0;
+}
+
+.app-content:has(.advanced-footer) .advanced-footer {
+  margin-bottom: var(--space-2);
+}
+
+/* צר מאוד (טלפון, או הגדלה גדולה): פחות שוליים, ובלי אייקוני שורה. */
+@container shell (max-width: 30em) {
+  .app-content {
+    padding-inline: var(--space-2);
+  }
+
+  .settings-row-heading > .settings-row-icon,
+  .settings-row > .settings-row-icon {
+    display: none;
+  }
+
+  .segmented {
+    flex-direction: column;
+  }
+
+  .segment + .segment {
+    border-inline-start: 0;
+    border-top: 1px solid var(--color-outline);
+  }
+
+  .option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* מסך מגע: מטרות לחיצה של 44px לפחות (M3). */
+@media (pointer: coarse) {
+  .button,
+  .segment,
+  .chip,
+  .option-tile {
+    min-height: 2.95em;
+  }
+
+  .icon-button {
+    width: 2.95em;
+    height: 2.95em;
   }
 }
 

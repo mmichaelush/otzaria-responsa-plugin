@@ -99,8 +99,8 @@ class ResponsaCatalogWriter {
           for (final node in book.classificationNodes)
             ResponsaNames.displayOf(node),
         ];
-        // כותרת ריקה לא תפיל את האימות: שם צומת חריג אחד היה מבטל בנייה של
-        // שש דקות.
+        // כותרת ריקה לא תפיל את האימות: שם צומת חריג אחד היה מבטל בנייה
+        // שלמה.
         final title = book.title.trim().isEmpty
             ? book.leafTitle.trim()
             : book.title;
@@ -324,7 +324,7 @@ class ResponsaCatalogWriter {
   }
 
   /// SQLite ב-Windows פותח בלי FILE_SHARE_DELETE, ולכן קריאה מקבילה (חיפוש,
-  /// `/status`) חוסמת שינוי שם לרגע. ממתינים לה במקום לזרוק חמש דקות בנייה.
+  /// `/status`) חוסמת שינוי שם לרגע. ממתינים לה במקום לזרוק בנייה שלמה.
   static void _retry(void Function() action) {
     for (var attempt = 1; ; attempt++) {
       try {
