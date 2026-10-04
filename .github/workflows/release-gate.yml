@@ -1,0 +1,33 @@
+name: Release gate
+
+# מפרסם את הגרסה שב-.github/release-gate.json ברגע שאוצריא מוציאה גרסה
+# רשמית עם ה-PR-ים שהיא תלויה בהם (.github/release-gate.sh). עד אז כל ריצה
+# רק מסכמת מה חסר. אפשר להריץ ידנית, גם כבדיקה בלבד.
+on:
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: בדיקה בלבד, בלי תג ובלי פרסום
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-gate
+
+permissions:
+  # תג וקידום main; `actions` — הפעלת ci.yml על התג.
+  contents: write
+  actions: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check Otzaria and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry-run && '1' || '' }}
+        run: bash .github/release-gate.sh

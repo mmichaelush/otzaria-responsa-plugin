@@ -1,0 +1,6 @@
+# צילומי המסך לחנות אוצריא, בסדר ההצגה. ci.yml (job store) קורא את הקובץ.
+docs/images/plugin-search.png
+docs/images/browse.png
+docs/images/browse-search.png
+docs/images/advanced.png
+docs/images/context-menu.png

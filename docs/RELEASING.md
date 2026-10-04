@@ -16,7 +16,8 @@
 - **`CHANGELOG.md`:** סעיף `## X.Y.Z` בראש הקובץ, עם מה שהשתנה בתוסף ובשירות.
 - **שינוי שובר בפרוטוקול:** מעלים גם את `apiVersion` בשני הצדדים (ראו `docs/PROTOCOL.md`).
 - **החנות מקבלת רק גרסה גבוהה מזו שכבר בה.** תג עם אותה גרסה לא יפורסם שם.
-- **`minAppVersion` במניפסט** שווה ל-`app-version` בכל מופע ב-`.github/workflows/ci.yml`. ה-CI בודק זאת.
+- **`minAppVersion`:** ה-CI קורא אותו מהמניפסט ומעביר לוולידטור. אין מה לעדכן ב-workflow.
+- **צילומי המסך לחנות** ב-`.github/store-screenshots.txt`, בסדר ההצגה.
 
 ## 2. תיוג
 
@@ -26,6 +27,26 @@
 git tag v0.2.0
 git push origin v0.2.0
 ```
+
+### גרסה שתלויה ב-PR של אוצריא
+
+גרסה שדורשת API שעוד לא יצא באוצריא (`minAppVersion` גבוה מהגרסה הרשמית האחרונה) אינה מתויגת ידנית. היא ממתינה בענף `release/X.Y.Z`, ו-`release-gate.yml` מפרסם אותה בזמן:
+
+1. **`.github/release-gate.json` ב-`main`:** הגרסה, הענף וה-PR-ים באוצריא שהיא תלויה בהם.
+
+   ```json
+   { "version": "0.5.0", "branch": "release/0.5.0", "otzaria": "Otzaria/otzaria", "pulls": [1655, 1762] }
+   ```
+
+2. **כל שלוש שעות** (`.github/release-gate.sh`) נבדק שכל ה-PR-ים מוזגו, ושיש גרסה רשמית של אוצריא שכוללת את כולם: לא Pre-release, ולא נמוכה מ-`minAppVersion` שבענף.
+3. **כשהכול מוכן:** נוצר התג `vX.Y.Z` על ראש הענף, `main` מתקדם אליו (fast-forward בלבד; אחרת אזהרה, והפרסום ממשיך), ו-`ci.yml` רץ על התג. תג שנוצר ב-`GITHUB_TOKEN` אינו מפעיל workflows בעצמו, ולכן השער מפעיל את `ci.yml` במפורש.
+
+- **מה חסר:** ב-Summary של כל ריצה (Actions ← Release gate).
+- **בדיקה ידנית:** Actions ← Release gate ← Run workflow, עם "בדיקה בלבד". אותה בדיקה מקומית: `DRY_RUN=1 GITHUB_REPOSITORY=mmichaelush/otzaria-responsa-plugin bash .github/release-gate.sh`.
+- **תיקון לגרסה הממתינה** נדחף לענף שלה. השער מפרסם את הראש שלו, ו-CI רץ על כל push ל-`release/**`.
+- **אחרי הפרסום** מעדכנים את `release-gate.json` לגרסה הבאה, או מרוקנים את `version`.
+- **`ci.yml` זהה בכל הענפים.** `GITHUB_TOKEN` אינו רשאי לדחוף שינוי ב-workflow, ולכן `main` מתקדם רק כשאין הבדל ב-`.github/workflows`. שינוי ב-workflow נכנס קודם ל-`main`, והענף עובר rebase עליו.
+- **GitHub משבית תזמון** במאגר שלא היה בו שינוי 60 יום. אז מפעילים את ה-workflow מחדש בלשונית Actions.
 
 ## 3. מה ה-CI עושה בתג
 
@@ -39,7 +60,7 @@ git push origin v0.2.0
 - **`store` מפרסם את הקובץ שב-Release:** הוא פורס אותו ומריץ עליו את הוולידטור (`publish: auto`). הוולידטור מפרסם רק מתיקייה, ולכן לא מעבירים לו את הקובץ עצמו.
 - **התוצאה ב-Summary של הריצה:** עלה, ממתין לאישור, כבר קיים, נכשל, או חסרים סודות.
 - **כשל בחנות לא נוגע ב-Release.** אחרי תיקון (סיסמה, למשל), מריצים שוב רק את `store` ("Re-run failed jobs").
-- **ב-PR וב-push ל-`main` אין פרסום.**
+- **ב-PR וב-push ל-`main` או ל-`release/**` אין פרסום.**
 
 ## 4. הגדרה חד-פעמית של החנות
 

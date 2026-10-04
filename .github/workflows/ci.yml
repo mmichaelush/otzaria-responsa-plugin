@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
     tags: ['v*']
   pull_request:
+  # release-gate.yml מפעיל כך את הבנייה על התג שיצר: תג שנוצר ב-GITHUB_TOKEN
+  # אינו מפעיל workflows בעצמו.
+  workflow_dispatch:
 
 jobs:
   helper:
@@ -33,21 +36,17 @@ jobs:
         run: for file in plugin/js/*.js plugin/i18n/*.js; do node --check "$file"; done
       - name: Unit tests
         run: node --test plugin/test/*.test.js
-      # כל מופע: גם שלב הפרסום בחנות מריץ את הוולידטור.
-      - name: app-version matches minAppVersion
-        run: |
-          want=$(node -p "require('./plugin/manifest.json').minAppVersion")
-          all=$(grep -E '^\s+app-version:' .github/workflows/ci.yml)
-          if [ -z "$all" ] || echo "$all" | grep -vqF "app-version: $want"; then
-            echo "::error::app-version בוולידטור שונה מ-minAppVersion ($want)"; exit 1
-          fi
-      # אותן בדיקות שהחנות מריצה, כולל בדיקת העיצוב. `app-version` שווה
-      # ל-minAppVersion שבמניפסט; מעלים את שניהם יחד.
+      # מהמניפסט ולא קבוע כאן: כך הקובץ זהה בכל ענף, ו-release-gate.yml יכול
+      # לקדם את main לענף הגרסה (GITHUB_TOKEN אינו רשאי לדחוף שינוי ב-workflow).
+      - name: minAppVersion
+        id: manifest
+        run: echo "min-app-version=$(node -p "require('./plugin/manifest.json').minAppVersion")" >> "$GITHUB_OUTPUT"
+      # אותן בדיקות שהחנות מריצה, כולל בדיקת העיצוב.
       - name: Official validator
         uses: Otzaria/otzaria-plugin-validator@v1
         with:
           path: plugin
-          app-version: 0.9.97
+          app-version: ${{ steps.manifest.outputs.min-app-version }}
           fail-on-warnings: true
           publish: false
 
@@ -113,6 +112,17 @@ jobs:
         run: |
           mkdir -p build/store-plugin
           unzip -q dist/staging/OtzariaResponsa.otzplugin -d build/store-plugin
+      # הגרסה מהקובץ שפורסם, ורשימת הצילומים מהענף (store-screenshots.txt),
+      # כדי שה-workflow יהיה זהה בכל ענף.
+      - name: Store inputs
+        id: inputs
+        run: |
+          echo "min-app-version=$(jq -r .minAppVersion build/store-plugin/manifest.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo 'screenshots<<EOF'
+            grep -v '^\s*\(#\|$\)' .github/store-screenshots.txt
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Store credentials
         id: creds
         env:
@@ -138,7 +148,7 @@ jobs:
         uses: Otzaria/otzaria-plugin-validator@v1
         with:
           path: build/store-plugin
-          app-version: 0.9.97
+          app-version: ${{ steps.inputs.outputs.min-app-version }}
           fail-on-warnings: true
           publish: auto
           otzaria-user: ${{ secrets.OTZARIA_USER }}
@@ -146,12 +156,7 @@ jobs:
           otzaria-plugin-id: ${{ vars.OTZARIA_PLUGIN_ID }}
           # צילומי המסך נדרשים ביצירת התוסף בחנות, ו-update-screenshots מחליף
           # אותם בכל גרסה, כדי שהחנות תציג את המסכים העדכניים.
-          screenshots: |
-            docs/images/plugin-search.png
-            docs/images/browse.png
-            docs/images/browse-search.png
-            docs/images/advanced.png
-            docs/images/context-menu.png
+          screenshots: ${{ steps.inputs.outputs.screenshots }}
           update-screenshots: true
           # דיווחי באגים מהמשתמשים נשלחים למייל של חשבון החנות; החנות דורשת
           # את ההסכמה הזו ביצירת תוסף חדש.
