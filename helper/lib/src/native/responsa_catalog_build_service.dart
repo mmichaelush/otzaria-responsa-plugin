@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
+import 'package:path/path.dart' as path;
 import 'package:win32/win32.dart'
     show
         ES_CONTINUOUS,
@@ -59,23 +61,118 @@ class ResponsaBuildProgress {
   /// קיים רק בשלב [ResponsaBuildStage.failed].
   final ResponsaBuildFailure? failure;
 
+  /// בר אילן אינו מגיב, והקריאה ממתינה לו.
+  final bool waiting;
+
+  /// שורה למשתמש מתחת להתקדמות (למשל: בר אילן קרס והקריאה ממשיכה).
+  final String? notice;
+
+  /// כשל שאפשר להמשיך ממנו: בר אילן קרס בפתיחת ספר מסוים. השירות מפעיל אותו
+  /// מחדש וממשיך בלי לפתוח את הספר הזה ([ResponsaCatalogBuildService]).
+  final ResponsaBuildResume? resume;
+
   const ResponsaBuildProgress({
     required this.stage,
     this.scannedNodes = 0,
     this.sectionsDone = 0,
     this.sectionsTotal = 0,
     this.books = 0,
+    this.waiting = false,
+    this.notice,
   }) : error = null,
-       failure = null;
+       failure = null,
+       resume = null;
 
   const ResponsaBuildProgress.failed(
     ResponsaBuildFailure this.failure,
-    String this.error,
-  ) : stage = ResponsaBuildStage.failed,
-      scannedNodes = 0,
-      sectionsDone = 0,
-      sectionsTotal = 0,
-      books = 0;
+    String this.error, {
+    this.resume,
+  }) : stage = ResponsaBuildStage.failed,
+       scannedNodes = 0,
+       sectionsDone = 0,
+       sectionsTotal = 0,
+       books = 0,
+       waiting = false,
+       notice = null;
+
+  /// אותה התקדמות, עם [notice]. הודעה שכבר יש נשארת.
+  ResponsaBuildProgress withNotice(String? text) =>
+      text == null || notice != null || stage == ResponsaBuildStage.failed
+      ? this
+      : ResponsaBuildProgress(
+          stage: stage,
+          scannedNodes: scannedNodes,
+          sectionsDone: sectionsDone,
+          sectionsTotal: sectionsTotal,
+          books: books,
+          waiting: waiting,
+          notice: text,
+        );
+}
+
+/// מאיפה ממשיכים אחרי קריסה של בר אילן.
+class ResponsaBuildResume {
+  /// הענף העליון שבו בר אילן קרס.
+  final int section;
+
+  /// הצומת שבר אילן קרס בפתיחתו.
+  final String culprit;
+
+  /// הצמתים של הענפים שהושלמו לפני [section].
+  final List<ResponsaTreeNode> nodes;
+
+  const ResponsaBuildResume({
+    required this.section,
+    required this.culprit,
+    required this.nodes,
+  });
+}
+
+/// ספרים שפתיחתם הפילה את בר אילן, לכל התקנה (`build-skip.json` ליד הקטלוג).
+/// נקראים ונכתבים באיזולט הקריאה. בר אילן 30 קורס בכל פעם בפתיחת אותו ספר,
+/// ולכן ספר כזה לא נפתח שוב: הוא נרשם, בלי הפרקים שלו.
+class ResponsaBuildSkipList {
+  ResponsaBuildSkipList(this.file);
+
+  final File file;
+
+  /// מעבר לזה כבר אין טעם לדלג: משהו אחר שבור.
+  static const int maxPerInstallation = 10;
+
+  static String _key(String installPath) => installPath.toLowerCase();
+
+  Map<String, Object?> _read() {
+    try {
+      if (!file.existsSync()) return {};
+      final json = jsonDecode(file.readAsStringSync());
+      return json is Map<String, Object?> ? json : {};
+    } catch (error) {
+      logLine('ResponsaBuildSkipList: cannot read ${file.path}: $error');
+      return {};
+    }
+  }
+
+  Set<String> forInstallation(String installPath) => {
+    for (final entry in (_read()[_key(installPath)] as List?) ?? const [])
+      if (entry is String) entry,
+  };
+
+  /// `false` כשהנתיב כבר ברשימה או שהרשימה מלאה: אז לא ממשיכים.
+  bool add(String installPath, String culprit) {
+    final all = _read();
+    final list = forInstallation(installPath);
+    if (list.contains(culprit) || list.length >= maxPerInstallation) {
+      return false;
+    }
+    all[_key(installPath)] = [...list, culprit];
+    try {
+      file.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(all));
+      return true;
+    } catch (error) {
+      logLine('ResponsaBuildSkipList: cannot write ${file.path}: $error');
+      return false;
+    }
+  }
 }
 
 /// בניית קטלוג פרויקט השו"ת באיזולט רקע, בהליכה חיה על עץ הספרים (ב-CD25 כ-466
@@ -116,6 +213,9 @@ class ResponsaCatalogBuildService {
   /// האם בנייה כלשהי רצה כרגע — גם כזו שהתחיל מסך שכבר נסגר.
   static bool _active = false;
 
+  /// כמה פעמים ממשיכים אחרי קריסה של בר אילן בבנייה אחת.
+  static const int _maxResumes = 2;
+
   Future<void> _start(
     StreamController<ResponsaBuildProgress> controller,
     String targetPath,
@@ -135,16 +235,68 @@ class ResponsaCatalogBuildService {
     final flag = calloc<Int32>();
     _cancelFlag = flag;
     _active = true;
-    final receive = ReceivePort();
-    final exit = ReceivePort();
-    final error = ReceivePort();
-
     controller.add(
       const ResponsaBuildProgress(stage: ResponsaBuildStage.starting),
     );
+    var fromSection = 0;
+    var prior = const <ResponsaTreeNode>[];
+    String? notice;
+    try {
+      for (var resumes = 0; ; resumes++) {
+        final launchFailure = await _launch();
+        if (launchFailure != null) {
+          controller.add(launchFailure);
+          return;
+        }
+        final outcome = await _read(
+          _BuildRequest(
+            targetPath: targetPath,
+            cancelFlagAddress: flag.address,
+            fromSection: fromSection,
+            prior: prior,
+          ),
+          (progress) => controller.add(progress.withNotice(notice)),
+        );
+        final resume = outcome.resume;
+        if (resume == null || resumes >= _maxResumes || flag.value != 0) {
+          controller.add(outcome);
+          return;
+        }
+        final book = resume.culprit
+            .split(ResponsaTreeReader.pathSeparator)
+            .last;
+        notice =
+            'בר אילן קרס בפתיחת "$book" (תקלה בבר אילן עצמו). הקריאה '
+            'ממשיכה בלי לפתוח את הספר הזה.';
+        logLine(
+          'ResponsaCatalogBuildService: Bar-Ilan crashed opening '
+          '"${resume.culprit}"; relaunching and continuing from section '
+          '${resume.section + 1} with ${resume.nodes.length} rows kept',
+        );
+        controller.add(
+          ResponsaBuildProgress(
+            stage: ResponsaBuildStage.starting,
+            scannedNodes: resume.nodes.length,
+            sectionsDone: resume.section,
+            notice: notice,
+          ),
+        );
+        fromSection = resume.section;
+        prior = resume.nodes;
+        // תהליך שקרס מסיים לצאת (ו-WER משחרר אותו) רגע אחרי הקריסה.
+        await Future<void>.delayed(const Duration(seconds: 3));
+      }
+    } finally {
+      await controller.close();
+      _cancelFlag = null;
+      _active = false;
+      calloc.free(flag);
+    }
+  }
 
-    // אין בהתקנה קובץ עם רשימת הספרים - הקטלוג נקרא מהעץ של התוכנה החיה,
-    // ולכן הבנייה מעלה אותה בעצמה.
+  /// אין בהתקנה קובץ עם רשימת הספרים - הקטלוג נקרא מהעץ של התוכנה החיה,
+  /// ולכן הבנייה מעלה אותה בעצמה. `null` כשבר אילן פועל.
+  Future<ResponsaBuildProgress?> _launch() async {
     // חריגה כאן (גילוי ההתקנה רץ באיזולט) הייתה נשארת לא מטופלת: הזרם לא
     // נסגר, `_active` נשאר דלוק, וכל פתיחה הייתה נדחית ב"עסוק" עד הפעלה מחדש.
     final ResponsaLaunchResult launch;
@@ -154,76 +306,43 @@ class ResponsaCatalogBuildService {
       logLine(
         'ResponsaCatalogBuildService: ensureRunning: $launchError\n$stackTrace',
       );
-      controller
-        ..add(
-          ResponsaBuildProgress.failed(
-            ResponsaBuildFailure.internal,
-            'לא ניתן להפעיל את בר אילן: $launchError',
-          ),
-        )
-        ..close();
-      _cleanup(receive, exit, error, flag);
-      return;
-    }
-    if (!launch.running) {
-      controller
-        ..add(
-          ResponsaBuildProgress.failed(
-            launch.installPath == null
-                ? ResponsaBuildFailure.notInstalled
-                : ResponsaBuildFailure.notRunning,
-            launch.message ?? 'לא ניתן להפעיל את בר אילן.',
-          ),
-        )
-        ..close();
-      _cleanup(receive, exit, error, flag);
-      return;
-    }
-
-    try {
-      await Isolate.spawn(
-        _buildEntry,
-        _BuildRequest(
-          sendPort: receive.sendPort,
-          targetPath: targetPath,
-          cancelFlagAddress: flag.address,
-        ),
-        onExit: exit.sendPort,
-        onError: error.sendPort,
+      return ResponsaBuildProgress.failed(
+        ResponsaBuildFailure.internal,
+        'לא ניתן להפעיל את בר אילן: $launchError',
       );
-    } catch (spawnError) {
-      controller
-        ..add(
-          ResponsaBuildProgress.failed(
-            ResponsaBuildFailure.internal,
-            'לא ניתן להתחיל לקרוא את רשימת הספרים: $spawnError',
-          ),
-        )
-        ..close();
-      _cleanup(receive, exit, error, flag);
-      return;
     }
+    if (launch.running) return null;
+    return ResponsaBuildProgress.failed(
+      launch.installPath == null
+          ? ResponsaBuildFailure.notInstalled
+          : ResponsaBuildFailure.notRunning,
+      launch.message ?? 'לא ניתן להפעיל את בר אילן.',
+    );
+  }
 
-    var finished = false;
-    void finish(ResponsaBuildProgress? last) {
-      if (finished) return;
-      finished = true;
-      if (last != null) controller.add(last);
-      controller.close();
-      _cleanup(receive, exit, error, flag);
+  /// קריאה אחת באיזולט. מעביר את ההתקדמות ל-[forward], ומחזיר את התוצאה
+  /// (`done` או `failed`, אולי עם [ResponsaBuildProgress.resume]).
+  Future<ResponsaBuildProgress> _read(
+    _BuildRequest request,
+    void Function(ResponsaBuildProgress progress) forward,
+  ) async {
+    final receive = ReceivePort();
+    final exit = ReceivePort();
+    final error = ReceivePort();
+    final result = Completer<ResponsaBuildProgress>();
+    void finish(ResponsaBuildProgress progress) {
+      if (!result.isCompleted) result.complete(progress);
     }
 
     receive.listen((message) {
-      if (message is ResponsaBuildProgress) {
-        if (finished) return;
-        controller.add(message);
-        if (message.stage == ResponsaBuildStage.done ||
-            message.stage == ResponsaBuildStage.failed) {
-          finish(null);
-        }
+      if (message is! ResponsaBuildProgress || result.isCompleted) return;
+      if (message.stage == ResponsaBuildStage.done ||
+          message.stage == ResponsaBuildStage.failed) {
+        finish(message);
+      } else {
+        forward(message);
       }
     });
-
     // איזולט שמת בלי לדווח (קריסת native, זיכרון, הרג) משאיר אחרת את המסך
     // ב"בונה..." לנצח.
     error.listen((message) {
@@ -243,20 +362,28 @@ class ResponsaCatalogBuildService {
         ),
       );
     });
-  }
-
-  void _cleanup(
-    ReceivePort receive,
-    ReceivePort exit,
-    ReceivePort error,
-    Pointer<Int32> flag,
-  ) {
-    receive.close();
-    exit.close();
-    error.close();
-    _cancelFlag = null;
-    _active = false;
-    calloc.free(flag);
+    try {
+      await Isolate.spawn(
+        _buildEntry,
+        request.withPort(receive.sendPort),
+        onExit: exit.sendPort,
+        onError: error.sendPort,
+      );
+    } catch (spawnError) {
+      finish(
+        ResponsaBuildProgress.failed(
+          ResponsaBuildFailure.internal,
+          'לא ניתן להתחיל לקרוא את רשימת הספרים: $spawnError',
+        ),
+      );
+    }
+    try {
+      return await result.future;
+    } finally {
+      receive.close();
+      exit.close();
+      error.close();
+    }
   }
 
   // -------------------------------------------------- מה שרץ באיזולט
@@ -265,6 +392,10 @@ class ResponsaCatalogBuildService {
     final send = request.sendPort;
     final flag = Pointer<Int32>.fromAddress(request.cancelFlagAddress);
     bool cancelled() => flag.value != 0;
+    final skipList = ResponsaBuildSkipList(
+      File(path.join(path.dirname(request.targetPath), 'build-skip.json')),
+    );
+    String? installPath;
 
     // המחשב לא נכנס למצב שינה מחוסר פעילות בזמן הקריאה: יציאה משינה משביתה
     // את בר אילן, וקריאה של דקות נזרקה. גם המסך: במחשבים עם Modern Standby
@@ -287,6 +418,7 @@ class ResponsaCatalogBuildService {
         return;
       }
       final installation = selection.installation;
+      installPath = installation.installPath;
       // לא מופע חונה מחוץ למסך: הבנייה הייתה מצליחה, אבל המשתמש לא היה
       // רואה דבר במשך דקות.
       final instance = ResponsaInstance.pick(selection.instances);
@@ -338,25 +470,34 @@ class ResponsaCatalogBuildService {
       send.send(
         const ResponsaBuildProgress(stage: ResponsaBuildStage.scanning),
       );
-      var scanned = 0;
-      var sections = (done: 0, total: 0);
+      final prior = request.prior;
+      var scanned = prior.length;
+      var sections = (done: request.fromSection, total: 0);
+      var waiting = false;
       void report() => send.send(
         ResponsaBuildProgress(
           stage: ResponsaBuildStage.scanning,
           scannedNodes: scanned,
           sectionsDone: sections.done,
           sectionsTotal: sections.total,
+          waiting: waiting,
         ),
       );
-      final nodes = ResponsaTreeReader.walk(
+      final fresh = ResponsaTreeReader.walk(
         pid: instance.pid,
         treeHandle: tree,
         descendInto: ResponsaCatalogBuilder.mayContainBooks,
         progressEvery: 2000,
         shouldStop: cancelled,
         patience: const Duration(minutes: 3),
+        fromSection: request.fromSection,
+        skip: skipList.forInstallation(installation.installPath),
+        onWaiting: (value) {
+          waiting = value;
+          report();
+        },
         onProgress: (count) {
-          scanned = count;
+          scanned = prior.length + count;
           report();
         },
         onSection: (done, total) {
@@ -374,6 +515,7 @@ class ResponsaCatalogBuildService {
         );
         return;
       }
+      final nodes = prior.isEmpty ? fresh : [...prior, ...fresh];
 
       send.send(
         ResponsaBuildProgress(
@@ -405,6 +547,24 @@ class ResponsaCatalogBuildService {
           const ResponsaBuildProgress.failed(
             ResponsaBuildFailure.cancelled,
             'קריאת רשימת הספרים בוטלה.',
+          ),
+        );
+        return;
+      }
+      // קריסה בפתיחת ספר מסוים: נרשם, ובר אילן יופעל מחדש בלעדיו.
+      final culprit = error.culprit;
+      if (culprit != null &&
+          installPath != null &&
+          skipList.add(installPath, culprit)) {
+        send.send(
+          ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.notResponding,
+            error.message,
+            resume: ResponsaBuildResume(
+              section: error.section,
+              culprit: culprit,
+              nodes: [...request.prior, ...error.completed],
+            ),
           ),
         );
         return;
@@ -443,13 +603,29 @@ class ResponsaCatalogBuildService {
 }
 
 class _BuildRequest {
-  final SendPort sendPort;
+  final SendPort? port;
   final String targetPath;
   final int cancelFlagAddress;
 
+  /// מאיזה ענף עליון לקרוא, ומה כבר נקרא לפניו (אחרי קריסה של בר אילן).
+  final int fromSection;
+  final List<ResponsaTreeNode> prior;
+
   const _BuildRequest({
-    required this.sendPort,
     required this.targetPath,
     required this.cancelFlagAddress,
+    this.fromSection = 0,
+    this.prior = const [],
+    this.port,
   });
+
+  SendPort get sendPort => port!;
+
+  _BuildRequest withPort(SendPort sendPort) => _BuildRequest(
+    targetPath: targetPath,
+    cancelFlagAddress: cancelFlagAddress,
+    fromSection: fromSection,
+    prior: prior,
+    port: sendPort,
+  );
 }

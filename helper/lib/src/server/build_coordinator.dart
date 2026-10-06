@@ -31,12 +31,20 @@ class BuildProgressEvent extends BuildEvent {
   final int sectionsDone;
   final int sectionsTotal;
 
+  /// בר אילן אינו מגיב, והקריאה ממתינה לו (מ-0.5.2).
+  final bool waiting;
+
+  /// שורה למשתמש, למשל שבר אילן קרס והקריאה ממשיכה (מ-0.5.2).
+  final String? notice;
+
   const BuildProgressEvent({
     required this.stage,
     required this.scanned,
     required this.sectionsDone,
     required this.sectionsTotal,
     this.expected,
+    this.waiting = false,
+    this.notice,
   });
 
   @override
@@ -47,6 +55,8 @@ class BuildProgressEvent extends BuildEvent {
     if (expected != null) 'expected': expected,
     'sectionsDone': sectionsDone,
     'sectionsTotal': sectionsTotal,
+    if (waiting) 'waiting': true,
+    if (notice != null) 'notice': notice,
   };
 }
 
@@ -274,6 +284,8 @@ class BuildCoordinator {
                 expected: expected,
                 sectionsDone: progress.sectionsDone,
                 sectionsTotal: progress.sectionsTotal,
+                waiting: progress.waiting,
+                notice: progress.notice,
               ),
             );
         }

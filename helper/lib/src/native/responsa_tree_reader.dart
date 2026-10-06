@@ -36,7 +36,27 @@ class ResponsaTreeReadException implements Exception {
   /// `OpenProcess` נכשל: כמעט תמיד בר אילן שרץ כמנהל מערכת.
   final bool accessDenied;
 
-  const ResponsaTreeReadException(this.message, {this.accessDenied = false});
+  /// בר אילן יצא (קרס) באמצע הקריאה.
+  final bool crashed;
+
+  /// הצומת שבר אילן קרס בזמן שנפתח: אחריו לא נקראה אף שורה. `null` כשאין
+  /// ודאות (הקריסה הייתה באמצע קריאה של ילדים, למשל).
+  final String? culprit;
+
+  /// הענף העליון שבו הקריאה נכשלה, ממנו ממשיכים.
+  final int section;
+
+  /// הצמתים של הענפים שהושלמו לפני [section].
+  final List<ResponsaTreeNode> completed;
+
+  const ResponsaTreeReadException(
+    this.message, {
+    this.accessDenied = false,
+    this.crashed = false,
+    this.culprit,
+    this.section = 0,
+    this.completed = const [],
+  });
 
   @override
   String toString() => message;
@@ -82,6 +102,9 @@ class ResponsaTreeReader {
     int progressEvery = 500,
     int maxNodes = 3000000,
     Duration patience = Duration.zero,
+    int fromSection = 0,
+    Set<String> skip = const {},
+    void Function(bool waiting)? onWaiting,
   }) {
     final session = ResponsaTreeSession.open(pid, treeHandle);
     if (session == null) {
@@ -93,9 +116,11 @@ class ResponsaTreeReader {
     }
     session
       ..patience = patience
-      ..shouldStop = shouldStop;
+      ..shouldStop = shouldStop
+      ..onWaiting = onWaiting;
     final walk = _Walk(
       session: session,
+      skip: skip,
       descendInto: descendInto,
       onProgress: onProgress,
       shouldStop: shouldStop,
@@ -104,6 +129,8 @@ class ResponsaTreeReader {
     );
     final clock = Stopwatch()..start();
     var section = '';
+    var failedSection = fromSection;
+    var completedCount = 0;
     int? exitCode;
     var treeGone = false;
     try {
@@ -115,10 +142,16 @@ class ResponsaTreeReader {
         )
           item,
       ];
-      logLine('ResponsaTreeReader: ${sections.length} sections');
-      onSection?.call(0, sections.length);
-      for (var i = 0; i < sections.length; i++) {
+      logLine(
+        'ResponsaTreeReader: ${sections.length} sections'
+        '${fromSection > 0 ? ', continuing from ${fromSection + 1}' : ''}'
+        '${skip.isEmpty ? '' : ', not opening ${skip.length} (crashed Bar-Ilan before)'}',
+      );
+      onSection?.call(fromSection, sections.length);
+      for (var i = fromSection; i < sections.length; i++) {
         final before = walk.nodes.length;
+        failedSection = i;
+        completedCount = before;
         final started = clock.elapsed;
         final completed = walk.visit(sections[i], 0, const <String>[]);
         final name = walk.nodes.length > before ? walk.nodes[before].name : '';
@@ -150,15 +183,25 @@ class ResponsaTreeReader {
     }
     if (session.failed) {
       final crashed = exitCode != null;
+      // אחרי שהצומת נפתח לא נקראה אף שורה: הפתיחה (או הקיפול) שלו הפילה את
+      // בר אילן. בר אילן 30 קורס כך בכל פעם באותו ספר (0xC0000409).
+      final culprit = crashed && walk.expanding == walk.current
+          ? walk.expanding
+          : null;
       logLine(
         'ResponsaTreeReader: FAILED in section $section after '
         '${walk.nodes.length} rows, ${_seconds(clock.elapsed)}; '
         'last row read: "${walk.current}"; '
         'message not answered: ${session.failedMessage ?? '?'}; '
         'tree window: ${treeGone ? 'gone' : 'exists'}; '
-        'Bar-Ilan: ${crashed ? 'exited, code 0x${exitCode.toRadixString(16).toUpperCase()}' : 'running'}',
+        'Bar-Ilan: ${crashed ? 'exited, code 0x${exitCode.toRadixString(16).toUpperCase()}' : 'running'}'
+        '${culprit == null ? '' : '; crashed while opening "$culprit"'}',
       );
       throw ResponsaTreeReadException(
+        crashed: crashed,
+        culprit: culprit,
+        section: failedSection,
+        completed: walk.nodes.sublist(0, completedCount),
         crashed
             ? 'בר אילן נסגר באמצע קריאת הרשימה (ייתכן שקרס). פתחו אותו ונסו '
                   'שוב. אם זה חוזר, שלחו דיווח מ"עזרה": הוא יכלול את המקום '
@@ -214,6 +257,9 @@ class ResponsaTreeSession {
 
   /// ביטול בזמן ההמתנה לבר אילן.
   bool Function()? shouldStop;
+
+  /// `true` כשמתחילים לחכות לבר אילן שאינו מגיב, `false` כשההמתנה נגמרת.
+  void Function(bool waiting)? onWaiting;
 
   static const int _maxResends = 2;
 
@@ -298,6 +344,15 @@ class ResponsaTreeSession {
   /// כשהמתנה קודמת כבר נכשלה.
   bool _awaitResponsive(Duration limit) {
     if (limit <= Duration.zero || _gaveUp) return false;
+    onWaiting?.call(true);
+    try {
+      return _waitUntilResponsive(limit);
+    } finally {
+      onWaiting?.call(false);
+    }
+  }
+
+  bool _waitUntilResponsive(Duration limit) {
     final clock = Stopwatch()..start();
     while (clock.elapsed < limit) {
       if (!ResponsaWin32.isWindow(treeHandle)) return false;
@@ -567,8 +622,17 @@ class _Walk {
   /// צמתים (פחות משנייה), ברמה 1 מאות אלפים (כתשע שניות).
   static const int _collapseDepth = 2;
 
+  /// נתיבים שלא נפתחים: פתיחתם הפילה את בר אילן בקריאה קודמת. הצומת עצמו
+  /// נרשם, בלי צאצאיו.
+  final Set<String> skip;
+
+  /// הצומת האחרון שנפתח (`TVM_EXPAND`). כשהוא גם [current], לא נקראה אחריו
+  /// אף שורה.
+  String? expanding;
+
   _Walk({
     required this.session,
+    required this.skip,
     required this.descendInto,
     required this.onProgress,
     required this.shouldStop,
@@ -600,6 +664,14 @@ class _Walk {
     if (read.children == 0) return true;
     // לא הורחב, ולכן גם אין מה למחוק.
     if (!(descendInto?.call(read.param) ?? true)) return true;
+
+    if (skip.contains(current)) {
+      logLine(
+        'ResponsaTreeReader: not opening "$current" (crashed Bar-Ilan before)',
+      );
+      return true;
+    }
+    expanding = current;
 
     // חובה להרחיב לפני קריאת הילדים — העץ נטען עצלנית.
     var completed = true;
