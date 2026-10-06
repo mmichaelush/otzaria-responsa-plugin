@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
+import 'package:win32/win32.dart'
+    show ES_CONTINUOUS, ES_SYSTEM_REQUIRED, SetThreadExecutionState;
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_author_table_reader.dart';
@@ -260,6 +262,10 @@ class ResponsaCatalogBuildService {
     final flag = Pointer<Int32>.fromAddress(request.cancelFlagAddress);
     bool cancelled() => flag.value != 0;
 
+    // המחשב לא נכנס למצב שינה מחוסר פעילות בזמן הקריאה: יציאה משינה משביתה
+    // את בר אילן, וקריאה של דקות נזרקה. האיזולט סינכרוני, ולכן כל הקריאה רצה
+    // בחוט הזה, וההגדרה משתחררת ב-finally (וגם כשהחוט מסתיים).
+    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
     try {
       // ההתקנה נבחרת לפני המופע והמופע מותאם לה: לכל מופע יכול להיות אתר
       // נתונים אחר, ובנייה ממופע של התקנה אחרת מתארת מאגר שאינו קיים.
@@ -333,6 +339,7 @@ class ResponsaCatalogBuildService {
         descendInto: ResponsaCatalogBuilder.mayContainBooks,
         progressEvery: 2000,
         shouldStop: cancelled,
+        patience: const Duration(minutes: 3),
         onProgress: (count) {
           scanned = count;
           report();
@@ -403,6 +410,8 @@ class ResponsaCatalogBuildService {
           'קריאת רשימת הספרים נכשלה: $error',
         ),
       );
+    } finally {
+      SetThreadExecutionState(ES_CONTINUOUS);
     }
   }
 }

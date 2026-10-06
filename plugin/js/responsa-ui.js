@@ -190,7 +190,12 @@
       error: true,
       title: t('השירות לא מגיב כרגע'),
       text: [model.message, t('אם זה חוזר, הפעלה מחדש של המחשב בדרך כלל פותרת את זה.')],
-      actions: [retryButton(model, actions)],
+      // ההודעה המלאה של השירות נמצאת ביומן שבפרטים, ולא בכרטיס (`internal`
+      // מוצג בהסבר כללי); כך אפשר לצרף אותה לפנייה.
+      actions: [
+        retryButton(model, actions),
+        button('text', t('העתקת הפרטים'), actions.copyStatus, { key: 'copy-status', icon: 'copy_24_regular' }),
+      ],
       code: errorCodeLine(model),
     });
   }

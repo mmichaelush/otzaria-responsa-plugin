@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:meta/meta.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_instance.dart';
@@ -48,9 +49,9 @@ class ResponsaInstallationDiscovery {
   static List<ResponsaInstallation> discover() {
     final byPath = <String, ResponsaInstallation>{};
     for (final found in [
-      ..._fromRegistry(),
-      ..._fromFileSystem(),
-      ..._fromRunningProcesses(),
+      ..._guarded('registry', _fromRegistry),
+      ..._guarded('filesystem', _fromFileSystem),
+      ..._guarded('processes', _fromRunningProcesses),
     ]) {
       byPath.putIfAbsent(found.installPath.toLowerCase(), () => found);
     }
@@ -126,6 +127,20 @@ class ResponsaInstallationDiscovery {
     return found;
   }
 
+  /// מקור אחד שנכשל אינו מבטל את האחרים: חריגה כאן הייתה מגיעה ל-`/status`
+  /// כ-`internal`, והתוסף כולו היה נעצר על "השירות לא מגיב".
+  static List<ResponsaInstallation> _guarded(
+    String source,
+    List<ResponsaInstallation> Function() find,
+  ) {
+    try {
+      return find();
+    } catch (e, stack) {
+      logLine('ResponsaInstallationDiscovery: $source failed: $e\n$stack');
+      return const [];
+    }
+  }
+
   /// שם קובץ ההרצה. תיקייה שמכילה אותו היא התקנה, איך שלא תיקרא.
   static const String executableName = 'RESPONSA.exe';
 
@@ -142,17 +157,25 @@ class ResponsaInstallationDiscovery {
 
   /// כל הכוננים, לא רק Registry: התקנה מועתקת אינה רשומה, והתקנה חלקית רצה
   /// מהתקן נשלף שאות הכונן שלו משתנה.
-  static List<ResponsaInstallation> _fromFileSystem() {
+  static List<ResponsaInstallation> _fromFileSystem() =>
+      fromFileSystem(drives: drives(), environment: Platform.environment);
+
+  /// [drives] ו-[environment] כפרמטרים, כדי שבדיקה תעביר כונן שאינו זמין.
+  @visibleForTesting
+  static List<ResponsaInstallation> fromFileSystem({
+    required List<String> drives,
+    required Map<String, String> environment,
+  }) {
     final roots = <String>{
       for (final variable in const [
         'ProgramFiles(x86)',
         'ProgramFiles',
         'ProgramW6432',
       ])
-        if (Platform.environment[variable] case final value?)
+        if (environment[variable] case final value?)
           if (value.isNotEmpty) value,
     };
-    for (final drive in drives()) {
+    for (final drive in drives) {
       roots.add(drive);
       for (final sub in _searchSubdirectories) {
         roots.add(path.join(drive, sub));
@@ -179,11 +202,14 @@ class ResponsaInstallationDiscovery {
     List<Directory> scan(String root) {
       final directory = Directory(root);
       if (!scanned.add(root.toLowerCase())) return const [];
-      if (!directory.existsSync()) return const [];
-      // גם השורש עצמו: בהתקנה חלקית קובץ ההרצה יושב לעתים ב-`E:\RESPONSA.exe`.
-      consider(root);
       final children = <Directory>[];
       try {
+        // בתוך ה-try: `Directory.existsSync` מחזיר false רק לנתיב שאינו
+        // קיים, ובכל שגיאה אחרת זורק — כונן DVD או קורא כרטיסים ריק
+        // (ERROR_NOT_READY), כונן רשת מנותק, כונן נעול ב-BitLocker.
+        if (!directory.existsSync()) return const [];
+        // גם השורש עצמו: בהתקנה חלקית קובץ ההרצה יושב לעתים ב-`E:\RESPONSA.exe`.
+        consider(root);
         var seen = 0;
         for (final entry in directory.listSync(followLinks: false)) {
           if (entry is! Directory) continue;
@@ -203,8 +229,7 @@ class ResponsaInstallationDiscovery {
 
     // רמה שנייה בשורש הכונן, ולפני לולאת `roots`: `scanned` חוסם סריקה
     // חוזרת, ושורש שנסרק קודם היה מחזיר כאן רשימה ריקה.
-    final driveRoots = drives();
-    for (final drive in driveRoots) {
+    for (final drive in drives) {
       for (final child in scan(drive)) {
         scan(child.path);
       }

@@ -222,4 +222,33 @@ void main() {
       expect(installationAt(root.path).volumeLabel, isNull);
     });
   });
+
+  group('סריקת הכוננים', () {
+    late Directory root;
+    setUp(() => root = Directory.systemTemp.createTempSync('responsa_drives'));
+    tearDown(() => root.deleteSync(recursive: true));
+
+    test('כונן שאינו זמין אינו עוצר את הגילוי', () {
+      // `Directory.existsSync` זורק על כל שגיאה שאינה "לא נמצא": כונן DVD
+      // ריק (ERROR_NOT_READY), כונן רשת מנותק. שם בלתי-חוקי (ERROR_INVALID_NAME)
+      // זורק באותה דרך, בלי תלות בחומרה. החריגה הגיעה ל-`/status` כ-`internal`.
+      final install = Directory(p.join(root.path, 'ResponsaCD34'))
+        ..createSync();
+      File(p.join(install.path, 'RESPONSA.exe')).writeAsStringSync('');
+      expect(
+        () => Directory(r'C:\a<b').existsSync(),
+        throwsA(isA<FileSystemException>()),
+        reason: 'הבדיקה נשענת על כך שהנתיב זורק',
+      );
+      final found = ResponsaInstallationDiscovery.fromFileSystem(
+        drives: [r'C:\a<b\', root.path],
+        environment: {'ProgramFiles': r'C:\a<c'},
+      );
+      // אותה תיקייה עולה גם כילד וגם כשורש; `discover` מאחד לפי נתיב.
+      expect(found.map((installation) => installation.installPath).toSet(), {
+        install.path,
+      });
+      expect(found.first.version, 34);
+    });
+  });
 }

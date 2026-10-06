@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:io' show sleep;
 import 'dart:typed_data';
 import 'package:responsa_helper/src/log.dart';
 
@@ -68,6 +69,9 @@ class ResponsaTreeReader {
   ///
   /// [descendInto] — האם לקרוא את צאצאי הצומת (לפי ה-`param` שלו). צומת
   /// שאין נכנסים אליו נרשם בכל זאת, עם מספר הילדים שלו. חסר = הכול.
+  ///
+  /// [patience] — כמה לחכות לבר אילן כשהודעה לא נענתה, לפני שהסריקה נכשלת
+  /// (ראו [ResponsaTreeSession.patience]).
   static List<ResponsaTreeNode> walk({
     required int pid,
     required int treeHandle,
@@ -77,6 +81,7 @@ class ResponsaTreeReader {
     bool Function()? shouldStop,
     int progressEvery = 500,
     int maxNodes = 3000000,
+    Duration patience = Duration.zero,
   }) {
     final session = ResponsaTreeSession.open(pid, treeHandle);
     if (session == null) {
@@ -86,6 +91,9 @@ class ResponsaTreeReader {
         accessDenied: true,
       );
     }
+    session
+      ..patience = patience
+      ..shouldStop = shouldStop;
     final walk = _Walk(
       session: session,
       descendInto: descendInto,
@@ -113,8 +121,10 @@ class ResponsaTreeReader {
     }
     if (session.failed) {
       throw const ResponsaTreeReadException(
-        'בר אילן הפסיק להגיב באמצע הסריקה, או שנסגר. הקטלוג הקיים לא הוחלף '
-        '— יש לנסות שוב.',
+        'בר אילן הפסיק להגיב באמצע קריאת הרשימה, או שנסגר. ייתכן שהמחשב נכנס '
+        'למצב שינה, או שבר אילן היה עסוק. כדאי לסגור את הספרים הפתוחים בבר '
+        'אילן, לא להשתמש בו עד הסיום, ולנסות שוב. רשימה קודמת, אם יש, לא '
+        'הוחלפה.',
       );
     }
     return walk.nodes;
@@ -141,23 +151,88 @@ class ResponsaTreeSession {
   /// האם הודעת קריאה אחת לפחות לא נענתה — חלון תקוע, סגור, או חסום.
   bool failed = false;
 
+  /// כמה לחכות שבר אילן יגיב שוב כשהודעה לא נענתה, ואז לשלוח אותה שוב
+  /// (עד [_maxResends] פעמים). אפס — נכשל מיד, כמו בעץ המאגרים של החיפוש.
+  /// בקריאת הרשימה: יציאה ממצב שינה, ספר שנטען או חיפוש בבר אילן משביתים
+  /// אותו לכמה שניות, והודעה אחת שלא נענתה זרקה סריקה של דקות.
+  Duration patience = Duration.zero;
+
+  /// ביטול בזמן ההמתנה לבר אילן.
+  bool Function()? shouldStop;
+
+  static const int _maxResends = 2;
+
+  /// המתנה לבר אילן הסתיימה בלי תשובה: ממנה והלאה לא מחכים עוד, כדי שקיפול
+  /// הענפים אחרי הכשל לא יחכה שוב ושוב.
+  bool _gaveUp = false;
+
+  /// המתנה לפני קיפול ענף שלא נענה: קצרה מ-[patience], כי היא כבר אחרי כשל.
+  static const Duration _cleanupPatience = Duration(seconds: 60);
+
   /// הודעת קריאה. `null` (לא נענתה) נרשם ב-[failed], ומוחזר `0` — מה
-  /// שהמתקשר ממילא מפרש כ"אין".
+  /// שהמתקשר ממילא מפרש כ"אין". [prepare] רץ לפני כל שליחה: הודעה שקוראת
+  /// לחוצץ בתהליך היעד כותבת אותו מחדש לפני שליחה חוזרת.
   int _read(
     int message, {
     int wParam = 0,
     int lParam = 0,
     int timeoutMs = 5000,
+    void Function()? prepare,
   }) {
-    final result = ResponsaWin32.send(
-      treeHandle,
-      message,
-      wParam: wParam,
-      lParam: lParam,
-      timeoutMs: timeoutMs,
-    );
+    int? attempt() {
+      prepare?.call();
+      return ResponsaWin32.send(
+        treeHandle,
+        message,
+        wParam: wParam,
+        lParam: lParam,
+        timeoutMs: timeoutMs,
+      );
+    }
+
+    var result = attempt();
+    // שליחה חוזרת בטוחה: הודעות הקריאה אינן משנות דבר (הרחבה של ענף מורחב
+    // אינה עושה כלום), והודעות שנשלחו מאותו חוט מטופלות לפי הסדר — כשבר
+    // אילן ענה ל-WM_NULL, ההודעה שלא נענתה כבר טופלה או נזרקה.
+    for (
+      var resend = 0;
+      result == null && resend < _maxResends && _awaitResponsive(patience);
+      resend++
+    ) {
+      logLine(
+        'ResponsaTreeSession: message 0x${message.toRadixString(16)} '
+        'was not answered; resending',
+      );
+      result = attempt();
+    }
     if (result == null) failed = true;
     return result ?? 0;
+  }
+
+  /// מחכה עד [limit] שבר אילן יענה. `false` מיד כשהעץ נסגר, בביטול, או
+  /// כשהמתנה קודמת כבר נכשלה.
+  bool _awaitResponsive(Duration limit) {
+    if (limit <= Duration.zero || _gaveUp) return false;
+    final clock = Stopwatch()..start();
+    while (clock.elapsed < limit) {
+      if (!ResponsaWin32.isWindow(treeHandle)) return false;
+      if (shouldStop?.call() ?? false) return false;
+      // SMTO_ABORTIFHUNG: חלון ש-Windows סימן כתקוע חוזר מיד, ולכן ההשהיה.
+      if (ResponsaWin32.responds(treeHandle, timeoutMs: 5000)) {
+        logLine(
+          'ResponsaTreeSession: Bar-Ilan responds again after '
+          '${clock.elapsed.inSeconds}s',
+        );
+        return true;
+      }
+      sleep(const Duration(seconds: 1));
+    }
+    _gaveUp = true;
+    logLine(
+      'ResponsaTreeSession: Bar-Ilan did not respond for '
+      '${limit.inSeconds}s; giving up',
+    );
+    return false;
   }
 
   /// `TVITEMW` חייב להיכתב בפריסת 32-ביט של היעד; פריסה שגויה מחזירה טקסט
@@ -270,18 +345,27 @@ class ResponsaTreeSession {
 
   /// פריטים טעונים משביתים את התוכנה בכל `WM_SETTINGCHANGE`, ולכן מוחקים (העץ
   /// עצל ויתמלא מחדש). קיפול לפני מחיקה, אחרת היא איטית פי 40.
+  ///
+  /// ענף שנשאר טעון אחרי סריקה שנכשלה השבית את בר אילן גם בניסיון הבא, ולכן
+  /// קיפול שלא נענה מחכה לבר אילן ונשלח שוב.
   void collapse(int item) {
+    final limit = patience < _cleanupPatience ? patience : _cleanupPatience;
     for (final action in const [
       ResponsaTreeReader.tveCollapse,
       ResponsaTreeReader.tveCollapse | ResponsaTreeReader.tveCollapseReset,
     ]) {
-      ResponsaWin32.send(
-        treeHandle,
-        ResponsaTreeReader.tvmExpand,
-        wParam: action,
-        lParam: item,
-        timeoutMs: 30000,
-      );
+      bool send() =>
+          ResponsaWin32.send(
+            treeHandle,
+            ResponsaTreeReader.tvmExpand,
+            wParam: action,
+            lParam: item,
+            timeoutMs: 30000,
+          ) !=
+          null;
+      if (!send() && !(_awaitResponsive(limit) && send())) {
+        logLine('ResponsaTreeSession: collapse of $item was not answered');
+      }
     }
   }
 
@@ -327,17 +411,21 @@ class ResponsaTreeSession {
       bytes.setUint32(_offText, remoteText.address, Endian.little);
       bytes.setInt32(_offTextMax, _textChars, Endian.little);
 
-      final written = calloc<IntPtr>();
-      try {
-        WriteProcessMemory(process, remoteItem, local, itemSize32, written);
-      } finally {
-        calloc.free(written);
+      // לפני כל שליחה: הפקד רשאי לשנות את `pszText` במבנה שבתהליך היעד.
+      void write() {
+        final written = calloc<IntPtr>();
+        try {
+          WriteProcessMemory(process, remoteItem, local, itemSize32, written);
+        } finally {
+          calloc.free(written);
+        }
       }
 
       final ok = _read(
         ResponsaTreeReader.tvmGetItemW,
         lParam: remoteItem.address,
         timeoutMs: 8000,
+        prepare: write,
       );
       if (ok == 0) return (name: '', param: 0, children: 0, image: -1);
 
