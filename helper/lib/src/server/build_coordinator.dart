@@ -111,6 +111,25 @@ class BuildCoordinator {
 
   bool get isRunning => _running;
 
+  /// תוצאת הקריאה האחרונה בשורה אחת, ל-`/diagnostics`. `null` עד הראשונה.
+  String? get lastSummary => _lastSummary;
+  String? _lastSummary;
+
+  /// קריאה שרצה עכשיו, בשורה אחת, ל-`/diagnostics`.
+  String? get runningSummary {
+    if (!_running) return null;
+    final progress = _lastProgress;
+    final started = _startedAt;
+    final minutes = started == null
+        ? '?'
+        : '${DateTime.now().difference(started).inMinutes}';
+    return 'for $minutes min, ${progress?.scanned ?? 0} rows'
+        '${progress != null && progress.sectionsTotal > 0 ? ', section ${progress.sectionsDone}/${progress.sectionsTotal}' : ''}';
+  }
+
+  /// ההתקדמות האחרונה: אחרי כשל, עד היכן הקריאה הגיעה.
+  BuildProgressEvent? _lastProgress;
+
   /// מצב הבנייה ל-`/status`.
   Map<String, Object?> snapshot() {
     final last = _last;
@@ -166,6 +185,32 @@ class BuildCoordinator {
   /// ביטול שהגיע לפני שהמנוע התחיל (בזמן הערכת המכנה) אינו מגיע אליו.
   bool _cancelRequested = false;
 
+  String _summarize(BuildEvent event) {
+    final started = _startedAt;
+    final elapsed = started == null ? null : DateTime.now().difference(started);
+    final when = started == null
+        ? ''
+        : ' ${started.toIso8601String().substring(0, 16).replaceFirst('T', ' ')}';
+    final took = elapsed == null
+        ? ''
+        : ', ${elapsed.inMinutes}:'
+              '${(elapsed.inSeconds % 60).toString().padLeft(2, '0')} min';
+    final progress = _lastProgress;
+    final reached = progress == null
+        ? ''
+        : ', reached ${progress.scanned} rows'
+              '${progress.sectionsTotal > 0 ? ', section ${progress.sectionsDone}/${progress.sectionsTotal}' : ''}'
+              '${progress.expected != null ? ' of ~${progress.expected}' : ''}';
+    return switch (event) {
+      BuildDone(:final books, :final scanned) =>
+        'book list read OK$when$took: $books books from $scanned rows',
+      BuildFailed(:final error) =>
+        'book list read FAILED$when$took$reached: '
+            '${error.code}: ${error.message}',
+      _ => 'book list read ended$when$took',
+    };
+  }
+
   /// מספר הצמתים שהסריקה קוראת בעצי המהדורות המוכרות (CD25 ו-CD29, בלי
   /// צאצאי מקטעים — `ResponsaCatalogBuilder.mayContainBooks`). בבנייה ראשונה
   /// הוא המכנה, כדי שהאחוז יהיה אמיתי ולא "חלק 6 מתוך 20", שאינם שווים
@@ -187,6 +232,7 @@ class BuildCoordinator {
   Future<void> _run() async {
     _running = true;
     _last = null;
+    _lastProgress = null;
     _startedAt = DateTime.now();
     _cancelRequested = false;
     final expected = await _expectedNodes();
@@ -249,6 +295,7 @@ class BuildCoordinator {
 
   void _emit(BuildEvent event) {
     _last = event;
+    if (event is BuildProgressEvent) _lastProgress = event;
     for (final listener in List.of(_listeners)) {
       listener.add(event);
     }
@@ -256,6 +303,8 @@ class BuildCoordinator {
 
   void _finish(BuildEvent event) {
     _emit(event);
+    _lastSummary = _summarize(event);
+    logLine('BuildCoordinator: $_lastSummary');
     _running = false;
     final listeners = List.of(_listeners);
     _listeners.clear();

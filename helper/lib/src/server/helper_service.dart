@@ -9,6 +9,7 @@ import 'package:responsa_helper/src/server/api_error.dart';
 import 'package:responsa_helper/src/server/build_coordinator.dart';
 import 'package:responsa_helper/src/server/catalog_index.dart';
 import 'package:responsa_helper/src/server/catalog_store.dart';
+import 'package:responsa_helper/src/server/diagnostics.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
@@ -48,6 +49,7 @@ class HelperService {
     'notify',
     'locate',
     'autoStart',
+    'diagnostics',
   ];
 
   static const int maxPageSize = 200;
@@ -62,6 +64,9 @@ class HelperService {
 
   final ResponsaBackend _backend;
   final Map<String, String> _environment;
+
+  /// מתי השירות עלה, ל-`/diagnostics`.
+  final DateTime startedAt = DateTime.now();
   final HelperPaths paths;
   final CatalogStore store;
   late final BuildCoordinator builds;
@@ -102,6 +107,17 @@ class HelperService {
       'build': builds.snapshot(),
     };
   }
+
+  /// פרטים לאיתור תקלה במחשב של משתמש (docs/PROTOCOL.md): סיכום קצר וסוף
+  /// היומן. נבנה רק לבקשה.
+  Future<Map<String, Object?>> diagnostics() async => HelperDiagnostics.collect(
+    serverVersion: serverVersion,
+    startedAt: startedAt,
+    sessionId: PeerSession.own,
+    catalog: store.repository.info,
+    lastBuild: builds.lastSummary,
+    runningBuild: builds.runningSummary,
+  );
 
   Future<Map<String, Object?>> search(Map<String, Object?> body) async {
     final query = _string(body, 'q');

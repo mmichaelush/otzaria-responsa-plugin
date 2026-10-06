@@ -102,6 +102,10 @@ class ResponsaTreeReader {
       progressEvery: progressEvery,
       maxNodes: maxNodes,
     );
+    final clock = Stopwatch()..start();
+    var section = '';
+    int? exitCode;
+    var treeGone = false;
     try {
       final sections = [
         for (
@@ -111,24 +115,75 @@ class ResponsaTreeReader {
         )
           item,
       ];
+      logLine('ResponsaTreeReader: ${sections.length} sections');
       onSection?.call(0, sections.length);
       for (var i = 0; i < sections.length; i++) {
-        if (!walk.visit(sections[i], 0, const <String>[])) break;
+        final before = walk.nodes.length;
+        final started = clock.elapsed;
+        final completed = walk.visit(sections[i], 0, const <String>[]);
+        final name = walk.nodes.length > before ? walk.nodes[before].name : '';
+        section = '${i + 1}/${sections.length} "$name"';
+        // מה שנדרש כדי להבחין בין קריאה איטית לתקועה, ולדעת היכן נעצרה.
+        logLine(
+          'ResponsaTreeReader: section $section: '
+          '${walk.nodes.length - before} rows in '
+          '${_seconds(clock.elapsed - started)}'
+          '${completed ? '' : ' (stopped)'}',
+        );
+        if (!completed) break;
         onSection?.call(i + 1, sections.length);
       }
     } finally {
+      // לפני `close`: אחריו אין ידית לתהליך.
+      if (session.failed) {
+        treeGone = !ResponsaWin32.isWindow(treeHandle);
+        exitCode = session.exitCode();
+        // תהליך שקרס מסיים את היציאה רגע אחרי שחלונותיו נעלמים (ו-WER עשוי
+        // להחזיק אותו עוד קצת): בלי ההמתנה הקריסה הייתה מדווחת כ"לא מגיב".
+        final clock = Stopwatch()..start();
+        while (treeGone && exitCode == null && clock.elapsed < _exitWait) {
+          sleep(const Duration(milliseconds: 200));
+          exitCode = session.exitCode();
+        }
+      }
       session.close();
     }
     if (session.failed) {
-      throw const ResponsaTreeReadException(
-        'בר אילן הפסיק להגיב באמצע קריאת הרשימה, או שנסגר. ייתכן שהמחשב נכנס '
-        'למצב שינה, או שבר אילן היה עסוק. כדאי לסגור את הספרים הפתוחים בבר '
-        'אילן, לא להשתמש בו עד הסיום, ולנסות שוב. רשימה קודמת, אם יש, לא '
-        'הוחלפה.',
+      final crashed = exitCode != null;
+      logLine(
+        'ResponsaTreeReader: FAILED in section $section after '
+        '${walk.nodes.length} rows, ${_seconds(clock.elapsed)}; '
+        'last row read: "${walk.current}"; '
+        'message not answered: ${session.failedMessage ?? '?'}; '
+        'tree window: ${treeGone ? 'gone' : 'exists'}; '
+        'Bar-Ilan: ${crashed ? 'exited, code 0x${exitCode.toRadixString(16).toUpperCase()}' : 'running'}',
+      );
+      throw ResponsaTreeReadException(
+        crashed
+            ? 'בר אילן נסגר באמצע קריאת הרשימה (ייתכן שקרס). פתחו אותו ונסו '
+                  'שוב. אם זה חוזר, שלחו דיווח מ"עזרה": הוא יכלול את המקום '
+                  'שבו זה קרה.'
+            : treeGone
+            ? 'החלון "עיון" של בר אילן נסגר באמצע קריאת הרשימה. אין לסגור '
+                  'אותו ואין לעבוד בבר אילן עד הסיום. נסו שוב.'
+            : 'בר אילן הפסיק להגיב באמצע קריאת הרשימה, ולא חזר להגיב גם '
+                  'אחרי כמה דקות. ייתכן שהמחשב נכנס למצב שינה, או שבר אילן היה '
+                  'עסוק. סגרו את הספרים הפתוחים בבר אילן, אל תשתמשו בו עד '
+                  'הסיום, ונסו שוב.',
       );
     }
+    logLine(
+      'ResponsaTreeReader: ${walk.nodes.length} rows in '
+      '${_seconds(clock.elapsed)}',
+    );
     return walk.nodes;
   }
+
+  /// כמה לחכות לסיום התהליך אחרי שחלון העץ נעלם.
+  static const Duration _exitWait = Duration(seconds: 3);
+
+  static String _seconds(Duration elapsed) =>
+      '${(elapsed.inMilliseconds / 1000).toStringAsFixed(1)}s';
 
   /// מאתר את ה-TreeView של הקטלוג בתוך דיאלוג העיון.
   static int? findCatalogTree(int dialogHandle) {
@@ -165,6 +220,31 @@ class ResponsaTreeSession {
   /// המתנה לבר אילן הסתיימה בלי תשובה: ממנה והלאה לא מחכים עוד, כדי שקיפול
   /// הענפים אחרי הכשל לא יחכה שוב ושוב.
   bool _gaveUp = false;
+
+  /// ההודעה שלא נענתה, ליומן (`0x1102 TVM_EXPAND`).
+  String? failedMessage;
+
+  /// קוד היציאה של בר אילן, או `null` כשהוא עדיין רץ. קריסה נראית מבחוץ כמו
+  /// "לא מגיב", ורק הקוד (למשל `0xC0000005`) מבדיל ביניהם.
+  int? exitCode() {
+    final code = calloc<Uint32>();
+    try {
+      if (!GetExitCodeProcess(process, code).value) return null;
+      return code.value == _stillActive ? null : code.value;
+    } finally {
+      calloc.free(code);
+    }
+  }
+
+  static const int _stillActive = 259;
+
+  static const Map<int, String> _messageNames = {
+    ResponsaTreeReader.tvmExpand: 'TVM_EXPAND',
+    ResponsaTreeReader.tvmGetItemRect: 'TVM_GETITEMRECT',
+    ResponsaTreeReader.tvmGetNextItem: 'TVM_GETNEXTITEM',
+    ResponsaTreeReader.tvmEnsureVisible: 'TVM_ENSUREVISIBLE',
+    ResponsaTreeReader.tvmGetItemW: 'TVM_GETITEMW',
+  };
 
   /// המתנה לפני קיפול ענף שלא נענה: קצרה מ-[patience], כי היא כבר אחרי כשל.
   static const Duration _cleanupPatience = Duration(seconds: 60);
@@ -205,7 +285,12 @@ class ResponsaTreeSession {
       );
       result = attempt();
     }
-    if (result == null) failed = true;
+    if (result == null) {
+      failed = true;
+      failedMessage ??=
+          '0x${message.toRadixString(16)} ${_messageNames[message] ?? ''}'
+              .trim();
+    }
     return result ?? 0;
   }
 
@@ -475,6 +560,9 @@ class _Walk {
   final int maxNodes;
   final nodes = <ResponsaTreeNode>[];
 
+  /// הנתיב של השורה האחרונה שנקראה: אחרי כשל, המקום שבו הוא קרה.
+  String current = '';
+
   /// המחיקה משביתה את התוכנה בזמן שהיא רצה: ענף רמה 2 הגדול ביותר הוא ~28 אלף
   /// צמתים (פחות משנייה), ברמה 1 מאות אלפים (כתשע שניות).
   static const int _collapseDepth = 2;
@@ -499,6 +587,7 @@ class _Walk {
     final read = session.readItem(item);
     if (session.failed) return false;
     final path = [...parentPath, read.name];
+    current = path.join(ResponsaTreeReader.pathSeparator);
     nodes.add(
       ResponsaTreeNode(
         name: read.name,

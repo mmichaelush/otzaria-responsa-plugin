@@ -54,7 +54,7 @@ void _append(String path, String text) {
   });
 }
 
-/// מסובב את היומן כשהוא גדול מדי. נקרא פעם אחת, בעליית השירות.
+/// מסובב את היומן כשהוא גדול מדי: בעליית השירות, וכל חצי שעה.
 void rotateLog({int maxBytes = 2 * 1024 * 1024}) {
   final file = _logFile;
   if (file == null) return;

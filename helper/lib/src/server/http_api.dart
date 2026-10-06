@@ -32,6 +32,7 @@ class HttpApi {
       '/health': (_) async => _service.health(),
       '/status': (_) => _service.status(),
       '/icon': (_) => _service.icon(),
+      '/diagnostics': (_) => _service.diagnostics(),
       '/catalog/export': (_) => _service.export(),
       '/otzaria/icons': (request) => _service.otzariaIcons(
         clientExe: switch (request['clientPort']) {

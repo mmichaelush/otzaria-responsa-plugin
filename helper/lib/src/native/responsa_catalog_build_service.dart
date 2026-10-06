@@ -5,7 +5,11 @@ import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart'
-    show ES_CONTINUOUS, ES_SYSTEM_REQUIRED, SetThreadExecutionState;
+    show
+        ES_CONTINUOUS,
+        ES_DISPLAY_REQUIRED,
+        ES_SYSTEM_REQUIRED,
+        SetThreadExecutionState;
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_author_table_reader.dart';
@@ -263,9 +267,12 @@ class ResponsaCatalogBuildService {
     bool cancelled() => flag.value != 0;
 
     // המחשב לא נכנס למצב שינה מחוסר פעילות בזמן הקריאה: יציאה משינה משביתה
-    // את בר אילן, וקריאה של דקות נזרקה. האיזולט סינכרוני, ולכן כל הקריאה רצה
+    // את בר אילן, וקריאה של דקות נזרקה. גם המסך: במחשבים עם Modern Standby
+    // כיבוי המסך הוא הכניסה לשינה. האיזולט סינכרוני, ולכן כל הקריאה רצה
     // בחוט הזה, וההגדרה משתחררת ב-finally (וגם כשהחוט מסתיים).
-    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
+    SetThreadExecutionState(
+      ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED,
+    );
     try {
       // ההתקנה נבחרת לפני המופע והמופע מותאם לה: לכל מופע יכול להיות אתר
       // נתונים אחר, ובנייה ממופע של התקנה אחרת מתארת מאגר שאינו קיים.
@@ -298,6 +305,14 @@ class ResponsaCatalogBuildService {
             instance.title,
           ) ??
           installation.version;
+      // כל מה שמבדיל בין מחשב למחשב, בשורה אחת: מהדורה, התקנה, מופע, וכמה
+      // ספרים פתוחים בו (הם מאטים את הקריאה).
+      logLine(
+        'ResponsaCatalogBuildService: start: edition ${version ?? '?'}, '
+        '${installation.installPath} (${installation.source}), '
+        'pid ${instance.pid} "${instance.title}", '
+        '${instance.openWindows} open book windows',
+      );
       final automation = ResponsaAutomation(
         pid: instance.pid,
         profile: ResponsaVersionProfile.forVersion(version),
@@ -383,6 +398,17 @@ class ResponsaCatalogBuildService {
       );
     } on ResponsaTreeReadException catch (error) {
       logLine('ResponsaCatalogBuildService: $error');
+      // "ביטול" בזמן שהקריאה חיכתה לבר אילן עוצר את ההמתנה, והקריאה נראית
+      // כמו כשל; המשתמש ביקש לעצור, ולכן זה ביטול.
+      if (cancelled()) {
+        send.send(
+          const ResponsaBuildProgress.failed(
+            ResponsaBuildFailure.cancelled,
+            'קריאת רשימת הספרים בוטלה.',
+          ),
+        );
+        return;
+      }
       send.send(
         ResponsaBuildProgress.failed(
           error.accessDenied

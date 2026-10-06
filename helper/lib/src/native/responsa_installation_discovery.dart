@@ -269,6 +269,27 @@ class ResponsaInstallationDiscovery {
     ];
   }
 
+  /// כוננים שהסריקה מדלגת עליהם, עם הסיבה (`E:\ (errno 21)`), ל-`/diagnostics`.
+  /// כונן ריק כזה הוא שהפיל את הגילוי עד 0.5.1.
+  static List<String> unavailableDrives() => [
+    for (final drive in drives())
+      if (_driveError(drive) case final error?) '$drive ($error)',
+  ];
+
+  static String? _driveError(String drive) {
+    try {
+      Directory(drive).existsSync();
+      return null;
+    } on FileSystemException catch (error) {
+      final os = error.osError;
+      return os == null
+          ? error.message
+          : '${os.message.trim()}, errno ${os.errorCode}';
+    } catch (error) {
+      return '$error';
+    }
+  }
+
   /// לפי נתיב קובץ ההרצה, כולל מופעים חונים (הם עדיין מעידים על ההתקנה).
   /// מופע לעבודה בוחרים ב-[ResponsaInstance.pick].
   static List<ResponsaInstance> instancesOf(String installPath) {

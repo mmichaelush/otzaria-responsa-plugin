@@ -79,8 +79,12 @@ Future<void> _run(List<String> arguments) async {
   final api = HttpApi(service, port: port);
   logLine(
     'responsa_helper ${HelperService.serverVersion} listening on '
-    '127.0.0.1:$port, data ${paths.dataDir}, pid $pid',
+    '127.0.0.1:$port, data ${paths.dataDir}, pid $pid, '
+    '${Platform.operatingSystemVersion}',
   );
+  // היומן מסובב גם בזמן ריצה: שירות שרץ שבועות, ותוסף שבודק כל 10 שניות
+  // מול שירות שנכשל, היו מגדילים אותו בלי סוף.
+  Timer.periodic(const Duration(minutes: 30), (_) => rotateLog());
 
   unawaited(
     ProcessSignal.sigint.watch().first.then((_) async {

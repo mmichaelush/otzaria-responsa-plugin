@@ -158,6 +158,21 @@ void main() {
       expect(result.json, containsPair('apiVersion', 1));
     });
 
+    test('diagnostics: מוצהר ביכולות, ומחזיר סיכום ויומן', () async {
+      await start();
+      final health = (await call('GET', '/health')).json as Map;
+      expect(health['capabilities'], contains('diagnostics'));
+      final result = await call('GET', '/diagnostics');
+      expect(result.status, 200);
+      final json = result.json as Map;
+      expect(json['summary'], allOf(isA<String>(), contains('service 0.5.')));
+      expect(
+        json['summary'],
+        contains('book list: ${sampleBooks.length} books'),
+      );
+      expect(json['logTail'], isA<String>());
+    });
+
     test('status מדווח על ההתקנה והקטלוג', () async {
       await start();
       final json = (await call('GET', '/status')).json as Map;
