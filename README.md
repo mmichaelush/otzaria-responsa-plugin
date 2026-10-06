@@ -20,7 +20,7 @@
 
 ## התקנה
 
-1. הורידו את **`OtzariaResponsa-Setup-….exe`** מ[דף ההורדות](https://github.com/mmichaelush/otzaria-responsa-plugin/releases/latest).
+1. הורידו את המתקין: **[OtzariaResponsa-Setup.exe](https://github.com/mmichaelush/otzaria-responsa-plugin/releases/latest/download/OtzariaResponsa-Setup.exe)** (קישור קבוע לגרסה האחרונה; גם ב[דף ההורדות](https://github.com/mmichaelush/otzaria-responsa-plugin/releases/latest)). במחשב בלי אינטרנט: מעבירים את הקובץ בדיסק און קי. הוא כולל גם את התוסף לאוצריא.
 2. הריצו אותו. אין צורך בהרשאות מנהל.
 3. אשרו את התקנת התוסף באוצריא, והדליקו את ההרשאה "הוספת רכיבים לתוכנה".
 

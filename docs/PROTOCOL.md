@@ -76,9 +76,9 @@
 
 ```json
 { "ok": true, "service": "otzaria-responsa", "apiVersion": 1,
-  "serverVersion": "0.5.0",
+  "serverVersion": "0.5.1",
   "capabilities": ["catalog", "open", "icon", "searchText", "export", "browse", "otzariaIcons",
-                   "advancedSearch", "showResponsa", "notify", "locate", "autoStart"],
+                   "advancedSearch", "showResponsa", "notify", "locate", "autoStart", "diagnostics"],
   "sessionId": 1 }
 ```
 
@@ -325,6 +325,17 @@
 - **למה:** התוסף מצייר את האייקונים של אוצריא עצמה, בגרסה שמותקנת אצל המשתמש, בלי לארוז אותם. כל שם שאין לו גליף נשאר מהאייקונים שבתוסף (FluentUI, MIT).
 - **שגיאות:** 404 `notFound` כשהגופן לא נמצא או לא נקרא.
 
+### `GET /diagnostics`
+יכולת `diagnostics` (מ-0.5.1). מה שצריך כדי למצוא את שורש התקלה במחשב של משתמש. התוסף מצרף אותו ל"העתקת הפרטים" ולדיווח על בעיה.
+
+```json
+{ "summary": "service 0.5.1, Windows 10 Pro 10.0 (Build 26200), up 3h12m, session 1\ninstallation: …", "logTail": "2026-10-06 00:18:26 HttpApi: GET /status: …" }
+```
+
+- **`summary`:** שורות קצרות באנגלית: גרסת השירות ו-Windows; כל התקנה של בר אילן (נתיב, מהדורה, מקור, קובץ הרצה, ארכיון, מופעים פועלים ומספר חלונות הספרים בהם); כוננים שאינם זמינים; מצב רשימת הספרים; הקריאה האחרונה של הרשימה (משך, תוצאה, עד היכן הגיעה).
+- **`logTail`:** סוף `helper.log`, עד 80 רשומות ו-6,000 תווים. בקשות שהצליחו מסוננות, עקבות מחסנית מקוצרות לשש שורות, וקבוצה של עד ארבע רשומות שחוזרת ברצף מופיעה פעם אחת עם מספר החזרות.
+- **נבנה רק לבקשה**, ולכן אינו נכתב ליומן בכל בדיקה תקופתית. שם המשתמש בנתיבים מושמט בתוסף (`Log.scrub`), לפני שהטקסט יוצא מהמחשב.
+
 ## 5. מיקומים
 
 | מה | איפה |
@@ -385,4 +396,5 @@
   - 0.3.0: `browse` (`/catalog/browse`, ו-`path` ב-`/catalog/search`), `otzariaIcons` (`/otzaria/icons`). תוסף 0.3.0 מול שירות ישן מסתיר את העיון ומציג הערה "כדאי להוריד את הגרסה החדשה".
   - 0.4.0: `advancedSearch` (`advanced`, `options`, `scope` ב-`/text/search`), `showResponsa` (`/responsa/show`). מול שירות ישן הדיאלוג מציג "כדאי להוריד את הגרסה החדשה", וכפתור "פתיחת בר אילן" אינו מוצג.
   - 0.5.0: `notify` (`notify: true` ב-`/text/search` וב-`/book/open`; `message` ו-`severity` ברמה העליונה של כל שגיאה), `locate` (`/reference/open`), `autoStart` (§4), `key` מספרי ב-`/book/open`. קטלוג בסכימה 7 (ספר בתוך ספר: ספר יחיד תחת ספר אחר, כמו "גינת ורדים כללים"), שמסמן קטלוג קודם כישן. מול שירות ישן הלשונית "איתור מקום" מציגה "כדאי להוריד את הגרסה החדשה".
+  - 0.5.1: `diagnostics` (`/diagnostics`). מול שירות ישן הדיווח נשלח בלי פרטי השירות.
 - **שדות לא מוכרים:** התוסף מתעלם משדות שאינו מכיר.

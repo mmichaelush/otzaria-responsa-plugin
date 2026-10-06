@@ -87,16 +87,31 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
         with:
           name: installer
           path: dist
+      # עותק בשם קבוע: הקישור הקבוע למתקין האחרון הוא
+      # .../releases/latest/download/OtzariaResponsa-Setup.exe
+      - name: Constant-name installer
+        run: cp dist/output/OtzariaResponsa-Setup-*.exe dist/OtzariaResponsa-Setup.exe
+      # הערות הגרסה מהסעיף שלה ב-CHANGELOG.md, ולא רשימת קומיטים.
+      - name: Release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v head="## $version" '$0 == head {on = 1; next} on && /^## / {exit} on' CHANGELOG.md > dist/notes.md
+          test -s dist/notes.md || { echo "::error::אין סעיף '## $version' ב-CHANGELOG.md"; exit 1; }
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/output/*.exe
+            dist/OtzariaResponsa-Setup.exe
             dist/staging/*.otzplugin
-          generate_release_notes: true
+          body_path: dist/notes.md
           fail_on_unmatched_files: true
 
   # אחרי ה-Release ולא לפניו: תקלה בחנות (סיסמה, אתר) לא מעכבת את המתקין.

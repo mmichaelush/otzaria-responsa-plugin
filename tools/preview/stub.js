@@ -129,7 +129,7 @@
               ok: true,
               service: 'otzaria-responsa',
               apiVersion: scenario === 'serviceOutdated' ? 2 : 1,
-              serverVersion: '0.5.0',
+              serverVersion: '0.5.1',
               capabilities: params.get('oldservice')
                 ? ['catalog', 'open', 'icon', 'searchText', 'export']
                 : [
@@ -145,10 +145,19 @@
                     'notify',
                     'locate',
                     'autoStart',
+                    'diagnostics',
                   ],
             };
       case '/status':
         return status();
+      case '/diagnostics':
+        return {
+          summary:
+            'service 0.5.1, Windows 10 Pro 10.0 (Build 26200), up 0h05m, session 1\n' +
+            'installation: C:\\Program Files (x86)\\ResponsaCD25, edition 25, from registry, exe ok, archive ok, running: no\n' +
+            'book list: 8392 books, edition 25, schema 7, 465701 rows, read 2026-10-06T10:03:35',
+          logTail: '2026-10-06 10:03:35 BuildCoordinator: book list read OK: 8392 books from 465701 rows',
+        };
       case '/catalog/search':
         return search(body);
       case '/catalog/browse':
@@ -255,7 +264,7 @@
 
   window.addEventListener('load', () => {
     const payload = {
-      plugin: { id: 'com.otzaria-responsa', version: '0.5.0' },
+      plugin: { id: 'com.otzaria-responsa', version: '0.5.1' },
       app: {
         version: '0.9.98',
         platform: scenario === 'unsupported' ? 'linux' : 'windows',

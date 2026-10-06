@@ -61,6 +61,10 @@ if (-not (Test-Path (Join-Path $validator 'src/cli.js'))) {
   if ($LASTEXITCODE -ne 0) { throw 'הורדת הוולידטור נכשלה' }
 }
 $env:INPUT_BUILD = 'true'
+# בלי GITHUB_OUTPUT הוולידטור כותב את הפלטים (total-warnings) ל-stdout, גם
+# בתוך GitHub Actions; אחרת הבדיקה שלמטה הייתה מקבלת מספר ריק.
+$githubOutput = $env:GITHUB_OUTPUT
+$env:GITHUB_OUTPUT = $null
 # ב-PowerShell 5.1, עם Stop, כל שורה ש-node כותב ל-stderr (גם אזהרה) הופכת
 # לחריגה. קוד היציאה הוא מה שמכריע.
 $ErrorActionPreference = 'Continue'
@@ -70,6 +74,7 @@ $output = node (Join-Path $validator 'src/cli.js') (Join-Path $root 'plugin') `
 $validatorExit = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
 $env:INPUT_BUILD = $null
+$env:GITHUB_OUTPUT = $githubOutput
 $output | Where-Object { $_ -notmatch '^OUTPUT ' } | Write-Host
 if ($validatorExit -ne 0) { throw 'הוולידטור נכשל' }
 # כמו ב-CI: מותרות רק ההמלצות להסיר הרשאת בסיס מוצהרת.
