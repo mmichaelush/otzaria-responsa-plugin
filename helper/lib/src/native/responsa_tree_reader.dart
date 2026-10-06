@@ -20,12 +20,17 @@ class ResponsaTreeNode {
   /// כמה ילדים יש לצומת לפי ה-TreeView. `0` = עלה.
   final int childCount;
 
+  /// לא נפתח, כי פתיחתו הפילה את בר אילן ([ResponsaTreeReader.walk] `skip`).
+  /// ילדיו לא נקראו, ו-[ResponsaCatalogBuilder] מחשיב אותו בכל זאת כספר.
+  final bool skipped;
+
   const ResponsaTreeNode({
     required this.name,
     required this.param,
     required this.level,
     required this.path,
     required this.childCount,
+    this.skipped = false,
   });
 }
 
@@ -185,7 +190,13 @@ class ResponsaTreeReader {
       final crashed = exitCode != null;
       // אחרי שהצומת נפתח לא נקראה אף שורה: הפתיחה (או הקיפול) שלו הפילה את
       // בר אילן. בר אילן 30 קורס כך בכל פעם באותו ספר (0xC0000409).
-      final culprit = crashed && walk.expanding == walk.current
+      // רק קוד של קריסה (NTSTATUS של שגיאה, 0xC…): בר אילן שהמשתמש סגר יוצא
+      // בקוד רגיל, והספר שנפתח באותו רגע אינו אשם.
+      final culprit =
+          crashed &&
+              exitCode >= _crashCodes &&
+              exitCode != _hungWindowClosed &&
+              walk.expanding == walk.current
           ? walk.expanding
           : null;
       logLine(
@@ -221,6 +232,13 @@ class ResponsaTreeReader {
     );
     return walk.nodes;
   }
+
+  /// קודי יציאה של קריסה מתחילים כאן (`STATUS_ACCESS_VIOLATION` הוא
+  /// 0xC0000005, `STATUS_STACK_BUFFER_OVERRUN` 0xC0000409).
+  static const int _crashCodes = 0xC0000000;
+
+  /// "סגור את התוכנית" על חלון של תוכנה שאינה מגיבה: המשתמש סגר, לא קריסה.
+  static const int _hungWindowClosed = 0xCFFFFFFF;
 
   /// כמה לחכות לסיום התהליך אחרי שחלון העץ נעלם.
   static const Duration _exitWait = Duration(seconds: 3);
@@ -668,6 +686,17 @@ class _Walk {
     if (skip.contains(current)) {
       logLine(
         'ResponsaTreeReader: not opening "$current" (crashed Bar-Ilan before)',
+      );
+      final added = nodes.removeLast();
+      nodes.add(
+        ResponsaTreeNode(
+          name: added.name,
+          param: added.param,
+          level: added.level,
+          path: added.path,
+          childCount: added.childCount,
+          skipped: true,
+        ),
       );
       return true;
     }

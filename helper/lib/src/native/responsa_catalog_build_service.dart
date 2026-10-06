@@ -121,20 +121,30 @@ class ResponsaBuildResume {
   /// הצמתים של הענפים שהושלמו לפני [section].
   final List<ResponsaTreeNode> nodes;
 
+  /// כמה פעמים הספר הזה הפיל את בר אילן. מ-[ResponsaBuildSkipList.crashesToSkip]
+  /// הוא לא נפתח בהמשך.
+  final int crashes;
+
   const ResponsaBuildResume({
     required this.section,
     required this.culprit,
     required this.nodes,
+    required this.crashes,
   });
 }
 
-/// ספרים שפתיחתם הפילה את בר אילן, לכל התקנה (`build-skip.json` ליד הקטלוג).
-/// נקראים ונכתבים באיזולט הקריאה. בר אילן 30 קורס בכל פעם בפתיחת אותו ספר,
-/// ולכן ספר כזה לא נפתח שוב: הוא נרשם, בלי הפרקים שלו.
+/// ספרים שבר אילן קרס בפתיחתם, לכל התקנה (`build-skip.json` ליד הקטלוג).
+/// נקראים ונכתבים באיזולט הקריאה. בר אילן 30 קורס בכל פעם בפתיחת אותו ספר:
+/// אחרי הקריסה הראשונה מנסים שוב; אחרי השנייה הספר לא נפתח, ונרשם בלי
+/// הפרקים שלו. כך סגירה של בר אילן בידי המשתמש, או קריסה אקראית, אינן
+/// מדלגות על ספר לתמיד. כשההתקנה משתנה (טביעת האצבע) הרשימה מתאפסת.
 class ResponsaBuildSkipList {
   ResponsaBuildSkipList(this.file);
 
   final File file;
+
+  /// כמה קריסות באותו ספר עד שהוא לא נפתח.
+  static const int crashesToSkip = 2;
 
   /// מעבר לזה כבר אין טעם לדלג: משהו אחר שבור.
   static const int maxPerInstallation = 10;
@@ -152,25 +162,69 @@ class ResponsaBuildSkipList {
     }
   }
 
-  Set<String> forInstallation(String installPath) => {
-    for (final entry in (_read()[_key(installPath)] as List?) ?? const [])
-      if (entry is String) entry,
+  /// הקריסות לכל ספר בהתקנה, כשטביעת האצבע שלה לא השתנתה.
+  Map<String, int> _crashes(
+    Map<String, Object?> all,
+    String installPath,
+    String identity,
+  ) {
+    final entry = all[_key(installPath)];
+    if (entry is! Map || entry['identity'] != identity) return {};
+    final crashes = entry['crashes'];
+    if (crashes is! Map) return {};
+    return {
+      for (final MapEntry(:key, :value) in crashes.entries)
+        if (key is String && value is int) key: value,
+    };
+  }
+
+  /// הספרים שלא נפתחים: קרסו [crashesToSkip] פעמים.
+  Set<String> forInstallation(String installPath, String identity) => {
+    for (final MapEntry(:key, :value) in _crashes(
+      _read(),
+      installPath,
+      identity,
+    ).entries)
+      if (value >= crashesToSkip) key,
   };
 
-  /// `false` כשהנתיב כבר ברשימה או שהרשימה מלאה: אז לא ממשיכים.
-  bool add(String installPath, String culprit) {
+  /// רושם קריסה, ומחזיר כמה פעמים הספר הזה הפיל את בר אילן; `0` כשהרשימה
+  /// מלאה או לא נכתבה, ואז לא ממשיכים.
+  int recordCrash(String installPath, String identity, String culprit) {
     final all = _read();
-    final list = forInstallation(installPath);
-    if (list.contains(culprit) || list.length >= maxPerInstallation) {
-      return false;
+    final crashes = _crashes(all, installPath, identity);
+    if (!crashes.containsKey(culprit) && crashes.length >= maxPerInstallation) {
+      return 0;
     }
-    all[_key(installPath)] = [...list, culprit];
+    final count = (crashes[culprit] ?? 0) + 1;
+    crashes[culprit] = count;
+    all[_key(installPath)] = {'identity': identity, 'crashes': crashes};
     try {
       file.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(all));
-      return true;
+      return count;
     } catch (error) {
       logLine('ResponsaBuildSkipList: cannot write ${file.path}: $error');
-      return false;
+      return 0;
+    }
+  }
+
+  /// שורה ל-`/diagnostics`, או `null` כשאין קריסות רשומות.
+  static String? describe(File file) {
+    try {
+      if (!file.existsSync()) return null;
+      final json = jsonDecode(file.readAsStringSync());
+      if (json is! Map) return null;
+      final parts = <String>[];
+      for (final MapEntry(:key, :value) in json.entries) {
+        final crashes = value is Map ? value['crashes'] : null;
+        if (crashes is! Map || crashes.isEmpty) continue;
+        parts.add(
+          '$key: ${[for (final MapEntry(:key, :value) in crashes.entries) '"$key" x$value'].join(', ')}',
+        );
+      }
+      return parts.isEmpty ? null : parts.join('; ');
+    } catch (error) {
+      return 'unreadable: $error';
     }
   }
 }
@@ -213,8 +267,14 @@ class ResponsaCatalogBuildService {
   /// האם בנייה כלשהי רצה כרגע — גם כזו שהתחיל מסך שכבר נסגר.
   static bool _active = false;
 
-  /// כמה פעמים ממשיכים אחרי קריסה של בר אילן בבנייה אחת.
-  static const int _maxResumes = 2;
+  /// כמה פעמים ממשיכים אחרי קריסה של בר אילן בבנייה אחת: ניסיון חוזר באותו
+  /// ספר, דילוג עליו, ועוד ספר אחד.
+  static const int _maxResumes = 3;
+
+  static const ResponsaBuildProgress _cancelled = ResponsaBuildProgress.failed(
+    ResponsaBuildFailure.cancelled,
+    'קריאת רשימת הספרים בוטלה.',
+  );
 
   Future<void> _start(
     StreamController<ResponsaBuildProgress> controller,
@@ -258,19 +318,25 @@ class ResponsaCatalogBuildService {
           (progress) => controller.add(progress.withNotice(notice)),
         );
         final resume = outcome.resume;
-        if (resume == null || resumes >= _maxResumes || flag.value != 0) {
+        if (flag.value != 0) {
+          controller.add(resume == null ? outcome : _cancelled);
+          return;
+        }
+        if (resume == null || resumes >= _maxResumes) {
           controller.add(outcome);
           return;
         }
         final book = resume.culprit
             .split(ResponsaTreeReader.pathSeparator)
             .last;
-        notice =
-            'בר אילן קרס בפתיחת "$book" (תקלה בבר אילן עצמו). הקריאה '
-            'ממשיכה בלי לפתוח את הספר הזה.';
+        notice = resume.crashes < ResponsaBuildSkipList.crashesToSkip
+            ? 'בר אילן קרס בפתיחת "$book". מפעיל אותו מחדש וממשיך.'
+            : 'בר אילן קרס שוב בפתיחת "$book" (תקלה בבר אילן עצמו). הקריאה '
+                  'ממשיכה בלי לפתוח את הספר הזה; הוא יישאר ברשימה, בלי הפרקים '
+                  'שלו.';
         logLine(
           'ResponsaCatalogBuildService: Bar-Ilan crashed opening '
-          '"${resume.culprit}"; relaunching and continuing from section '
+          '"${resume.culprit}" (crash ${resume.crashes}); relaunching and continuing from section '
           '${resume.section + 1} with ${resume.nodes.length} rows kept',
         );
         controller.add(
@@ -285,6 +351,11 @@ class ResponsaCatalogBuildService {
         prior = resume.nodes;
         // תהליך שקרס מסיים לצאת (ו-WER משחרר אותו) רגע אחרי הקריסה.
         await Future<void>.delayed(const Duration(seconds: 3));
+        // ביטול בזמן ההמתנה: לא מפעילים את בר אילן שוב.
+        if (flag.value != 0) {
+          controller.add(_cancelled);
+          return;
+        }
       }
     } finally {
       await controller.close();
@@ -396,6 +467,7 @@ class ResponsaCatalogBuildService {
       File(path.join(path.dirname(request.targetPath), 'build-skip.json')),
     );
     String? installPath;
+    String? identity;
 
     // המחשב לא נכנס למצב שינה מחוסר פעילות בזמן הקריאה: יציאה משינה משביתה
     // את בר אילן, וקריאה של דקות נזרקה. גם המסך: במחשבים עם Modern Standby
@@ -419,6 +491,9 @@ class ResponsaCatalogBuildService {
       }
       final installation = selection.installation;
       installPath = installation.installPath;
+      identity = jsonEncode(
+        ResponsaInstallationDiscovery.fingerprint(installation).toMeta(),
+      );
       // לא מופע חונה מחוץ למסך: הבנייה הייתה מצליחה, אבל המשתמש לא היה
       // רואה דבר במשך דקות.
       final instance = ResponsaInstance.pick(selection.instances);
@@ -467,10 +542,14 @@ class ResponsaCatalogBuildService {
         return;
       }
 
-      send.send(
-        const ResponsaBuildProgress(stage: ResponsaBuildStage.scanning),
-      );
       final prior = request.prior;
+      send.send(
+        ResponsaBuildProgress(
+          stage: ResponsaBuildStage.scanning,
+          scannedNodes: prior.length,
+          sectionsDone: request.fromSection,
+        ),
+      );
       var scanned = prior.length;
       var sections = (done: request.fromSection, total: 0);
       var waiting = false;
@@ -491,7 +570,7 @@ class ResponsaCatalogBuildService {
         shouldStop: cancelled,
         patience: const Duration(minutes: 3),
         fromSection: request.fromSection,
-        skip: skipList.forInstallation(installation.installPath),
+        skip: skipList.forInstallation(installation.installPath, identity),
         onWaiting: (value) {
           waiting = value;
           report();
@@ -553,9 +632,10 @@ class ResponsaCatalogBuildService {
       }
       // קריסה בפתיחת ספר מסוים: נרשם, ובר אילן יופעל מחדש בלעדיו.
       final culprit = error.culprit;
-      if (culprit != null &&
-          installPath != null &&
-          skipList.add(installPath, culprit)) {
+      final crashes = culprit == null || installPath == null || identity == null
+          ? 0
+          : skipList.recordCrash(installPath, identity, culprit);
+      if (culprit != null && crashes > 0) {
         send.send(
           ResponsaBuildProgress.failed(
             ResponsaBuildFailure.notResponding,
@@ -564,6 +644,7 @@ class ResponsaCatalogBuildService {
               section: error.section,
               culprit: culprit,
               nodes: [...request.prior, ...error.completed],
+              crashes: crashes,
             ),
           ),
         );

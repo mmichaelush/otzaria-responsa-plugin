@@ -117,6 +117,9 @@ class HelperService {
     catalog: store.repository.info,
     lastBuild: builds.lastSummary,
     runningBuild: builds.runningSummary,
+    skipFile: File(
+      '${File(paths.catalog).parent.path}${Platform.pathSeparator}build-skip.json',
+    ),
   );
 
   Future<Map<String, Object?>> search(Map<String, Object?> body) async {

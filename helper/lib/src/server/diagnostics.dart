@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:meta/meta.dart';
 import 'package:responsa_helper/src/catalog/responsa_catalog_repository.dart';
 import 'package:responsa_helper/src/log.dart';
+import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
 
 /// `GET /diagnostics`: מה שצריך כדי למצוא את שורש התקלה ממחשב שאין לנו גישה
@@ -36,6 +37,7 @@ class HelperDiagnostics {
     required Future<ResponsaCatalogInfo> Function() catalog,
     required String? lastBuild,
     required String? runningBuild,
+    File? skipFile,
   }) async {
     // היומן קודם ובלי תלות בשאר: הוא מה שמסביר תקלה שעוד לא ראינו, וכשל
     // בחלק אחר אסור שיאבד אותו.
@@ -63,6 +65,9 @@ class HelperDiagnostics {
       ...catalogLines,
       if (runningBuild != null) 'book list: reading now, $runningBuild',
       'last book list read: ${lastBuild ?? 'none since the service started'}',
+      if (skipFile != null)
+        if (ResponsaBuildSkipList.describe(skipFile) case final skips?)
+          'books that crashed Bar-Ilan: $skips',
     ];
     return {'summary': lines.join('\n'), 'logTail': logTail};
   }

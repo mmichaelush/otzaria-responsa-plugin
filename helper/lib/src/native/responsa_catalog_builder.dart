@@ -216,7 +216,9 @@ class ResponsaCatalogBuilder {
       stack.add((
         node: node,
         order: scanned++,
-        hasSectionChild: false,
+        // ספר שלא נפתח (הפיל את בר אילן): המקטעים שלו לא נקראו, אבל הוא ספר,
+        // ונפתח לפי שמו.
+        hasSectionChild: node.skipped,
         anchor: null,
       ));
     }

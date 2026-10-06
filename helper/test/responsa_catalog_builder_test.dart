@@ -29,6 +29,35 @@ final _ginatVradim = _tree([
 ]);
 
 void main() {
+  test('ספר שלא נפתח (הפיל את בר אילן) נשאר ספר, בלי מקום', () {
+    // `כללים` דולג: הצומת נרשם בלי המקטעים שתחתיו.
+    final skipped = [
+      for (final node in _ginatVradim.take(7))
+        node.name == 'כללים'
+            ? ResponsaTreeNode(
+                name: node.name,
+                param: node.param,
+                level: node.level,
+                path: node.path,
+                childCount: 2,
+                skipped: true,
+              )
+            : node,
+    ];
+    final rows = ResponsaCatalogBuilder.classify(skipped);
+    expect(rows.map((row) => row.title), ['גינת ורדים', 'גינת ורדים כללים']);
+    expect(rows.last.anchor, isNull);
+
+    // אותו עץ בלי הסימון: הספר נעלם (זה מה שהסימון מונע).
+    final unmarked = _tree([
+      for (final node in _ginatVradim.take(7))
+        (node.level, node.param, node.name),
+    ]);
+    expect(ResponsaCatalogBuilder.classify(unmarked).map((row) => row.title), [
+      'גינת ורדים',
+    ]);
+  });
+
   group('ספר בתוך ספר', () {
     test('גינת ורדים: שתי שורות, והיחידה מסומנת כספר בתוך ספר', () {
       final rows = ResponsaCatalogBuilder.classify(_ginatVradim);
