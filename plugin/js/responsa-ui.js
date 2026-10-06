@@ -154,6 +154,22 @@
     });
   }
 
+  /** השלבים אחרי "הורדת המתקין": בהתקנה ראשונה ובעדכון של השירות. */
+  function installSteps() {
+    return [
+      t('לחצו על "הורדת המתקין".'),
+      t('פתחו את הקובץ שירד, לחצו "הבא" ובסוף "סיום".'),
+      t('חזרו לכאן. המסך יתעדכן מעצמו.'),
+    ];
+  }
+
+  function downloadButton(actions) {
+    return button('filled', t('הורדת המתקין'), actions.download, {
+      key: 'download',
+      icon: 'arrow_download_24_regular',
+    });
+  }
+
   function serviceMissingView(model, actions) {
     return stateCard({
       iconName: 'arrow_download_24_regular',
@@ -161,18 +177,8 @@
       text: t(
         'כדי שאוצריא תוכל לעבוד עם תוכנת בר אילן, יש להתקין במחשב את "שירות בר אילן לאוצריא". ההתקנה לוקחת פחות מדקה ואינה דורשת הרשאות מנהל.',
       ),
-      steps: [
-        t('לחצו על "הורדת המתקין".'),
-        t('פתחו את הקובץ שירד, לחצו "הבא" ובסוף "סיום".'),
-        t('חזרו לכאן. המסך יתעדכן מעצמו.'),
-      ],
-      actions: [
-        button('filled', t('הורדת המתקין'), actions.download, {
-          key: 'download',
-          icon: 'arrow_download_24_regular',
-        }),
-        retryButton(model, actions),
-      ],
+      steps: installSteps(),
+      actions: [downloadButton(actions), retryButton(model, actions)],
       footnote: [
         t('כבר התקנתם? ייתכן שהשירות לא פועל כרגע. הפעלה מחדש של המחשב תפעיל אותו.'),
         model.online === false
@@ -187,6 +193,24 @@
   }
 
   function serviceErrorView(model, actions) {
+    // שירות ישן מהתוסף: התוסף התעדכן מהחנות והשירות לא. בדיקה חוזרת או
+    // הפעלה מחדש לא יעזרו, ולכן העדכון הוא הפעולה הראשית.
+    const update = Domain.serviceUpdateHint(model.health, model.pluginVersion);
+    if (update) {
+      return stateCard({
+        iconName: 'arrow_download_24_regular',
+        error: true,
+        title: t('השירות לא מגיב כרגע'),
+        text: update,
+        steps: installSteps(),
+        actions: [
+          downloadButton(actions),
+          retryButton(model, actions),
+          button('text', t('העתקת הפרטים'), actions.copyStatus, { key: 'copy-status', icon: 'copy_24_regular' }),
+        ],
+        code: errorCodeLine(model),
+      });
+    }
     return stateCard({
       iconName: 'warning_24_regular',
       error: true,
@@ -297,6 +321,9 @@
           el('span', { 'data-role': 'remaining' }),
         ),
       ),
+      // מוסתרות כשאין מה לומר; [updateProgress] ממלא ומציג.
+      el('p', { class: 'progress-note', 'data-role': 'waiting', 'aria-live': 'polite', hidden: true }),
+      el('p', { class: 'progress-note', 'data-role': 'notice', 'aria-live': 'polite', hidden: true }),
     ];
   }
 
@@ -312,6 +339,11 @@
     set('detail', progress.detail);
     set('percent', progress.percent === null ? '' : progress.percent + '%');
     set('remaining', progress.remaining ? ' · ' + progress.remaining : '');
+    for (const role of ['waiting', 'notice']) {
+      set(role, progress[role]);
+      const node = part(role);
+      if (node) node.hidden = !progress[role];
+    }
     const track = part('track');
     const bar = part('bar');
     if (track && bar) {
@@ -454,7 +486,7 @@
   /** הערה מעל החיפוש, או `null`. בזמן בנייה מחדש אין מה להמליץ. */
   function noticeView(model, actions) {
     if (model.buildActive) return null;
-    const service = Domain.serviceNotice(model.health);
+    const service = Domain.serviceNotice(model.health, model.pluginVersion);
     if (service) {
       return el(
         'div',

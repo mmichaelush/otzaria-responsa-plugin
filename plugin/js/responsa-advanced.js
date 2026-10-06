@@ -194,73 +194,256 @@
       .filter((word) => LETTER.test(word));
   }
 
+  // ------------------------------------------------------ מדיאלוג החיפוש של אוצריא
+
+  /**
+   * שמות אפשרויות המילה של אוצריא, כפי שהן מגיעות ב-`wordOptions`
+   * (`SearchQueryBuilder` ו-`hebrew_query.rs` באוצריא 0.9.98).
+   */
+  const OTZARIA = Object.freeze({
+    gramPrefixes: 'קידומות דקדוקיות',
+    gramSuffixes: 'סיומות דקדוקיות',
+    prefixes: 'קידומות',
+    suffixes: 'סיומות',
+    spelling: 'כתיב מלא/חסר',
+    partial: 'חלק ממילה',
+    quotes: 'התעלם מגרשיים',
+    translation: 'תרגום ארמי',
+    acronyms: 'ראשי תיבות',
+  });
+
+  /**
+   * הצורה לפי מה שמותר לפני המילה ואחריה: '' כלום, `gram` אותיות שימוש או
+   * סיומות דקדוקיות (`#`), `any` כל אות (`*`).
+   */
+  const AFFIX_FORMS = Object.freeze({
+    '|': 'exact',
+    'gram|': 'prefixes',
+    '|gram': 'suffixes',
+    'gram|gram': 'affixes',
+    'any|': 'endsWith',
+    '|any': 'startsWith',
+    'any|any': 'contains',
+    'gram|any': 'prefixesAny',
+    // `*נר#` לא נמדד בבר אילן; "מכילה" רחבה ממנו.
+    'any|gram': 'contains',
+  });
+
+  const unique = (values) => [...new Set(values)];
+
+  /** האם ערך מהבקשה של אוצריא מבקש משהו: אוצריא שולחת גם ברירות מחדל כבויות. */
+  function filled(value) {
+    if (Array.isArray(value)) return value.some(filled);
+    if (value && typeof value === 'object') return Object.values(value).some(filled);
+    return typeof value === 'string' ? value.trim() !== '' : Boolean(value);
+  }
+
+  /**
+   * אפשרויות של מילה אחת ← צורה כאן, ו-`missing`: שמות האפשרויות שלא עברו
+   * במדויק. בר אילן אינו מצרף סימנים (רק `#!`), ולכן מצירוף נשארת צורה אחת.
+   * "קידומות", "סיומות" ו"חלק ממילה" של אוצריא מוגבלות בכמה אותיות, ו-`*`
+   * אינו מוגבל: הן עוברות, רחבות יותר.
+   */
+  function otzariaTerm(words, options) {
+    const on = (name) => options[name] === true;
+    const missing = [];
+    const before = on(OTZARIA.partial) || on(OTZARIA.prefixes) ? 'any' : on(OTZARIA.gramPrefixes) ? 'gram' : '';
+    const after = on(OTZARIA.partial) || on(OTZARIA.suffixes) ? 'any' : on(OTZARIA.gramSuffixes) ? 'gram' : '';
+    let form = AFFIX_FORMS[before + '|' + after];
+    missing.push(...[OTZARIA.partial, OTZARIA.prefixes, OTZARIA.suffixes].filter(on));
+    if (on(OTZARIA.spelling)) {
+      if (form === 'exact') form = 'spelling';
+      else if (form === 'prefixes') form = 'spellingPrefixes';
+      else missing.push(OTZARIA.spelling);
+    }
+    let result = words;
+    // בלי גרש או גרשיים במילה, "התעלם מגרשיים" אינו משנה דבר.
+    if (on(OTZARIA.quotes) && words.some((word) => /["']/.test(word))) {
+      if (form === 'exact' && !on(OTZARIA.translation)) {
+        form = 'quotes';
+        result = unique(words.map((word) => word.replace(/["']/g, ''))).filter((word) => LETTER.test(word));
+      } else missing.push(OTZARIA.quotes);
+    }
+    if (on(OTZARIA.translation)) {
+      if (form === 'exact') form = 'aramaic';
+      else missing.push(OTZARIA.translation);
+    }
+    // אין מקבילה: שגיאות כתיב, קידומות וסיומות ארמיות, ניקוד, טעמים.
+    const known = new Set(Object.values(OTZARIA));
+    missing.push(...Object.keys(options).filter((name) => on(name) && !known.has(name)));
+    return { words: result, form, missing, acronyms: on(OTZARIA.acronyms) };
+  }
+
+  /**
+   * ההגדרות לכל מילה (`wordOptions` לפי `"{מילה}_{מקום}"`, `alternativeWords`
+   * ו-`customSpacing` לפי מקום) לפי המקומות כאן, או `null` כשהמקומות אינם
+   * בטוחים. אוצריא מפצלת בעצמה: מילה שאינה בעברית היא אצלה מקום וכאן היא
+   * נמחקת, ואז כל מה שאחריה היה עובר למילה הלא נכונה.
+   */
+  function otzariaPositions(source, all) {
+    const tokens = String(source.query || '').split(/[\s־-]+/);
+    if (tokens.some((token) => /[\p{L}\p{N}]/u.test(token) && simpleWords(token).length !== 1)) return null;
+    const plain = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
+    const index = (value) => (/^\d+$/.test(value) ? Number(value) : -1);
+    const options = [];
+    for (const [key, value] of Object.entries(plain(source.wordOptions))) {
+      if (!filled(value)) continue;
+      const sep = key.lastIndexOf('_');
+      const at = sep > 0 ? index(key.slice(sep + 1)) : -1;
+      const words = simpleWords(key.slice(0, sep));
+      if (at < 0 || at >= all.length || words.length !== 1 || words[0] !== all[at]) return null;
+      options[at] = plain(value);
+    }
+    const alternatives = [];
+    for (const [key, value] of Object.entries(plain(source.alternativeWords))) {
+      if (!filled(value)) continue;
+      const at = index(key);
+      if (at < 0 || at >= all.length || !Array.isArray(value)) return null;
+      alternatives[at] = value.filter((word) => typeof word === 'string' && word.trim());
+    }
+    const spacing = plain(source.customSpacing);
+    for (const key of Object.keys(spacing)) {
+      const pair = /^(\d+)-(\d+)$/.exec(key);
+      if (!pair || Number(pair[2]) !== Number(pair[1]) + 1 || Number(pair[2]) >= all.length) return null;
+    }
+    return { options, alternatives, spacing };
+  }
+
+  /**
+   * המילים שבין כל שתי מילים, כמו `resolve_gaps` באוצריא: בלי מרווחים
+   * ידניים — `distance` לכולן; עם מרווחים — זוג בלי ערך מקבל את הגדול שבהם.
+   */
+  function otzariaGaps(spacing, distance, count) {
+    const values = spacing || {};
+    const parse = (value) => (/^-?\d+$/.test(String(value).trim()) ? Math.max(0, Number.parseInt(value, 10)) : null);
+    const widest = Math.max(0, ...Object.values(values).map(parse).filter((value) => value !== null));
+    return Array.from({ length: Math.max(0, count - 1) }, (_, i) => {
+      if (!Object.keys(values).length) return Math.max(0, distance);
+      const value = parse(values[i + '-' + (i + 1)] ?? '');
+      return value === null ? widest : value;
+    });
+  }
+
+  /** חלופה של אוצריא ← מילה אחת כאן, או `null` (ביטוי, לועזית, תווים כלליים). */
+  function otzariaAlternative(value) {
+    if (/[*?~]/.test(value)) return null;
+    const words = simpleWords(value);
+    return words.length === 1 ? words[0] : null;
+  }
+
   /**
    * חיפוש מדיאלוג החיפוש של אוצריא (`search.requested`, בחוזה של
    * `search.query`) ← חיפוש כאן, מעל [query] הנוכחי (התחום והאפשרויות
-   * נשארים). `null` כשאין מילה עברית. `approximate` — חלק מהבקשה לא עבר
-   * כמו שהוא, וההודעה אומרת זאת:
-   * - מרווח במצב מתקדם (כל המילים) ← בונה, "עד N+1 מילים אחריה": באוצריא
-   *   המרווח הוא המילים *שבין* המילים;
+   * נשארים; "ראשי תיבות" רק מדליק). `null` כשאין מילה עברית.
+   * `approximate` — חלק מהבקשה לא עבר כמו שהוא, וההודעה אומרת זאת;
+   * `missing` — מה בדיוק, בשמות של אוצריא (או החלופה במירכאות), כשידוע.
+   * - אפשרויות מילה ← צורה (`otzariaTerm`), חלופות ← `(א/ב)`;
+   * - מרווח במצב מתקדם (כל המילים) ← "עד N+1 מילים אחריה": באוצריא
+   *   המרווח הוא המילים *שבין* המילים; מרווח ידני לכל זוג בנפרד;
    * - "כל אחת מהמילים" ← מילה אחת עם חלופות (עד MAX_ALTERNATIVES);
    * - "באותה פסקה" / "תחת אותה כותרת" ← בכל סדר, בטווח הרחב ביותר (קירוב);
-   * - כל השאר ← חיפוש רגיל. קירוב גם כשנשלחו סינון קטגוריות, אפשרויות
-   *   מילה, חלופות, מרווחים ידניים, שלילה או תווים כלליים, שאין להם מקבילה כאן.
+   * - כל השאר ← צמודות: בונה כשיש צורה או חלופה, אחרת חיפוש רגיל. קירוב
+   *   גם כשנשלחו סינון קטגוריות, שלילה או תווים כלליים, שאין להם מקבילה.
    */
   function fromOtzariaSearch(query, request) {
     const source = request && typeof request === 'object' ? request : {};
-    const found = simpleWords(source.query).slice(0, MAX_TERMS);
+    const all = simpleWords(source.query);
+    const found = all.slice(0, MAX_TERMS);
     if (!found.length) return null;
     const advanced = source.mode === 'advanced';
     const rawDistance = Number.parseInt(source.distance, 10) || 0;
     const scope = advanced ? source.proximityScope || 'wordDistance' : 'wordDistance';
     const match = advanced ? source.wordMatchMode || 'all' : 'all';
-    // אוצריא שולחת גם ברירות מחדל: `facets: ['/']` (כל הספרייה) ואפשרויות
-    // כבויות. רק סינון אמיתי ואפשרות דלוקה הם משהו שלא עבר.
-    const filled = (value) =>
-      Boolean(value) &&
-      typeof value === 'object' &&
-      Object.values(value).some((entry) =>
-        entry && typeof entry === 'object' ? filled(entry) : Array.isArray(entry) ? entry.length > 0 : Boolean(entry),
-      );
-    const lost =
+    const missing = [];
+    let lost =
       source.mode === 'fuzzy' ||
-      simpleWords(source.query).length > MAX_TERMS ||
+      all.length > MAX_TERMS ||
       /[*?~]/.test(String(source.query || '')) ||
       (typeof source.negativeQuery === 'string' && LETTER.test(source.negativeQuery)) ||
       (Array.isArray(source.facets) && source.facets.some((facet) => facet !== '/')) ||
-      filled(source.wordOptions) ||
-      filled(source.options) ||
-      filled(source.alternativeWords) ||
-      filled(source.customSpacing);
+      filled(source.options);
+    const perWord = filled(source.wordOptions) || filled(source.alternativeWords) || filled(source.customSpacing);
+    const positions = perWord ? otzariaPositions(source, all) : null;
+    if (perWord && !positions) lost = true;
+
+    const terms = found.map((word) => newTerm(word));
+    const originals = found.map((word) => [word]);
+    let acronyms = 0;
+    if (positions) {
+      found.forEach((word, i) => {
+        const words = [word];
+        for (const value of positions.alternatives[i] || []) {
+          const alternative = otzariaAlternative(value);
+          if (alternative === null || (words.length >= MAX_ALTERNATIVES && !words.includes(alternative))) {
+            missing.push('"' + value.trim().slice(0, 40) + '"');
+          } else if (!words.includes(alternative)) words.push(alternative);
+        }
+        const mapped = otzariaTerm(words, positions.options[i] || {});
+        terms[i] = { words: mapped.words, form: mapped.form, exclude: false };
+        originals[i] = words;
+        missing.push(...mapped.missing);
+        if (mapped.acronyms) acronyms += 1;
+      });
+    }
+    // "כולל ראשי תיבות" של בר אילן חל על כל השאילתה.
+    if (acronyms && acronyms < found.length) missing.push(OTZARIA.acronyms);
+
     const base = normalize(query);
-    const builder = (fields) => ({ ...base, mode: Mode.builder, anyOrder: false, ...fields });
+    const options = acronyms ? { ...base.options, abbreviations: true } : base.options;
+    const shaped = terms.some((term) => term.form !== 'exact' || term.words.length > 1);
+    const builder = (fields) => fit({ ...base, options, mode: Mode.builder, anyOrder: false, ...fields }, missing);
+    const result = (built, approximate) => {
+      const names = unique(missing).slice(0, 8);
+      return { query: built, approximate: Boolean(approximate || names.length), missing: names };
+    };
+
     if (found.length > 1 && match === 'anyWord' && found.length <= MAX_ALTERNATIVES) {
-      return { query: builder({ terms: [{ ...newTerm(), words: found }], gaps: [] }), approximate: lost };
+      // צורה אחת לכל הקבוצה: כשהצורות שונות, המילים כפי שנשלחו.
+      const forms = unique(terms.map((term) => term.form));
+      const group = forms.length === 1 ? terms : originals.map((words) => ({ words }));
+      const words = unique([...group.map((term) => term.words[0]), ...group.flatMap((term) => term.words.slice(1))]);
+      words.slice(MAX_ALTERNATIVES).forEach((word) => missing.push('"' + word + '"'));
+      const merged = { words: words.slice(0, MAX_ALTERNATIVES), form: forms.length === 1 ? forms[0] : 'exact', exclude: false };
+      return result(builder({ terms: [merged], gaps: [] }), lost || forms.length > 1);
     }
     if (found.length > 1 && match === 'all' && scope !== 'wordDistance') {
-      return {
-        query: builder({
-          terms: found.map((word) => newTerm(word)),
-          gaps: found.slice(1).map(() => newGap()),
-          anyOrder: true,
-          within: MAX_DISTANCE,
-        }),
-        approximate: true,
-      };
+      return result(
+        builder({ terms, gaps: found.slice(1).map(() => newGap()), anyOrder: true, within: MAX_DISTANCE }),
+        true,
+      );
     }
-    if (found.length > 1 && match === 'all' && advanced && rawDistance > 0) {
-      return {
-        query: builder({
-          terms: found.map((word) => newTerm(word)),
-          gaps: found.slice(1).map(() => ({ kind: 'after', distance: Math.min(rawDistance + 1, MAX_DISTANCE) })),
+    const distances =
+      advanced && match === 'all' ? otzariaGaps(positions && positions.spacing, rawDistance, found.length) : [];
+    if (distances.some((distance) => distance > 0)) {
+      return result(
+        builder({
+          terms,
+          gaps: distances.map((distance) =>
+            distance > 0 ? { kind: 'after', distance: Math.min(distance + 1, MAX_DISTANCE) } : newGap(),
+          ),
         }),
-        approximate: lost || rawDistance + 1 > MAX_DISTANCE,
-      };
+        lost || distances.some((distance) => distance + 1 > MAX_DISTANCE),
+      );
     }
-    return {
-      query: { ...base, mode: Mode.simple, simpleText: found.join(' ') },
-      approximate: lost || match !== 'all' || (advanced && rawDistance > 0),
-    };
+    const approximate = lost || match !== 'all' || (advanced && rawDistance > 0 && found.length === 1);
+    if (shaped) return result(builder({ terms, gaps: found.slice(1).map(() => newGap()) }), approximate);
+    return result({ ...base, options, mode: Mode.simple, simpleText: found.join(' ') }, approximate);
+  }
+
+  /**
+   * שאילתה ארוכה מהמותר בבר אילן מאבדת חלופות מהסוף, מהמילה שיש לה הכי
+   * הרבה, עד שהיא נכנסת. מה שנשמט נוסף ל-[missing].
+   */
+  function fit(query, missing) {
+    let next = query;
+    while (buildQuery(next).length > MAX_QUERY_LENGTH) {
+      const widest = next.terms.reduce((best, term, i) => (term.words.length > next.terms[best].words.length ? i : best), 0);
+      const words = next.terms[widest].words;
+      if (words.length < 2) break;
+      missing.push('"' + words[words.length - 1] + '"');
+      next = updateTerm(next, widest, { words: words.slice(0, -1) });
+    }
+    return next;
   }
 
   /** השאילתה בתחביר של בר אילן. מילה ריקה מדולגת, יחד עם המרחק שלפניה. */

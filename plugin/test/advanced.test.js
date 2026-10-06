@@ -305,10 +305,15 @@ test('fromOtzariaSearch: מה שאין בבר אילן מסומן כקירוב; 
   const paragraph = Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', proximityScope: 'sameParagraph' });
   assert.equal(buildQuery(paragraph.query), Advanced.MAX_DISTANCE + ': נר שבת');
   assert.equal(paragraph.approximate, true);
-  // סינון קטגוריות, אפשרויות מילה ותווים כלליים של אוצריא אינם עוברים.
-  for (const extra of [{ facets: ['/תנך'] }, { wordOptions: { 'נר_0': { 'קידומות': true } } }, { query: 'נר*' }]) {
+  // סינון קטגוריות ותווים כלליים של אוצריא אינם עוברים.
+  for (const extra of [{ facets: ['/תנך'] }, { query: 'נר*' }]) {
     assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר', mode: 'exact', ...extra }).approximate, true);
   }
+  // "קידומות" (כל אות, עד 3) עוברת כ"מסתיימת כך", שאינה מוגבלת: רחבה יותר.
+  const prefixes = Advanced.fromOtzariaSearch(base, { query: 'נר', mode: 'exact', wordOptions: { 'נר_0': { 'קידומות': true } } });
+  assert.equal(buildQuery(prefixes.query), '*נר');
+  assert.equal(prefixes.approximate, true);
+  assert.deepEqual(prefixes.missing, ['קידומות']);
   // מרווח מעבר לטווח של בר אילן נחתך: קירוב.
   assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', distance: 99 }).approximate, true);
   // ברירות המחדל שאוצריא שולחת (נמצא בבדיקה חיה): כל הספרייה ואפשרויות כבויות.
@@ -334,4 +339,184 @@ test('fromOtzariaSearch: מה שאין בבר אילן מסומן כקירוב; 
   assert.equal(Advanced.fromOtzariaSearch(base, { query: 'abc' }), null);
   assert.equal(Advanced.fromOtzariaSearch(base, null), null);
   assert.equal(validate(Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'exact' }).query), null);
+});
+
+// השמות של אוצריא 0.9.98 (SearchQueryBuilder): רק אפשרויות דלוקות נשלחות,
+// ו"אותן אפשרויות לכל המילים" כבר פרוש לכל מילה.
+const fromOtzaria = (request, base) =>
+  Advanced.fromOtzariaSearch(base || emptyQuery(), { query: 'נר שבת', mode: 'exact', distance: 0, ...request });
+
+test('fromOtzariaSearch: אפשרויות דקדוקיות וכתיב עוברות במדויק, צמודות, גם במצב מדויק', () => {
+  const grammatical = fromOtzaria({
+    wordOptions: { 'נר_0': { 'קידומות דקדוקיות': true }, 'שבת_1': { 'סיומות דקדוקיות': true } },
+  });
+  assert.equal(grammatical.query.mode, 'builder');
+  assert.equal(buildQuery(grammatical.query), '#נר שבת#');
+  assert.equal(toRequest(grammatical.query).q, '#נר שבת#');
+  assert.equal(validate(grammatical.query), null);
+  assert.equal(grammatical.approximate, false);
+  assert.deepEqual(grammatical.missing, []);
+
+  const expected = [
+    [{ 'קידומות דקדוקיות': true, 'סיומות דקדוקיות': true }, '#נר# שבת'],
+    [{ 'כתיב מלא/חסר': true }, '!נר שבת'],
+    [{ 'כתיב מלא/חסר': true, 'קידומות דקדוקיות': true }, '#!נר שבת'],
+  ];
+  for (const [options, text] of expected) {
+    const mapped = fromOtzaria({ wordOptions: { 'נר_0': options } });
+    assert.equal(buildQuery(mapped.query), text, text);
+    assert.equal(mapped.approximate, false, text);
+  }
+  // ניקוד במפתח של אוצריא אינו מפריע להתאמה.
+  assert.equal(buildQuery(fromOtzaria({ query: 'נֵר שבת', wordOptions: { 'נֵר_0': { 'כתיב מלא/חסר': true } } }).query), '!נר שבת');
+});
+
+test('fromOtzariaSearch: כל אות ("קידומות", "סיומות", "חלק ממילה") — רחב יותר, ולכן קירוב עם שם', () => {
+  const expected = [
+    [{ 'סיומות': true }, 'נר* שבת', ['סיומות']],
+    [{ 'חלק ממילה': true }, '*נר* שבת', ['חלק ממילה']],
+    [{ 'קידומות דקדוקיות': true, 'סיומות': true }, '#נר* שבת', ['סיומות']],
+    // `*נר#` אינו מוכר: "מכילה".
+    [{ 'קידומות': true, 'סיומות דקדוקיות': true }, '*נר* שבת', ['קידומות']],
+  ];
+  for (const [options, text, missing] of expected) {
+    const mapped = fromOtzaria({ mode: 'advanced', wordOptions: { 'נר_0': options } });
+    assert.equal(buildQuery(mapped.query), text, text);
+    assert.equal(mapped.approximate, true, text);
+    assert.deepEqual(mapped.missing, missing, text);
+  }
+});
+
+test('fromOtzariaSearch: צירוף שבר אילן אינו מקבל, ואפשרות בלי מקבילה — נשמטים ונקראים בשם', () => {
+  const mapped = fromOtzaria({
+    mode: 'advanced',
+    wordOptions: {
+      'נר_0': { 'סיומות דקדוקיות': true, 'כתיב מלא/חסר': true, 'שגיאות כתיב': true },
+      'שבת_1': { 'ניקוד': true, 'קידומות ארמיות': true },
+    },
+  });
+  assert.equal(buildQuery(mapped.query), 'נר# שבת');
+  assert.equal(mapped.approximate, true);
+  assert.deepEqual(mapped.missing, ['כתיב מלא/חסר', 'שגיאות כתיב', 'ניקוד', 'קידומות ארמיות']);
+
+  // גרשיים ותרגום: רק כשהם האפשרות היחידה של המילה. `+` נמדד בלי הגרשיים.
+  const alone = fromOtzaria({
+    query: 'רמב"ם אמר',
+    mode: 'advanced',
+    wordOptions: { 'רמב"ם_0': { 'התעלם מגרשיים': true }, 'אמר_1': { 'תרגום ארמי': true } },
+  });
+  assert.equal(buildQuery(alone.query), '+רמבם ^אמר');
+  assert.equal(alone.approximate, false);
+  const together = fromOtzaria({
+    query: 'רמב"ם אמר',
+    mode: 'advanced',
+    wordOptions: { 'רמב"ם_0': { 'התעלם מגרשיים': true, 'כתיב מלא/חסר': true }, 'אמר_1': { 'תרגום ארמי': true, 'קידומות דקדוקיות': true } },
+  });
+  assert.equal(buildQuery(together.query), '!רמב"ם #אמר');
+  assert.deepEqual(together.missing, ['התעלם מגרשיים', 'תרגום ארמי']);
+  assert.equal(validate(together.query), null);
+  // בלי גרשיים במילה, "התעלם מגרשיים" אינו משנה דבר.
+  const noQuotes = fromOtzaria({ wordOptions: { 'נר_0': { 'התעלם מגרשיים': true } } });
+  assert.equal(noQuotes.query.mode, 'simple');
+  assert.equal(noQuotes.approximate, false);
+});
+
+test('fromOtzariaSearch: "ראשי תיבות" מדליק את "כולל ראשי תיבות", ולעולם אינו מכבה', () => {
+  const both = fromOtzaria({ wordOptions: { 'נר_0': { 'ראשי תיבות': true }, 'שבת_1': { 'ראשי תיבות': true } } });
+  assert.equal(both.query.mode, 'simple');
+  assert.equal(toRequest(both.query).options.abbreviations, true);
+  assert.equal(both.approximate, false);
+  // בבר אילן האפשרות חלה על כל השאילתה.
+  const one = fromOtzaria({ wordOptions: { 'נר_0': { 'ראשי תיבות': true } } });
+  assert.equal(one.query.options.abbreviations, true);
+  assert.deepEqual(one.missing, ['ראשי תיבות']);
+  const kept = fromOtzaria({}, { ...emptyQuery(), options: { abbreviations: true, showForms: false } });
+  assert.equal(kept.query.options.abbreviations, true);
+});
+
+test('fromOtzariaSearch: מילים חלופיות ← (א/ב); ביטוי ולועזית נשמטים, עם הצורה של המילה', () => {
+  const plain = fromOtzaria({ mode: 'advanced', alternativeWords: { 0: ['אור'] } });
+  assert.equal(buildQuery(plain.query), '(נר/אור) שבת');
+  assert.equal(toRequest(plain.query).q, '(נר/אור) שבת');
+  assert.equal(plain.approximate, false);
+
+  const mixed = fromOtzaria({
+    mode: 'advanced',
+    alternativeWords: { 0: ['אור', 'אוֹר', 'נר גדול', 'light'] },
+    wordOptions: { 'נר_0': { 'קידומות דקדוקיות': true } },
+  });
+  assert.equal(buildQuery(mixed.query), '#(נר/אור) שבת');
+  assert.deepEqual(mixed.missing, ['"נר גדול"', '"light"']);
+  assert.equal(mixed.approximate, true);
+
+  // עד MAX_ALTERNATIVES מילים בשדה.
+  const many = fromOtzaria({ mode: 'advanced', alternativeWords: { 1: ['א', 'ב', 'ג', 'ד', 'ה', 'ו'] } });
+  assert.deepEqual(many.query.terms[1].words, ['שבת', 'א', 'ב', 'ג', 'ד', 'ה']);
+  assert.deepEqual(many.missing, ['"ו"']);
+
+  // "כל אחת מהמילים": קבוצה אחת; צורה משותפת נשארת, צורות שונות — המילים בלבד.
+  const anyWord = { mode: 'advanced', wordMatchMode: 'anyWord' };
+  const same = fromOtzaria({
+    ...anyWord,
+    alternativeWords: { 0: ['אור'] },
+    wordOptions: { 'נר_0': { 'קידומות דקדוקיות': true }, 'שבת_1': { 'קידומות דקדוקיות': true } },
+  });
+  assert.equal(buildQuery(same.query), '#(נר/שבת/אור)');
+  assert.equal(same.approximate, false);
+  const different = fromOtzaria({ ...anyWord, wordOptions: { 'נר_0': { 'קידומות דקדוקיות': true } } });
+  assert.equal(buildQuery(different.query), '(נר/שבת)');
+  assert.equal(different.approximate, true);
+});
+
+test('fromOtzariaSearch: מרווח ידני לכל זוג; זוג בלי ערך מקבל את הגדול שבהם', () => {
+  const advanced = { query: 'נר שבת חנוכה', mode: 'advanced', distance: 1 };
+  const missingPair = fromOtzaria({ ...advanced, customSpacing: { '1-2': '3' } });
+  assert.equal(buildQuery(missingPair.query), 'נר [1:4] שבת [1:4] חנוכה');
+  assert.equal(missingPair.approximate, false);
+  const mixed = fromOtzaria({ ...advanced, customSpacing: { '0-1': '0', '1-2': '2' } });
+  assert.equal(buildQuery(mixed.query), 'נר שבת [1:3] חנוכה');
+  assert.equal(toRequest(mixed.query).q, 'נר שבת [1:3] חנוכה');
+  // מרווח ידני גובר על המרווח הכללי: כולם 0 ← צמודות, בדיוק.
+  const adjacent = fromOtzaria({ ...advanced, distance: 5, customSpacing: { '0-1': '0', '1-2': '0' } });
+  assert.equal(adjacent.query.mode, 'simple');
+  assert.equal(adjacent.approximate, false);
+  const far = fromOtzaria({ ...advanced, customSpacing: { '0-1': '40' } });
+  assert.equal(buildQuery(far.query), 'נר [1:30] שבת [1:30] חנוכה');
+  assert.equal(far.approximate, true);
+  // במצב מדויק אוצריא אינה שולחת מרווחים, וכאן הם אינם חלים.
+  assert.equal(fromOtzaria({ customSpacing: { '0-1': '3' } }).query.mode, 'simple');
+});
+
+test('fromOtzariaSearch: מקומות המילים אינם תואמים ← בלי ההגדרות לכל מילה, וקירוב', () => {
+  // "abc" היא מילה באוצריא ונמחקת כאן: "נר" הוא 1 שם ו-0 כאן.
+  const dropped = fromOtzaria({
+    query: 'abc נר שבת',
+    mode: 'advanced',
+    wordOptions: { 'נר_1': { 'קידומות דקדוקיות': true } },
+    alternativeWords: { 1: ['אור'] },
+    customSpacing: { '1-2': '3' },
+  });
+  assert.equal(dropped.query.mode, 'simple');
+  assert.equal(buildQuery(dropped.query), 'נר שבת');
+  assert.equal(dropped.approximate, true);
+  assert.deepEqual(dropped.missing, []);
+  // מילה במפתח שאינה המילה במקום הזה, או מפתח פגום.
+  for (const wordOptions of [{ 'שבת_0': { 'קידומות דקדוקיות': true } }, { 'נר': { 'קידומות דקדוקיות': true } }]) {
+    const mismatch = fromOtzaria({ wordOptions });
+    assert.equal(mismatch.query.mode, 'simple');
+    assert.equal(mismatch.approximate, true);
+  }
+  assert.equal(fromOtzaria({ mode: 'advanced', alternativeWords: { 5: ['אור'] } }).query.mode, 'simple');
+});
+
+test('fromOtzariaSearch: שאילתה ארוכה מ-300 תווים מאבדת חלופות מהסוף, עד שהיא נכנסת', () => {
+  const words = ['אאאאאאאא', 'בבבבבבבב', 'גגגגגגגג', 'דדדדדדדד', 'הההההההה', 'וווווווו', 'זזזזזזזז', 'חחחחחחחח'];
+  const alternatives = Object.fromEntries(
+    words.map((word, i) => [i, ['ט', 'י', 'כ', 'ל', 'מ'].map((letter) => letter.repeat(8) + word.slice(0, 1))]),
+  );
+  const mapped = fromOtzaria({ query: words.join(' '), mode: 'advanced', alternativeWords: alternatives });
+  assert.ok(buildQuery(mapped.query).length <= Advanced.MAX_QUERY_LENGTH);
+  assert.equal(validate(mapped.query), null);
+  assert.equal(mapped.approximate, true);
+  assert.ok(mapped.missing.length > 0);
 });

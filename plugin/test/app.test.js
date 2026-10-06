@@ -389,6 +389,43 @@ test('חזרה ללשונית בזמן בנייה מצטרפת בלי להתחי
   app.suspend();
 });
 
+test('בנייה: "ממתין לבר אילן" והודעת השירות מ-/status ומהזרם, ונעלמות באירוע הבא', async () => {
+  const notice = 'בר אילן קרס בפתיחת "סדרי טהרה - חידוד הלכות". מפעיל אותו מחדש וממשיך בלי לפתוח את הספר הזה.';
+  const { app, bridge } = setup({
+    '/status': reply(200, {
+      installed: true,
+      catalog: { exists: false },
+      build: { state: 'running', scanned: 10, waiting: true, notice, startedAt: new Date().toISOString() },
+    }),
+    '/catalog/build': { status: 200, chunks: [], hang: true },
+  });
+  await app.boot(windows);
+  await until(() => requests(bridge, '/catalog/build').length > 0);
+  let progress = Domain.buildProgress(app.model.progress, 1);
+  assert.match(progress.waiting, /ממתינה לו/);
+  assert.equal(progress.notice, notice);
+  app.suspend();
+
+  const streamed = setup({
+    '/status': reply(200, noCatalog),
+    '/catalog/build': {
+      status: 200,
+      chunks: [
+        JSON.stringify({ type: 'progress', stage: 'scanning', scanned: 11, waiting: true, notice }) + '\n',
+        '{"type":"progress","stage":"scanning","scanned":12}\n',
+      ],
+      hang: true,
+    },
+  });
+  await streamed.app.boot(windows);
+  streamed.app.startBuild();
+  await until(() => streamed.app.model.progress && streamed.app.model.progress.scanned === 12);
+  progress = Domain.buildProgress(streamed.app.model.progress, 1);
+  assert.equal(progress.waiting, '');
+  assert.equal(progress.notice, '');
+  streamed.app.suspend();
+});
+
 test('רענון ישן אינו מחזיר את מסך ההתחלה בזמן בנייה ראשונה', async () => {
   let release;
   const slow = new Promise((resolve) => (release = resolve));

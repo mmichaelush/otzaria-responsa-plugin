@@ -285,6 +285,33 @@
   }
 
   /**
+   * השוואת גרסאות לפי מספרים ולא לפי טקסט: 0.5.9 < 0.5.10. סיומת ("-beta")
+   * אינה נספרת. `null` כשאחת מהן אינה גרסה.
+   */
+  function compareVersions(a, b) {
+    const parse = (value) => {
+      const match = typeof value === 'string' && /^\s*v?(\d+(?:\.\d+)*)/.exec(value);
+      return match ? match[1].split('.').map(Number) : null;
+    };
+    const left = parse(a);
+    const right = parse(b);
+    if (!left || !right) return null;
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+      const diff = (left[i] || 0) - (right[i] || 0);
+      if (diff !== 0) return diff < 0 ? -1 : 1;
+    }
+    return 0;
+  }
+
+  /**
+   * השירות ישן מהתוסף: התוסף מתעדכן מהחנות של אוצריא, והשירות רק מהמתקין.
+   * שירות חדש מהתוסף תקין (המתקין החדש עובד גם עם תוסף ישן).
+   */
+  function serviceBehind(health, pluginVersion) {
+    return compareVersions(health && health.serverVersion, pluginVersion) === -1;
+  }
+
+  /**
    * הערה מעל החיפוש כשהרשימה קיימת אבל כדאי לקרוא אותה מחדש, או `null`.
    * הרשימה עדיין שמישה בכל המקרים, ולכן זו הערה ולא חסימה.
    */
@@ -376,7 +403,34 @@
       percent: fraction === null ? null : Math.round(fraction * 100),
       detail,
       remaining: remainingLabel(fraction, elapsedMs),
+      ...buildNotes(progress),
     };
+  }
+
+  /**
+   * שורות נוספות מאירוע ההתקדמות (שירות 0.5.2 ומעלה). כל אירוע מחליף את
+   * הקודם, ולכן שורה שאינה באירוע הבא נעלמת.
+   * - `waiting`: בר אילן לא עונה, והקריאה ממתינה לו (עד 3 דקות). בלי ההסבר
+   *   המספרים עומדים, והמשתמש מבטל קריאה שהייתה ממשיכה.
+   * - `notice`: מה שהשירות עשה בעצמו (למשל הפעיל מחדש את בר אילן שקרס).
+   *   בעברית — הטקסט של השירות; בשפה אחרת — הסבר כללי, כי השירות כותב בעברית.
+   */
+  function buildNotes(progress) {
+    const notice = progress && typeof progress.notice === 'string' ? progress.notice.trim() : '';
+    return {
+      waiting: progress && progress.waiting === true
+        ? t('בר אילן לא מגיב כרגע. הקריאה ממתינה לו וממשיכה מעצמה; אין צורך לבטל.')
+        : '',
+      notice: !notice
+        ? ''
+        : I18n.language === I18n.SOURCE_LANGUAGE
+          ? shortText(notice, 300)
+          : t('בר אילן נתקל בתקלה, והשירות טיפל בה. הקריאה ממשיכה.'),
+    };
+  }
+
+  function shortText(text, max) {
+    return text.length > max ? text.slice(0, max - 1) + '…' : text;
   }
 
   /** "נותרו כ-3 דקות", או ריק כשמוקדם מדי לדעת. */
@@ -538,17 +592,40 @@
   }
 
   /**
-   * הערה על שירות ישן: `apiVersion` שלו זהה, ולכן הלשונית עובדת, אבל שירות
-   * לפני 0.5.0 (בלי `notify`) אינו מבין את הבקשות שאוצריא שולחת בלחיצה
-   * הימנית ובחיפוש הספרייה, ולכן הם מוסתרים (`Engine.syncPort`). `null`
+   * הערה על שירות ישן: `apiVersion` שלו זהה, ולכן הלשונית עובדת. שירות לפני
+   * 0.5.0 (בלי `notify`) אינו מבין את הבקשות שאוצריא שולחת בלחיצה הימנית
+   * ובחיפוש הספרייה, ולכן הם מוסתרים (`Engine.syncPort`). שירות אחר שישן
+   * מהתוסף חסר תיקונים: התוסף מתעדכן מהחנות, והשירות רק מהמתקין. `null`
    * כשהכול תקין.
    */
-  function serviceNotice(health) {
-    if (!health || serviceCan(health, 'notify')) return null;
+  function serviceNotice(health, pluginVersion) {
+    if (!health) return null;
+    if (!serviceCan(health, 'notify')) {
+      return {
+        kind: 'serviceOld',
+        text: t('שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית ופתיחת ספרים מחיפוש הספרייה אינם זמינים. כדאי להוריד את הגרסה החדשה.'),
+      };
+    }
+    if (!serviceBehind(health, pluginVersion)) return null;
     return {
-      kind: 'serviceOld',
-      text: t('שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית ופתיחת ספרים מחיפוש הספרייה אינם זמינים. כדאי להוריד את הגרסה החדשה.'),
+      kind: 'serviceBehind',
+      text: t('שירות בר אילן שבמחשב (גרסה {service}) ישן מהתוסף (גרסה {plugin}). התוסף מתעדכן מהחנות של אוצריא, והשירות רק מהמתקין: כדאי להוריד ולהתקין אותו.', {
+        service: health.serverVersion,
+        plugin: pluginVersion,
+      }),
     };
+  }
+
+  /**
+   * במסך "השירות לא מגיב", כשהשירות ישן מהתוסף: התקלה כנראה כבר תוקנה
+   * בשירות החדש, והפתרון הוא המתקין ולא בדיקה חוזרת. `null` אחרת.
+   */
+  function serviceUpdateHint(health, pluginVersion) {
+    if (!serviceBehind(health, pluginVersion)) return null;
+    return t('שירות בר אילן שבמחשב ישן (גרסה {service}), והתיקון לתקלה הזו נמצא כנראה בגרסה החדשה ({plugin}). התקינו את המתקין החדש.', {
+      service: health.serverVersion,
+      plugin: pluginVersion,
+    });
   }
 
   /** שורת הנתיב בעיון: "כל הספרים" ואחריו כל רמה, עם הנתיב שלה. */
@@ -809,6 +886,9 @@
     hasLocalhostPermission,
     screenFor,
     serviceCan,
+    compareVersions,
+    serviceBehind,
+    serviceUpdateHint,
     catalogReady,
     catalogNotice,
     buildProgress,

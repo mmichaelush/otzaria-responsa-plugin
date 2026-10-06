@@ -894,6 +894,13 @@ textarea {
   color: var(--color-primary);
 }
 
+/* בר אילן לא עונה, או הודעה מהשירות: בולט יותר מהמספרים, כדי שלא יבטלו. */
+.progress-note {
+  margin: var(--space-2) 0 0;
+  font-size: 0.88em;
+  color: var(--color-on-surface);
+}
+
 /* ---------- בנייה מחדש ברקע, מעל החיפוש ---------- */
 
 .rebuild-banner {

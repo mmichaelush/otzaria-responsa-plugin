@@ -973,7 +973,11 @@
       this._editAdvanced(mapped.query);
       // שדה שרק הערך שלו השתנה אינו נבנה מחדש (refreshPage משווה מבנה).
       this.view.setInputValue('adv-simple', mapped.query.simpleText);
-      mapped.query.terms.forEach((term, index) => this.view.setInputValue('adv-word-' + index + '-0', term.words[0]));
+      mapped.query.terms.forEach((term, index) =>
+        term.words.forEach((word, alternative) =>
+          this.view.setInputValue('adv-word-' + index + '-' + alternative, word),
+        ),
+      );
       if (Domain.SETUP_SCREENS.has(this.model.screen)) return;
       this.log.info('חיפוש מדיאלוג החיפוש של אוצריא' + (mapped.approximate ? ' (בקירוב)' : ''));
       await this.runAdvanced();
@@ -983,7 +987,9 @@
           text:
             state.status.text +
             ' ' +
-            t('לא כל אפשרויות החיפוש של אוצריא קיימות בבר אילן, ולכן החיפוש כאן קרוב לזה שנשלח ולא זהה לו.'),
+            t('לא כל אפשרויות החיפוש של אוצריא קיימות בבר אילן, ולכן החיפוש כאן קרוב לזה שנשלח ולא זהה לו.') +
+            // השמות כפי שהם בדיאלוג של אוצריא, או המילה החלופית במירכאות.
+            (mapped.missing.length ? ' ' + t('לא עבר במדויק: {names}.', { names: mapped.missing.join(', ') }) : ''),
         };
         this._renderPage();
       }

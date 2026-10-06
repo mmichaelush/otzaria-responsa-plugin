@@ -674,5 +674,17 @@
     'מחפשים בטקסט של כל הספרים, או פותחים מקום מדויק — למשל "בראשית ב ג".': 'Search the text of all books, or open an exact location — e.g. "בראשית ב ג".',
     'שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית ופתיחת ספרים מחיפוש הספרייה אינם זמינים. כדאי להוריד את הגרסה החדשה.':
       'The Bar-Ilan service on this computer is outdated, so "Search in Bar-Ilan" from the right-click menu and opening books from the library search are unavailable. Please download the new version.',
+
+    // ---- 0.5.2: שירות ישן מהתוסף, המתנה לבר אילן בקריאת הרשימה
+    'שירות בר אילן שבמחשב (גרסה {service}) ישן מהתוסף (גרסה {plugin}). התוסף מתעדכן מהחנות של אוצריא, והשירות רק מהמתקין: כדאי להוריד ולהתקין אותו.':
+      'The Bar-Ilan service on this computer (version {service}) is older than the plugin (version {plugin}). The plugin updates from the Otzaria store, but the service only updates through the installer: please download and run it.',
+    'שירות בר אילן שבמחשב ישן (גרסה {service}), והתיקון לתקלה הזו נמצא כנראה בגרסה החדשה ({plugin}). התקינו את המתקין החדש.':
+      'The Bar-Ilan service on this computer is outdated (version {service}), and the fix for this problem is most likely in the new version ({plugin}). Download and run the new installer.',
+    'בר אילן לא מגיב כרגע. הקריאה ממתינה לו וממשיכה מעצמה; אין צורך לבטל.':
+      'Bar-Ilan is not responding right now. The read is waiting for it and will continue on its own; there is no need to cancel.',
+    'בר אילן נתקל בתקלה, והשירות טיפל בה. הקריאה ממשיכה.': 'Bar-Ilan ran into a problem, and the service handled it. The read continues.',
+
+    // ---- 0.5.2: אפשרויות המילה מדיאלוג החיפוש של אוצריא
+    'לא עבר במדויק: {names}.': 'Not carried over exactly: {names}.',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

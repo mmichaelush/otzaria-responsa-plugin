@@ -1,6 +1,7 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
 // המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|settings|help&tab=...
-// &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&noicons=1&scale=1.3&font=Shofar`. ערכות הצבעים הן
+// &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&service=<גרסה>&waiting=1&notice=1
+// &noicons=1&scale=1.3&font=Shofar`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
 (function () {
   'use strict';
@@ -9,6 +10,7 @@
   const scenario = params.get('scenario') || 'ready';
   const dark = params.get('mode') === 'dark';
   const fixtures = window.__RESPONSA_FIXTURES__;
+  const PLUGIN_VERSION = '0.5.1';
 
   const schemes = {
     light: {"primary":"#805610","onPrimary":"#ffffff","primaryContainer":"#ffddb3","onPrimaryContainer":"#633f00","secondary":"#6f5b40","onSecondary":"#ffffff","secondaryContainer":"#fbdebc","onSecondaryContainer":"#56442a","tertiary":"#51643f","onTertiary":"#ffffff","tertiaryContainer":"#d4eabb","onTertiaryContainer":"#3a4c2a","surface":"#fff8f4","onSurface":"#201b13","onSurfaceVariant":"#4f4539","surfaceContainerLowest":"#ffffff","surfaceContainerLow":"#fff1e5","surfaceContainer":"#f9ecdf","surfaceContainerHigh":"#f3e6da","surfaceContainerHighest":"#ede0d4","error":"#ba1a1a","onError":"#ffffff","errorContainer":"#ffdad6","onErrorContainer":"#93000a","outline":"#817567","outlineVariant":"#d3c4b4","inverseSurface":"#362f27","onInverseSurface":"#fcefe2","inversePrimary":"#f4bd6f","shadow":"#000000","scrim":"#000000","surfaceTint":"#805610"},
@@ -34,6 +36,11 @@
     sectionsDone: 9,
     sectionsTotal: 20,
   };
+  // `waiting=1` / `notice=1`: בר אילן לא עונה, והודעה מהשירות (שירות 0.5.2).
+  if (params.get('waiting')) running.waiting = true;
+  if (params.get('notice')) {
+    running.notice = 'בר אילן קרס בפתיחת "סדרי טהרה - חידוד הלכות". מפעיל אותו מחדש וממשיך בלי לפתוח את הספר הזה.';
+  }
 
   const statuses = {
     needsCatalog: { catalog: catalogMissing, build: { state: 'idle' } },
@@ -129,7 +136,8 @@
               ok: true,
               service: 'otzaria-responsa',
               apiVersion: scenario === 'serviceOutdated' ? 2 : 1,
-              serverVersion: '0.5.1',
+              // `service=<גרסה>`: שירות ישן מהתוסף (למשל 0.4.0).
+              serverVersion: params.get('service') || PLUGIN_VERSION,
               capabilities: params.get('oldservice')
                 ? ['catalog', 'open', 'icon', 'searchText', 'export']
                 : [
@@ -264,7 +272,7 @@
 
   window.addEventListener('load', () => {
     const payload = {
-      plugin: { id: 'com.otzaria-responsa', version: '0.5.1' },
+      plugin: { id: 'com.otzaria-responsa', version: PLUGIN_VERSION },
       app: {
         version: '0.9.98',
         platform: scenario === 'unsupported' ? 'linux' : 'windows',

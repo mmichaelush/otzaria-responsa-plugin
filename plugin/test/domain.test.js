@@ -155,6 +155,34 @@ test('buildProgress: התחלה ומיון', () => {
   assert.equal(Domain.buildProgress({ stage: 'classifying', scanned: 10 }, 1).percent, 99);
 });
 
+test('buildProgress: בר אילן לא עונה, והקריאה ממתינה לו', () => {
+  const waiting = Domain.buildProgress({ stage: 'scanning', scanned: 500, waiting: true }, 1);
+  assert.match(waiting.waiting, /בר אילן לא מגיב כרגע.*אין צורך לבטל/);
+  assert.equal(waiting.notice, '');
+  // האירוע הבא בלי `waiting`: השורה נעלמת. שירות ישן אינו שולח אותו בכלל.
+  assert.equal(Domain.buildProgress({ stage: 'scanning', scanned: 600 }, 1).waiting, '');
+  assert.equal(Domain.buildProgress({ stage: 'scanning', waiting: 'yes' }, 1).waiting, '');
+  assert.equal(Domain.buildProgress(null, 0).waiting, '');
+});
+
+test('buildProgress: הודעה מהשירות מוצגת כפי שהיא, ובאנגלית בהסבר כללי', () => {
+  const text = 'בר אילן קרס בפתיחת "סדרי טהרה - חידוד הלכות". מפעיל אותו מחדש וממשיך בלי לפתוח את הספר הזה.';
+  const progress = { stage: 'scanning', scanned: 500, notice: '  ' + text + ' ' };
+  assert.equal(Domain.buildProgress(progress, 1).notice, text);
+  assert.equal(Domain.buildProgress({ stage: 'scanning', notice: '   ' }, 1).notice, '');
+  assert.equal(Domain.buildProgress({ stage: 'scanning', notice: 42 }, 1).notice, '');
+  assert.equal(Domain.buildProgress({ stage: 'scanning', notice: 'א'.repeat(400) }, 1).notice.length, 300);
+  const { I18n } = loadPlugin();
+  I18n.configure('en');
+  try {
+    const english = Domain.buildProgress(Object.assign({ waiting: true }, progress), 1);
+    assert.equal(english.notice, 'Bar-Ilan ran into a problem, and the service handled it. The read continues.');
+    assert.match(english.waiting, /^Bar-Ilan is not responding/);
+  } finally {
+    I18n.configure('he');
+  }
+});
+
 test('remainingLabel', () => {
   assert.equal(Domain.remainingLabel(0.01, 60000), '');
   assert.equal(Domain.remainingLabel(0.9, 60000), 'פחות מדקה');
@@ -389,4 +417,56 @@ test('serviceNotice: שירות לפני 0.5.0 (בלי notify) מקבל הערה
   assert.equal(Domain.serviceNotice(caps(['searchText', 'browse', 'notify'])), null);
   assert.match(Domain.serviceNotice(caps(['searchText', 'browse'])).text, /לחיצה ימנית ופתיחת ספרים/);
   assert.equal(Domain.serviceNotice(null), null);
+  // בלי notify ההערה הישנה גוברת: היא אומרת גם מה לא עובד.
+  const old = Domain.serviceNotice({ capabilities: ['browse'], serverVersion: '0.4.0' }, '0.5.2');
+  assert.equal(old.kind, 'serviceOld');
+});
+
+test('compareVersions: לפי מספרים, לא לפי טקסט', () => {
+  assert.equal(Domain.compareVersions('0.4.0', '0.5.1'), -1);
+  assert.equal(Domain.compareVersions('0.5.1', '0.5.10'), -1);
+  assert.equal(Domain.compareVersions('0.5.10', '0.5.9'), 1);
+  assert.equal(Domain.compareVersions('0.5.2', '0.5.2'), 0);
+  assert.equal(Domain.compareVersions('0.5', '0.5.0'), 0);
+  assert.equal(Domain.compareVersions('1.0.0', '0.9.99'), 1);
+  assert.equal(Domain.compareVersions('0.5.2-beta', '0.5.2'), 0);
+  assert.equal(Domain.compareVersions('v0.5.1', '0.5.2'), -1);
+  assert.equal(Domain.compareVersions('', '0.5.2'), null);
+  assert.equal(Domain.compareVersions(null, '0.5.2'), null);
+  assert.equal(Domain.compareVersions('0.5.2', undefined), null);
+  assert.equal(Domain.compareVersions('abc', '0.5.2'), null);
+});
+
+test('serviceBehind: רק שירות ישן מהתוסף; גרסה לא ידועה אינה סיבה להזהיר', () => {
+  const service = (serverVersion) => ({ serverVersion, capabilities: ['notify'] });
+  assert.equal(Domain.serviceBehind(service('0.4.0'), '0.5.1'), true);
+  assert.equal(Domain.serviceBehind(service('0.5.9'), '0.5.10'), true);
+  assert.equal(Domain.serviceBehind(service('0.5.1'), '0.5.1'), false);
+  assert.equal(Domain.serviceBehind(service('0.6.0'), '0.5.1'), false);
+  assert.equal(Domain.serviceBehind(service('0.4.0'), null), false);
+  assert.equal(Domain.serviceBehind(service(undefined), '0.5.1'), false);
+  assert.equal(Domain.serviceBehind(null, '0.5.1'), false);
+});
+
+test('serviceNotice: שירות ישן מהתוסף מקבל הערה עם שתי הגרסאות', () => {
+  const service = (serverVersion) => ({ serverVersion, capabilities: ['browse', 'notify'] });
+  const notice = Domain.serviceNotice(service('0.5.1'), '0.5.2');
+  assert.equal(notice.kind, 'serviceBehind');
+  assert.match(notice.text, /\(גרסה 0\.5\.1\) ישן מהתוסף \(גרסה 0\.5\.2\)/);
+  assert.match(notice.text, /רק מהמתקין/);
+  assert.equal(Domain.serviceNotice(service('0.5.2'), '0.5.2'), null);
+  assert.equal(Domain.serviceNotice(service('0.5.10'), '0.5.9'), null);
+  // לפני boot גרסת התוסף אינה ידועה.
+  assert.equal(Domain.serviceNotice(service('0.4.0'), null), null);
+});
+
+test('serviceUpdateHint: במסך "השירות לא מגיב" — רק כשהשירות ישן מהתוסף', () => {
+  const hint = Domain.serviceUpdateHint({ serverVersion: '0.4.0' }, '0.5.2');
+  assert.equal(
+    hint,
+    'שירות בר אילן שבמחשב ישן (גרסה 0.4.0), והתיקון לתקלה הזו נמצא כנראה בגרסה החדשה (0.5.2). התקינו את המתקין החדש.',
+  );
+  assert.equal(Domain.serviceUpdateHint({ serverVersion: '0.5.2' }, '0.5.2'), null);
+  assert.equal(Domain.serviceUpdateHint({ serverVersion: '0.6.0' }, '0.5.2'), null);
+  assert.equal(Domain.serviceUpdateHint(null, '0.5.2'), null);
 });
