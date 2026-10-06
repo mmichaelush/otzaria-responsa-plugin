@@ -34,7 +34,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.5.1';
+  static const String serverVersion = '0.5.2';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
