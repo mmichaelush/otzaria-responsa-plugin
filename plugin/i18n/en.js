@@ -26,6 +26,15 @@
     'הדיווח לא נשלח. אפשר לנסות שוב מאוחר יותר.': 'The report was not sent. Please try again later.',
     'לא ניתן לפתוח את הדפדפן. הכתובת: {url}': 'The browser could not be opened. The address is: {url}',
 
+    // ---- פרטים לפנייה ולדיווח
+    'שירות בר אילן': 'Bar-Ilan service',
+    'יומן השירות': 'Service log',
+    'פרטי השירות לא התקבלו: {reason}': 'The service details were not received: {reason}',
+    'השורה שלמעלה חזרה עוד {count} פעמים, עד {time}': 'The line above repeated {count} more times, until {time}',
+    '{lines} השורות שלמעלה חזרו עוד פעם אחת, עד {time}': 'The {lines} lines above repeated once more, until {time}',
+    '{lines} השורות שלמעלה חזרו עוד {count} פעמים, עד {time}':
+      'The {lines} lines above repeated {count} more times, until {time}',
+
     // ---- שילוב באוצריא: לחיצה ימנית, דיאלוג החיפוש, הפעלת בר אילן
     'בחיפוש שהגיע מאוצריא אין מילים בעברית.':
       'The search that came from Otzaria has no Hebrew words.',
@@ -79,6 +88,7 @@
     'נקראו {count} מתוך כ-{total} שורות בעץ של בר אילן (קטגוריות, ספרים ופרקים)':
       '{count} of about {total} rows of the Bar-Ilan tree read (categories, books and chapters)',
     'חלק {done} מתוך {total}': 'Part {done} of {total}',
+    'נקראו {count} שורות בעץ של בר אילן': '{count} rows of the Bar-Ilan tree read',
     'פחות מדקה': 'less than a minute left',
     'נותרה כדקה': 'about a minute left',
     'נותרו כ-{count} דקות': 'about {count} minutes left',
@@ -415,9 +425,11 @@
     'למי שיש חשבון GitHub; אפשר גם לדווח כאן למטה': 'For those with a GitHub account; you can also report right below',
     'המתקין של השירות ושל התוסף יחד': 'The installer for both the service and the plugin',
     'מסך הפתיחה': 'Welcome screen',
-    'הדיווח נשלח למפתח דרך אוצריא, יחד עם פרטי המערכת ויומן הפעולות האחרונות (בלי תוכן אישי ובלי נתיבים). לפני השליחה אוצריא מבקשת אישור.': 'The report is sent to the developer through Otzaria, with the system details and the recent activity log (no personal content and no file paths). Otzaria asks for confirmation before sending.',
+    'הדיווח נשלח למפתח דרך אוצריא, יחד עם פרטי המערכת, יומן הפעולות האחרונות (כולל חיפושים וספרים שנפתחו) ויומן השירות (מהדורות בר אילן שנמצאו ומיקומן). שם המשתמש מושמט מכל נתיב. לפני השליחה אוצריא מבקשת אישור.':
+      'The report is sent to the developer through Otzaria, with the system details, the recent activity log (including searches and opened books) and the service log (the Bar-Ilan editions found and their locations). The user name is removed from every path. Otzaria asks for confirmation before sending.',
     'קוד לתמיכה: {code}': 'Support code: {code}',
-    'אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר, מדף ההורדות של התוסף ב-GitHub, ולהעביר אותו בדיסק און קי.': 'There is no internet connection right now. You can download the installer on another computer, from the plugin\'s download page on GitHub, and bring it over on a USB drive.',
+    'אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}':
+      'There is no internet connection right now. You can download the installer on another computer and bring it over on a USB drive. The download address is: {url}',
     'פרטי הספר': 'Book details',
     // ---- הבהרה: רישיון
     'הבהרה חשובה': 'Important notice',
@@ -435,7 +447,8 @@
     'מה שחסר מוסבר בלשונית עצמה, צעד אחר צעד. אפשר לחזור למסך הזה מ"עזרה" ← "אודות ודיווח" ← "מסך הפתיחה".': 'Whatever is missing is explained step by step in the tab itself. You can return to this screen from "Help" → "About and report" → "Welcome screen".',
     'Windows לפעמים משאיר את חלון בר אילן מאחור, והוא מהבהב בשורת המשימות. לוחצים עליו בשורת המשימות.': 'Windows sometimes keeps the Bar-Ilan window behind, and it flashes in the taskbar. Click it in the taskbar.',
     'כתוב שבבר אילן פתוחים חלונות רבים מדי': 'It says too many windows are open in Bar-Ilan',
-    '"העתקת הפרטים" מעתיקה גם את יומן הפעולות, כדי לצרף אותו לפנייה.': '"Copy details" also copies the activity log, so you can attach it to a support request.',
+    '"העתקת הפרטים" מעתיקה גם את יומן הפעולות ואת יומן השירות, כדי לצרף אותם לפנייה.':
+      '"Copy details" also copies the activity log and the service log, so you can attach them to a support request.',
     'השירות הפסיק לענות בזמן קריאת הרשימה. אפשר לנסות שוב.': 'The service stopped answering while reading the list. Please try again.',
     'בזמן הזה בר אילן ייפתח ויעבוד לבד. אל תלחצו בו ואל תסגרו אותו עד הסיום; אפשר להמשיך לעבוד באוצריא.': 'Meanwhile Bar-Ilan opens and works on its own. Do not click in it or close it until it finishes; you can keep working in Otzaria.',
     'בר אילן פתוח ועובד כרגע לבד. אל תלחצו בו ואל תסגרו אותו. אפשר להמשיך לעבוד באוצריא, וגם לסגור את הלשונית הזו: הקריאה תמשיך.': 'Bar-Ilan is open and working on its own. Do not click in it or close it. You can keep working in Otzaria, and even close this tab: the reading continues.',

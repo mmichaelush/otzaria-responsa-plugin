@@ -39,9 +39,8 @@
 
   const MAX_REPORT_TEXT = Domain.MAX_REPORT_TEXT;
 
-  /** כמה פעולות אחרונות מוצגות ב"מצב המערכת", וכמה נכנסות להעתקה. */
+  /** כמה פעולות אחרונות מוצגות ב"מצב המערכת". להעתקה נכנס כל היומן. */
   const LOG_VIEW_ENTRIES = 40;
-  const LOG_COPY_ENTRIES = 150;
 
   class App {
     constructor(bridge, view, options) {
@@ -1356,13 +1355,30 @@
 
     // ---------------------------------------------------- עזרה ודיווח
 
-    /** פרטי המערכת ויומן הפעולות, כטקסט אחד להדבקה בפנייה. */
-    _diagnostics(options) {
-      const forReport = Boolean(options && options.forReport);
-      const log = this.log.text({ limit: LOG_COPY_ENTRIES });
+    /**
+     * פרטי המערכת, יומן הפעולות ופרטי השירות (סיכום ויומן), כטקסט אחד
+     * להדבקה בפנייה. ללוח אין מגבלת אורך, ולכן הכול נכנס.
+     */
+    async _diagnostics() {
+      const service = await this.service.diagnostics();
       return Log.scrub(
-        Panels.statusText(this.model, { forReport }) +
-          (log ? '\n\n--- ' + t('יומן פעולות') + ' ---\n' + log : ''),
+        Domain.diagnosticsText({
+          status: Panels.statusText(this.model),
+          log: this.log.text({ compact: true }),
+          service,
+        }),
+      );
+    }
+
+    /** פרטי השירות, כשנתיבי תיקיות המשתמש כבר מקוצרים. */
+    async _serviceForReport() {
+      const service = await this.service.diagnostics();
+      return (
+        service && {
+          summary: Log.scrub(service.summary),
+          logTail: Log.scrub(service.logTail),
+          note: Log.scrub(service.note),
+        }
       );
     }
 
@@ -1375,12 +1391,23 @@
       }
     }
 
-    /** תוכנת הדואר שבמחשב, עם פרטי המערכת. בלעדיה — הכתובת להעתקה. */
+    /**
+     * תוכנת הדואר שבמחשב, עם פרטי המערכת וסיכום השירות. היומנים נשארים
+     * בחוץ, כדי שהמייל יהיה קצר. בלעדיה — הכתובת להעתקה.
+     */
     async writeEmail() {
+      const service = await this._serviceForReport();
       const sent = await this.runtime.callSoft('feedback.sendEmail', {
         to: Domain.SUPPORT_EMAIL,
         subject: t('בר אילן באוצריא {version}', { version: this.model.pluginVersion || '' }).trim(),
-        body: '\n\n---\n' + Panels.statusText(this.model, { forReport: true }),
+        body:
+          '\n\n---\n' +
+          Log.scrub(
+            Domain.diagnosticsText({
+              status: Panels.statusText(this.model, { forReport: true }),
+              service: service && { summary: service.summary, note: service.note },
+            }),
+          ),
       });
       if (sent === null) {
         await this.runtime.notify.info(
@@ -1390,7 +1417,7 @@
     }
 
     async copyStatus() {
-      const text = this._diagnostics();
+      const text = await this._diagnostics();
       try {
         await root.navigator.clipboard.writeText(text);
         await this.runtime.notify.success(t('פרטי המערכת הועתקו.'));
@@ -1404,30 +1431,25 @@
       this.view.updateReport(this.model);
     }
 
-    /** סוף היומן שנכנס ב-[room] תווים, משורה שלמה ולא מאמצעה. */
-    _logTail(room) {
-      if (room <= 200) return '';
-      let log = this.log.text({ limit: LOG_COPY_ENTRIES });
-      if (log.length > room) {
-        log = log.slice(-room);
-        log = log.slice(log.indexOf('\n') + 1);
-      }
-      return log ? '\n\n--- ' + t('יומן פעולות') + ' ---\n' + log : '';
-    }
-
     /** `feedback.report` מציג אישור משלו ואינו כפוף לחסם זמן — לא עוטפים אותו. */
     async sendReport() {
       const report = this.model.report;
       if (report.sending || report.text.trim().length < 10) return;
       report.sending = true;
       this._renderPage();
-      // התיאור ופרטי המערכת קודם; מהיומן נכנס מה שנשאר, מהסוף (החדש).
-      const head =
-        report.text.trim().slice(0, MAX_REPORT_TEXT) +
-        '\n\n---\n' +
-        Panels.statusText(this.model, { forReport: true });
-      const room = MAX_REPORT_LENGTH - head.length - 40;
-      const details = Log.scrub(head + this._logTail(room)).slice(0, MAX_REPORT_LENGTH);
+      // הקיצור לפני החלוקה לתקציב, כדי שהאורך שנספר הוא האורך שנשלח.
+      const details = Log.scrub(
+        Domain.reportDetails(
+          {
+            text: Log.scrub(report.text.trim().slice(0, MAX_REPORT_TEXT)),
+            status: Log.scrub(Panels.statusText(this.model, { forReport: true })),
+            service: await this._serviceForReport(),
+            startup: this.log.text({ compact: true, startup: true, forReport: true }),
+            log: this.log.text({ compact: true, startup: false, forReport: true }),
+          },
+          MAX_REPORT_LENGTH,
+        ),
+      );
       try {
         const outcome = await this.runtime.call('feedback.report', { details, reportType: 'bug' });
         if (outcome === 'sent' || outcome === 'queued') {
@@ -1463,7 +1485,9 @@
       if (this.model.online === false) this.model.online = await this._checkOnline();
       if (this.model.online === false) {
         await this.runtime.notify.info(
-          t('אין כרגע חיבור לאינטרנט, ולכן הדף לא ייפתח. הכתובת: {url}', { url }),
+          name === 'setup'
+            ? t('אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}', { url })
+            : t('אין כרגע חיבור לאינטרנט, ולכן הדף לא ייפתח. הכתובת: {url}', { url }),
         );
         return;
       }
@@ -1479,7 +1503,7 @@
     _actions() {
       return {
         retry: () => this.retry(),
-        download: () => this.openLink('releases'),
+        download: () => this.openLink('setup'),
         openLink: (name) => this.openLink(name),
         openWelcome: () => this.openSheet('welcome'),
         finishWelcome: () => this.finishWelcome(),

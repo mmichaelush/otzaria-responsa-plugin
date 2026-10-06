@@ -176,7 +176,9 @@
       footnote: [
         t('כבר התקנתם? ייתכן שהשירות לא פועל כרגע. הפעלה מחדש של המחשב תפעיל אותו.'),
         model.online === false
-          ? t('אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר, מדף ההורדות של התוסף ב-GitHub, ולהעביר אותו בדיסק און קי.')
+          ? t('אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}', {
+              url: Domain.Links.setup,
+            })
           : null,
       ]
         .filter(Boolean)
@@ -258,7 +260,11 @@
       error: true,
       title: t('קריאת רשימת הספרים לא הושלמה'),
       text: [model.message, t('שום דבר לא נמחק. אפשר לנסות שוב.')],
-      actions: [button('filled', t('ניסיון נוסף'), actions.startBuild, { key: 'start-build' })],
+      // הסיבה המלאה ביומן השירות, שנכנס לפרטים; כך אפשר לצרף אותה לפנייה.
+      actions: [
+        button('filled', t('ניסיון נוסף'), actions.startBuild, { key: 'start-build' }),
+        button('text', t('העתקת הפרטים'), actions.copyStatus, { key: 'copy-status', icon: 'copy_24_regular' }),
+      ],
       code: errorCodeLine(model),
     });
   }

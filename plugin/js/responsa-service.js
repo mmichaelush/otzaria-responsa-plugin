@@ -30,6 +30,9 @@
   /** בדיקת פורט: חיבור שנדחה חוזר מיד; זה רק למקרה של תוכנה תקועה. */
   const PROBE_MS = 2500;
 
+  /** פרטי האבחון: מי שלוחץ "העתקה" או "שליחה" לא ממתין לשירות תקוע. */
+  const DIAGNOSTICS_MS = 5000;
+
   /** זרמי בנייה ריקים ברצף שאחריהם מוותרים: השירות עונה ואינו מתקדם. */
   const MAX_EMPTY_STREAMS = 10;
 
@@ -167,6 +170,28 @@
 
     cancelBuild() {
       return this.request('POST', '/catalog/cancel', {});
+    }
+
+    /**
+     * פרטי האבחון של השירות להעתקה ולדיווח: `{ summary, logTail, note }`.
+     * שירות ישן בלי היכולת — `null`. לא זורק: הפרטים הם תוספת לדיווח, וכשל
+     * שלהם חוזר כ-`note` בשורה אחת, שגם היא מספרת משהו.
+     */
+    async diagnostics() {
+      if (!Domain.serviceCan(this.health, 'diagnostics')) return null;
+      try {
+        const data = (await this.request('GET', '/diagnostics', undefined, DIAGNOSTICS_MS)) || {};
+        const text = (value) => (typeof value === 'string' ? value : '');
+        return { summary: text(data.summary), logTail: text(data.logTail), note: '' };
+      } catch (error) {
+        const Log = root.ResponsaLog;
+        const reason = Log ? Log.describe(error) : String((error && error.message) || error);
+        return {
+          summary: '',
+          logTail: '',
+          note: I18n.t('פרטי השירות לא התקבלו: {reason}', { reason }),
+        };
+      }
     }
 
     /** בקשה אחת לשירות שנמצא ב-[connect]. זורק [ServiceError]. */

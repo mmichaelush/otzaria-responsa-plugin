@@ -822,6 +822,8 @@ textarea {
   margin-top: var(--space-4);
   font-size: 0.82em;
   color: var(--color-on-surface-variant);
+  /* כתובת ההורדה ארוכה ובלי רווחים. */
+  overflow-wrap: anywhere;
 }
 
 /* "קוד לתמיכה": קטן, אבל אפשר לסמן ולהעתיק. */

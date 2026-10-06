@@ -232,3 +232,48 @@ test('"הפעלת בר אילן" כבויה: autoStart: false בפתיחה, בח
   assert.deepEqual(bodies['/reference/open'], { ref: 'בראשית ב ג', index: 2, autoStart: false });
   assert.equal('autoStart' in bodies['/catalog/search'], false);
 });
+
+// ---------------------------------------------------- פרטי אבחון
+
+const diagnosticsHealth = reply(200, {
+  ok: true,
+  service: 'otzaria-responsa',
+  apiVersion: 1,
+  capabilities: ['catalog', 'diagnostics'],
+});
+
+test('diagnostics: שירות ישן בלי היכולת — null, בלי בקשה', async () => {
+  const { bridge, service } = await connected({});
+  assert.equal(await service.diagnostics(), null);
+  assert.equal(bridge.requests.length, 0);
+});
+
+test('diagnostics: summary ו-logTail, בחסם זמן קצר', async () => {
+  const { bridge, service } = await connected({
+    '/health': diagnosticsHealth,
+    '/diagnostics': reply(200, { summary: 'Service 0.5.1\nWindows 11', logTail: 'line 1\nline 2' }),
+  });
+  assert.deepEqual(await service.diagnostics(), {
+    summary: 'Service 0.5.1\nWindows 11',
+    logTail: 'line 1\nline 2',
+    note: '',
+  });
+  assert.equal(bridge.requests[0].params.timeoutMs, 5000);
+});
+
+test('diagnostics: כשל אינו נזרק, אלא חוזר כהערה בשורה אחת', async () => {
+  const { service } = await connected({
+    '/health': diagnosticsHealth,
+    '/diagnostics': reply(500, { error: { code: 'internal', message: 'boom' } }),
+  });
+  assert.deepEqual(await service.diagnostics(), {
+    summary: '',
+    logTail: '',
+    note: 'פרטי השירות לא התקבלו: ServiceError [internal]: boom',
+  });
+  const missing = await connected({
+    '/health': diagnosticsHealth,
+    '/diagnostics': reply(200, { summary: 7 }),
+  });
+  assert.deepEqual(await missing.service.diagnostics(), { summary: '', logTail: '', note: '' });
+});

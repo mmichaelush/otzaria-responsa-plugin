@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { loadPlugin } = require('./helpers/load');
 const { FakeBridge, reply } = require('./helpers/fake-bridge');
 
-const { App: AppModule, Domain } = loadPlugin();
+const { App: AppModule, Domain, Log: LogModule } = loadPlugin();
 const { App } = AppModule;
 const { Screen } = Domain;
 
@@ -725,6 +725,108 @@ test('דיווח: מצורף יומן הפעולות, בלי שם המשתמש �
   assert.doesNotMatch(details, /Moshe/);
   assert.ok(details.length <= 5000);
   app.suspend();
+});
+
+// ---------------------------------------------------- פרטי השירות
+
+const diagnosticsRoutes = (logTail) => ({
+  '/health': reply(200, {
+    ok: true,
+    service: 'otzaria-responsa',
+    apiVersion: 1,
+    serverVersion: '0.5.1',
+    capabilities: ['catalog', 'diagnostics'],
+  }),
+  '/status': reply(500, { error: { code: 'internal', message: "FileSystemException: Exists failed, path = 'E:\\'" } }),
+  '/diagnostics': reply(200, {
+    summary: 'Service 0.5.1\nInstallations: C:\\Users\\Moshe\\ResponsaCD25',
+    logTail,
+  }),
+});
+
+/**
+ * כמו [setup], עם יומן משלו: היומן המשותף כבר מחזיק את רשומות ההפעלה של
+ * הבדיקה הראשונה בקובץ.
+ */
+function setupWithLog(routes) {
+  const bridge = new FakeBridge(routes);
+  const app = new App(bridge, new FakeView(), { log: new LogModule.Log({ console: null }) });
+  return { bridge, app };
+}
+
+/** הלוח של הדף, במקום `navigator.clipboard` שאין ב-Node. */
+function fakeClipboard() {
+  const copied = [];
+  Object.defineProperty(globalThis.navigator, 'clipboard', {
+    value: { writeText: async (text) => copied.push(text) },
+    configurable: true,
+  });
+  return copied;
+}
+
+test('העתקת הפרטים: יומן מקופל, סיכום השירות ויומן השירות, בלי שם המשתמש', async () => {
+  const copied = fakeClipboard();
+  const { app } = setupWithLog(diagnosticsRoutes('svc first\nsvc E:\\ skipped (not ready)'));
+  await app.boot({ ...windows, plugin: { version: '0.5.1' } });
+  assert.equal(app.model.screen, Screen.serviceError);
+  // הבדיקה התקופתית של מסך השגיאה, 30 פעמים.
+  for (let i = 0; i < 30; i++) await app.refresh();
+  app.suspend();
+  await app.actions.copyStatus();
+  delete globalThis.navigator.clipboard;
+  const text = copied[0];
+  assert.match(text, /גרסת התוסף: 0\.5\.1/);
+  assert.match(text, /--- יומן פעולות ---\n[^]*הפעלה: תוסף 0\.5\.1/);
+  assert.match(text, /↻ 3 השורות שלמעלה חזרו עוד \d+ פעמים/);
+  assert.ok(text.split('\n').length < 40, 'המחזור מקופל: ' + text.split('\n').length);
+  assert.match(text, /--- שירות בר אילן ---\nService 0\.5\.1\nInstallations: C:\\Users\\…\\ResponsaCD25/);
+  assert.match(text, /--- יומן השירות ---\nsvc first\nsvc E:\\ skipped \(not ready\)$/);
+  assert.doesNotMatch(text, /Moshe/);
+  assert.deepEqual(app.bridge.notifications('ui.showSuccess'), ['פרטי המערכת הועתקו.']);
+});
+
+test('דיווח: סיכום השירות ויומן השירות נכנסים, ושורות ההפעלה נשמרות, עד 5,000 תווים', async () => {
+  const logTail = Array.from({ length: 150 }, (_, i) => 'svc line ' + i + ' ' + 'x'.repeat(40)).join('\n');
+  const { app, bridge } = setupWithLog(diagnosticsRoutes(logTail));
+  bridge.methods['feedback.report'] = 'sent';
+  await app.boot({ ...windows, plugin: { version: '0.5.1' } });
+  app.suspend();
+  for (let i = 0; i < 300; i++) app.log.debug('בקשה ' + i + ' ' + 'y'.repeat(40));
+  app.actions.editReport('השירות לא מגיב אחרי שחיברתי כונן');
+  await app.actions.sendReport();
+  const { details } = bridge.calls.find((c) => c.method === 'feedback.report').payload;
+  assert.ok(details.length <= 5000, String(details.length));
+  assert.match(details, /^השירות לא מגיב אחרי שחיברתי כונן\n\n---\n/);
+  assert.match(details, /--- שירות בר אילן ---\nService 0\.5\.1\nInstallations: C:\\Users\\…\\ResponsaCD25/);
+  assert.match(details, /--- יומן פעולות ---\n[^\n]*הפעלה: תוסף 0\.5\.1[^]*\n…\n/);
+  assert.match(details, /בקשה 299 y+\n/, 'מיומן התוסף — הסוף');
+  assert.match(details, /--- יומן השירות ---\n…\n[^]*svc line 149 x+$/);
+  assert.doesNotMatch(details, /Moshe/);
+});
+
+test('מייל: סיכום השירות נכנס לגוף, בלי היומנים', async () => {
+  const { app, bridge } = setupWithLog(diagnosticsRoutes('svc first'));
+  await app.boot(windows);
+  app.suspend();
+  await app.actions.writeEmail();
+  const { body } = bridge.calls.find((c) => c.method === 'feedback.sendEmail').payload;
+  assert.match(body, /--- שירות בר אילן ---\nService 0\.5\.1/);
+  assert.doesNotMatch(body, /יומן|Moshe/);
+});
+
+test('הורדת המתקין: הקישור הישיר למתקין האחרון; בלי אינטרנט — הסבר להורדה במחשב אחר', async () => {
+  const { app, bridge } = setupWithLog({});
+  await app.boot(windows);
+  app.suspend();
+  assert.equal(app.model.screen, Screen.serviceMissing);
+  await app.actions.download();
+  assert.equal(bridge.calls.find((c) => c.method === 'app.openUrl').payload.url, Domain.Links.setup);
+  app.model.online = false;
+  await app.actions.download();
+  assert.match(
+    bridge.notifications('ui.showMessage').at(-1),
+    /במחשב אחר[^]*releases\/latest\/download\/OtzariaResponsa-Setup\.exe$/,
+  );
 });
 
 

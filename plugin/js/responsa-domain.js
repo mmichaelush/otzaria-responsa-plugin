@@ -44,7 +44,13 @@
    */
   const Links = Object.freeze({
     homepage: REPOSITORY_URL,
+    /** דף הגרסה האחרונה: מה חדש, וכל הקבצים. */
     releases: REPOSITORY_URL + '/releases/latest',
+    /**
+     * המתקין של הגרסה האחרונה, בהורדה ישירה: ה-CI מצרף אותו לכל גרסה בשם
+     * קבוע. כתובת שאפשר להקליד גם במחשב אחר, בלי לחפש בדף.
+     */
+    setup: REPOSITORY_URL + '/releases/latest/download/OtzariaResponsa-Setup.exe',
     guide: REPOSITORY_URL + '/blob/main/docs/USER_GUIDE.md',
     issues: REPOSITORY_URL + '/issues',
     store: 'https://otzaria.org/plugins/6abfbb96f4aadb0d88fd755a',
@@ -57,6 +63,12 @@
 
   /** אורך התיאור בדיווח על בעיה; השאר שמור לפרטי המערכת וליומן. */
   const MAX_REPORT_TEXT = 3000;
+
+  /**
+   * כמה מהדיווח שמור ליומן השירות, גם כשיומן התוסף ארוך: בכשל של השירות
+   * הסיבה כתובה שם, ולא ביומן התוסף.
+   */
+  const SERVICE_LOG_RESERVE = 1200;
 
   /** פריט "חיפוש בבר אילן" בתפריט הלחיצה הימנית (manifest.json). */
   const CONTEXT_MENU_ITEM = 'responsa-search';
@@ -343,11 +355,20 @@
         count: formatCount(scanned),
         total: formatCount(expected),
       });
-    } else if (progress && progress.sectionsTotal > 0) {
-      detail = t('חלק {done} מתוך {total}', {
-        done: formatCount(progress.sectionsDone),
-        total: formatCount(progress.sectionsTotal),
-      });
+    } else if (scanned > 0 || (progress && progress.sectionsTotal > 0)) {
+      // מהדורה בלי מכנה ידוע: אין אחוז, אבל מספר השורות שעולה מראה שהקריאה
+      // מתקדמת. בלעדיו קריאה איטית (חלק אחד בכמה דקות) נראית תקועה.
+      detail = [
+        scanned > 0 ? t('נקראו {count} שורות בעץ של בר אילן', { count: formatCount(scanned) }) : '',
+        progress.sectionsTotal > 0
+          ? t('חלק {done} מתוך {total}', {
+              done: formatCount(progress.sectionsDone || 0),
+              total: formatCount(progress.sectionsTotal),
+            })
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
     }
     return {
       label: stageLabel(stage),
@@ -660,6 +681,102 @@
     return t('"{title}" נפתח בבר אילן', { title: name });
   }
 
+  // ------------------------------------------------------------- דיווח
+
+  function section(title, body) {
+    return '\n\n--- ' + title + ' ---\n' + body;
+  }
+
+  function linesOf(text) {
+    const value = String(text || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '');
+    return value ? value.split('\n') : [];
+  }
+
+  /** אורך השורות כשהן מחוברות ב-`\n`. */
+  function joinedLength(lines) {
+    return lines.reduce((sum, line) => sum + line.length, 0) + Math.max(lines.length - 1, 0);
+  }
+
+  /** השורות הראשונות ([fromEnd]: האחרונות) שנכנסות ב-[room] תווים. */
+  function fitting(lines, room, fromEnd) {
+    const order = fromEnd ? lines.slice().reverse() : lines;
+    const kept = [];
+    let used = -1;
+    for (const line of order) {
+      if (used + 1 + line.length > room) break;
+      used += 1 + line.length;
+      kept.push(line);
+    }
+    return fromEnd ? kept.reverse() : kept;
+  }
+
+  /** כמו [fitting], ו-`…` בשורה משלה במקום מה שהושמט. */
+  function fitWithGap(lines, room, fromEnd) {
+    if (joinedLength(lines) <= room) return lines;
+    const kept = fitting(lines, room - 2, fromEnd);
+    if (!kept.length) return [];
+    return fromEnd ? ['…', ...kept] : [...kept, '…'];
+  }
+
+  /** `summary` של השירות, או ההערה שאומרת למה לא התקבל. */
+  function serviceSummary(service) {
+    return (service && (service.summary || service.note)) || '';
+  }
+
+  /**
+   * הטקסט של "העתקת הפרטים" ושל המייל, בלי הגבלת אורך. `parts`:
+   * `{ status, log, service }`; [service] מ-`ServiceClient.diagnostics`, או
+   * `null` כששירות ישן אינו מוסר פרטים.
+   */
+  function diagnosticsText(parts) {
+    const service = parts.service || {};
+    const summary = serviceSummary(service);
+    return (
+      parts.status +
+      (parts.log ? section(t('יומן פעולות'), parts.log) : '') +
+      (summary ? section(t('שירות בר אילן'), summary) : '') +
+      (service.logTail ? section(t('יומן השירות'), service.logTail) : '')
+    );
+  }
+
+  /**
+   * פרטי הדיווח, עד [max] תווים, ואף שורה אינה נחתכת באמצע. הסדר הוא סדר
+   * העדיפות: התיאור, פרטי המערכת, סיכום השירות, יומן התוסף, יומן השירות.
+   * מיומן התוסף נשמרות שורות ההפעלה (`startup`: הגרסאות, השירות שנמצא),
+   * ואחריהן הסוף, החדש (`log`); מיומן השירות — הסוף. ליומן השירות שמור
+   * [SERVICE_LOG_RESERVE], כדי שיומן תוסף ארוך לא ידחק אותו לגמרי.
+   */
+  function reportDetails(parts, max) {
+    let details = (parts.text + '\n\n---\n' + parts.status).slice(0, max);
+    const add = (title, lines) => {
+      if (lines.length) details += section(title, lines.join('\n'));
+    };
+    const room = (title) => max - details.length - section(title, '').length;
+    const service = parts.service || {};
+
+    const summaryTitle = t('שירות בר אילן');
+    add(summaryTitle, fitWithGap(linesOf(serviceSummary(service)), room(summaryTitle), false));
+
+    const serviceLog = linesOf(service.logTail);
+    const logTitle = t('יומן פעולות');
+    const reserve = serviceLog.length
+      ? Math.min(SERVICE_LOG_RESERVE, section(t('יומן השירות'), service.logTail).length)
+      : 0;
+    const logRoom = room(logTitle) - reserve;
+    const startup = linesOf(parts.startup);
+    const rest = linesOf(parts.log);
+    if (joinedLength(startup.concat(rest)) <= logRoom) {
+      add(logTitle, startup.concat(rest));
+    } else {
+      const head = fitting(startup, logRoom, false);
+      add(logTitle, head.concat(fitWithGap(rest, logRoom - (head.length ? joinedLength(head) + 1 : 0), true)));
+    }
+
+    const serviceLogTitle = t('יומן השירות');
+    add(serviceLogTitle, fitWithGap(serviceLog, room(serviceLogTitle), true));
+    return details;
+  }
+
   const api = {
     FIRST_PORT,
     PORT_COUNT,
@@ -712,6 +829,8 @@
     needsLibrarySync,
     portOf,
     openedMessage,
+    diagnosticsText,
+    reportDetails,
     subtitleFor,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;

@@ -132,14 +132,22 @@ test('buildProgress: לעולם לא 100% לפני הסיום', () => {
   assert.equal(p.percent, 98);
 });
 
-test('buildProgress: בלי מכנה אין אחוז, רק חלקים', () => {
+test('buildProgress: בלי מכנה (מהדורה 30, 34) אין אחוז, אבל השורות שנקראו עולות', () => {
   const p = Domain.buildProgress(
-    { stage: 'scanning', scanned: 1000, sectionsDone: 3, sectionsTotal: 20 },
+    { stage: 'scanning', scanned: 152000, sectionsDone: 7, sectionsTotal: 20 },
     60000,
   );
   assert.equal(p.fraction, null);
   assert.equal(p.remaining, '');
-  assert.match(p.detail, /חלק 3 מתוך 20/);
+  assert.equal(p.detail, 'נקראו 152,000 שורות בעץ של בר אילן · חלק 7 מתוך 20');
+  assert.equal(
+    Domain.buildProgress({ stage: 'scanning', scanned: 0, sectionsDone: 0, sectionsTotal: 20 }, 1).detail,
+    'חלק 0 מתוך 20',
+  );
+  assert.equal(
+    Domain.buildProgress({ stage: 'scanning', scanned: 500 }, 1).detail,
+    'נקראו 500 שורות בעץ של בר אילן',
+  );
 });
 
 test('buildProgress: התחלה ומיון', () => {
@@ -265,6 +273,103 @@ test('setupChecklist: מה מוכן, מה חסר ומה עוד לא ידוע', (
 test('Links: כתובות https בלבד, והפורום מצביע על ההבהרה', () => {
   for (const url of Object.values(Domain.Links)) assert.match(url, /^https:\/\//);
   assert.equal(Domain.Links.forum, 'https://otzaria.org/forum/post/40010');
+});
+
+test('Links.setup: המתקין האחרון בשם הקבוע שה-CI מצרף לכל גרסה', () => {
+  assert.equal(
+    Domain.Links.setup,
+    'https://github.com/mmichaelush/otzaria-responsa-plugin/releases/latest/download/OtzariaResponsa-Setup.exe',
+  );
+});
+
+// ------------------------------------------------------------- דיווח
+
+const lines = (prefix, count, width) =>
+  Array.from({ length: count }, (_, i) => (prefix + ' ' + i + ' ').padEnd(width || 60, 'x')).join('\n');
+
+const reportParts = (overrides) => ({
+  text: 'הספר לא נפתח',
+  status: 'גרסת התוסף: 0.5.1\nגרסת השירות: 0.5.1',
+  service: { summary: 'Service 0.5.1\nWindows 11\nE:\\ skipped (not ready)', logTail: lines('svc', 20), note: '' },
+  startup: '00:00:01 INFO  הפעלה: תוסף 0.5.1\n00:00:02 INFO  נמצא השירות ב-http://127.0.0.1:39700, גרסה 0.5.1',
+  log: lines('plugin', 20),
+  ...overrides,
+});
+
+/** כל שורה בתוצאה היא שורה שלמה מאחד החלקים, או סימן השמטה/כותרת. */
+function assertWholeLines(details, parts) {
+  const source = new Set(
+    [parts.text, parts.status, parts.service.summary, parts.service.logTail, parts.startup, parts.log]
+      .join('\n')
+      .split('\n'),
+  );
+  for (const line of details.split('\n')) {
+    assert.ok(line === '' || line === '…' || line === '---' || /^--- .+ ---$/.test(line) || source.has(line), line);
+  }
+}
+
+test('reportDetails: הכול נכנס — בסדר העדיפות, בלי השמטה', () => {
+  const parts = reportParts();
+  const details = Domain.reportDetails(parts, 5000);
+  assert.ok(details.startsWith('הספר לא נפתח\n\n---\nגרסת התוסף: 0.5.1'));
+  const order = ['--- שירות בר אילן ---', '--- יומן פעולות ---', 'הפעלה:', 'plugin 0 ', '--- יומן השירות ---', 'svc 0 '];
+  const at = order.map((mark) => details.indexOf(mark));
+  assert.ok(at.every((index, i) => index > 0 && (i === 0 || index > at[i - 1])), JSON.stringify(at));
+  assert.doesNotMatch(details, /…/);
+});
+
+test('reportDetails: תקציב קטן — שורות ההפעלה נשמרות, ומהיומנים נכנס הסוף, בשורות שלמות', () => {
+  const parts = reportParts({ log: lines('plugin', 100), service: { summary: 'Service 0.5.1', logTail: lines('svc', 100), note: '' } });
+  const details = Domain.reportDetails(parts, 5000);
+  assert.ok(details.length <= 5000, String(details.length));
+  assert.ok(details.length > 4900, 'התקציב מנוצל: ' + details.length);
+  assertWholeLines(details, parts);
+  assert.match(details, /הפעלה: תוסף 0\.5\.1\n[^\n]*נמצא השירות[^\n]*\n…\n/);
+  assert.match(details, /plugin 99 x+\n\n--- יומן השירות ---\n…\n/, 'מיומן התוסף — הסוף, החדש');
+  assert.match(details, /svc 99 x+$/, 'מיומן השירות — הסוף');
+  assert.doesNotMatch(details, /plugin 0 /);
+  // יומן התוסף ארוך, ובכל זאת יומן השירות מקבל את החלק השמור לו.
+  const serviceLog = details.slice(details.indexOf('--- יומן השירות ---'));
+  assert.ok(serviceLog.length >= 1100, String(serviceLog.length));
+});
+
+test('reportDetails: יומן שירות קצר מקבל רק מה שהוא צריך, והשאר ליומן התוסף', () => {
+  const parts = reportParts({ log: lines('plugin', 100), service: { summary: 'S', logTail: 'svc last', note: '' } });
+  const details = Domain.reportDetails(parts, 5000);
+  assert.ok(details.length <= 5000 && details.length > 4900, String(details.length));
+  assert.ok(details.endsWith('--- יומן השירות ---\nsvc last'));
+});
+
+test('reportDetails: תיאור ארוך — הסיכום נכנס לפני היומנים, ומה שלא נכנס נשמט בשלמותו', () => {
+  const parts = reportParts({ text: 'א'.repeat(3000), status: lines('status', 25), log: lines('plugin', 30) });
+  const details = Domain.reportDetails(parts, 5000);
+  assert.ok(details.length <= 5000);
+  assertWholeLines(details, parts);
+  assert.match(details, /--- שירות בר אילן ---\nService 0\.5\.1\nWindows 11/);
+});
+
+test('reportDetails: שירות ישן (בלי פרטים) או כשל בקבלתם', () => {
+  const old = Domain.reportDetails(reportParts({ service: null }), 5000);
+  assert.doesNotMatch(old, /שירות בר אילן|יומן השירות/);
+  const failed = Domain.reportDetails(
+    reportParts({ service: { summary: '', logTail: '', note: 'פרטי השירות לא התקבלו: ServiceError [timeout]: x' } }),
+    5000,
+  );
+  assert.match(failed, /--- שירות בר אילן ---\nפרטי השירות לא התקבלו: ServiceError \[timeout\]: x/);
+  assert.doesNotMatch(failed, /יומן השירות/);
+});
+
+test('diagnosticsText: הכול, בלי הגבלת אורך', () => {
+  const text = Domain.diagnosticsText({
+    status: 'גרסת התוסף: 0.5.1',
+    log: lines('plugin', 200),
+    service: { summary: 'Service 0.5.1', logTail: lines('svc', 200), note: '' },
+  });
+  assert.ok(text.length > 20000);
+  assert.match(text, /^גרסת התוסף: 0\.5\.1\n\n--- יומן פעולות ---\nplugin 0 /);
+  assert.match(text, /\n\n--- שירות בר אילן ---\nService 0\.5\.1\n\n--- יומן השירות ---\nsvc 0 /);
+  assert.match(text, /svc 199 x+$/);
+  assert.equal(Domain.diagnosticsText({ status: 'x', log: '', service: null }), 'x');
 });
 
 
