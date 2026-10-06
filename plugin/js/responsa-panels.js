@@ -157,22 +157,128 @@
     return radioGroup({ class: 'segmented' }, { class: 'segment' }, label, options, value, onSelect, keyPrefix);
   }
 
-  /** אריחים שנשברים לשורות, לבחירה מרשימה ארוכה (גופן). */
-  function optionGrid(label, options, value, onSelect, keyPrefix, dataOf) {
-    return radioGroup(
-      { class: 'option-grid' },
-      { class: 'option-tile' },
-      label,
-      options,
-      value,
-      onSelect,
-      keyPrefix,
-      dataOf,
+  /** הדגימה שליד כל גופן בתפריט, כמו בבורר הגופן של אוצריא. */
+  const FONT_SAMPLE = 'אבגד הוזח';
+
+  /**
+   * בורר גופן כמו באוצריא: שדה עם שם הגופן הנבחר בגופן עצמו, ותפריט שבו כל
+   * גופן בגופן שלו, עם דוגמה. התפריט הוא popover — שכבה עליונה, כי הכרטיס
+   * חותך את מה שגולש ממנו — ונפתח מתחת לשדה (anchor ב-CSS). Esc ולחיצה בחוץ
+   * סוגרים אותו, והפוקוס חוזר לשדה. [options] — `{ value, label }`; הערך ''
+   * הוא גופן הממשק של אוצריא.
+   */
+  function fontMenu(label, options, value, onSelect) {
+    const current = options.find((option) => option.value === value) || options[0];
+    const fontOf = (option) => option.value || 'host';
+    let trigger = null;
+    let menu = null;
+    const choose = (next) => {
+      menu.hidePopover();
+      trigger.focus();
+      if (next !== current.value) onSelect(next);
+    };
+    const items = options.map((option) => {
+      const selected = option.value === current.value;
+      return el(
+        'button',
+        {
+          type: 'button',
+          class: 'font-option',
+          role: 'option',
+          tabindex: '-1',
+          'aria-selected': selected ? 'true' : 'false',
+          onclick: () => choose(option.value),
+          dataset: { font: fontOf(option) },
+        },
+        selected ? icon('checkmark_24_regular', 'font-option-check') : el('span', { class: 'font-option-check' }),
+        el('span', { class: 'font-option-name' }, option.label),
+        el('span', { class: 'font-option-sample', 'aria-hidden': 'true' }, FONT_SAMPLE),
+      );
+    });
+    menu = el(
+      'div',
+      {
+        id: 'font-menu',
+        class: 'font-menu',
+        popover: 'auto',
+        role: 'listbox',
+        'aria-label': label,
+        ontoggle: (event) => {
+          if (event.newState === 'open') items[options.indexOf(current)].focus();
+        },
+        onkeydown: (event) => {
+          const index = items.indexOf(document.activeElement);
+          const target = {
+            ArrowDown: (index + 1) % items.length,
+            ArrowUp: (index - 1 + items.length) % items.length,
+            Home: 0,
+            End: items.length - 1,
+          }[event.key];
+          if (target !== undefined) {
+            event.preventDefault();
+            items[target].focus();
+          } else if (event.key === 'Tab') {
+            menu.hidePopover();
+          }
+        },
+      },
+      items,
     );
+    trigger = el(
+      'button',
+      {
+        type: 'button',
+        class: 'font-field',
+        popovertarget: 'font-menu',
+        'aria-haspopup': 'listbox',
+        'aria-label': label + ': ' + current.label,
+        onkeydown: (event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+          event.preventDefault();
+          menu.showPopover();
+        },
+        dataset: { font: fontOf(current), focusKey: 'font' },
+      },
+      el('span', { class: 'font-field-name' }, current.label),
+      icon('chevron_down_24_regular', 'font-field-chevron'),
+    );
+    return el('div', { class: 'font-picker' }, trigger, menu);
   }
 
-  /** שורת הגדרה שהפקד שלה מתחתיה (בחירה מכמה אפשרויות). */
-  function stackedRow(iconName, title, subtitle, control) {
+  /**
+   * "גודל תצוגה" כמו המחוונים בהגדרות אוצריא: הערך בסוף שורת הכותרת, והמחוון
+   * מתחתיה. הגודל חל כשעוזבים את המחוון (change) ולא בכל תזוזה, כי הדף כולו
+   * גדל והמחוון היה זז מתחת לעכבר; בזמן הגרירה מתעדכן רק המספר. בחצים כל
+   * לחיצה היא change, והגודל חל מיד.
+   */
+  function scaleSlider(label, value, onCommit) {
+    const range = root.ResponsaSettings.SCALE;
+    const percent = (scale) => Math.round(scale * 100) + '%';
+    const output = el('span', { class: 'scale-value', 'aria-hidden': 'true' }, percent(value));
+    // החלק המלא של המסילה (CSS: linear-gradient לפי --fill).
+    const show = (input, scale) => {
+      output.textContent = percent(scale);
+      input.setAttribute('aria-valuetext', percent(scale));
+      input.style.setProperty('--fill', ((scale - range.min) / (range.max - range.min)) * 100 + '%');
+    };
+    const input = el('input', {
+      type: 'range',
+      class: 'scale-slider',
+      min: range.min,
+      max: range.max,
+      step: range.step,
+      value,
+      'aria-label': label,
+      oninput: (event) => show(event.target, Number(event.target.value)),
+      onchange: (event) => onCommit(Number(event.target.value)),
+      dataset: { focusKey: 'scale' },
+    });
+    show(input, value);
+    return { input, output };
+  }
+
+  /** שורת הגדרה שהפקד שלה מתחתיה. [value] — ערך בסוף שורת הכותרת (מחוון). */
+  function stackedRow(iconName, title, subtitle, control, value) {
     return el(
       'div',
       { class: 'settings-row settings-row-stacked' },
@@ -186,6 +292,7 @@
           el('span', { class: 'settings-row-title' }, title),
           subtitle ? el('span', { class: 'settings-row-subtitle' }, subtitle) : null,
         ),
+        value || null,
       ),
       control,
     );
@@ -328,31 +435,25 @@
   function displayRows(model, actions) {
     const Settings = root.ResponsaSettings;
     const fonts = Settings.FONTS.map((value) => ({ value, label: t(FONT_LABELS[value]) }));
-    const scales = Settings.SCALES.map((value) => ({ value, label: Math.round(value * 100) + '%' }));
+    const scale = scaleSlider(t('גודל תצוגה'), model.settings.scale, (value) => actions.setSetting('scale', value));
     const languages = [
       { value: 'auto', label: t('כמו באוצריא') },
       { value: 'he', label: 'עברית' },
       { value: 'en', label: 'English' },
     ];
     return [
-      stackedRow(
+      infoRow(
         'text_font_24_regular',
         t('גופן'),
         t('הגופן של התוסף. "כמו באוצריא" הוא גופן הממשק שנבחר בהגדרות אוצריא.'),
-        optionGrid(
-          t('גופן'),
-          fonts,
-          model.settings.font,
-          (value) => actions.setSetting('font', value),
-          'font-',
-          (option) => ({ font: option.value || 'host' }),
-        ),
+        fontMenu(t('גופן'), fonts, model.settings.font, (value) => actions.setSetting('font', value)),
       ),
       stackedRow(
         'text_font_size_24_regular',
         t('גודל תצוגה'),
         t('מגדיל או מקטין את כל מה שבלשונית: טקסט, כפתורים ורשימות.'),
-        segmented(t('גודל תצוגה'), scales, model.settings.scale, (value) => actions.setSetting('scale', value), 'scale-'),
+        scale.input,
+        scale.output,
       ),
       stackedRow(
         'translate_24_regular',

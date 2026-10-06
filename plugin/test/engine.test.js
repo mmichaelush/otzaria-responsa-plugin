@@ -229,7 +229,7 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
   });
 });
 
-test('הגדרות: גופן וגודל תצוגה רק מהרשימות', async () => {
+test('הגדרות: גופן מהרשימה, וגודל תצוגה בטווח המחוון', async () => {
   const read = async (values) =>
     new Settings.SettingsStore(fakeRuntime({ 'storage.get': ({ key }) => values[key] ?? null })).load();
   const chosen = await read({ responsa_font: 'Shofar', responsa_scale: 1.3 });
@@ -239,7 +239,12 @@ test('הגדרות: גופן וגודל תצוגה רק מהרשימות', async
   for (const font of ['NotoRashiHebrew', "x'; color: red", 7]) {
     assert.equal((await read({ responsa_font: font })).font, '');
   }
-  for (const scale of [0, 1.2, '1.3', 9]) {
+  // ערך בטווח מעוגל לקפיצה של 5%, ובקצוות נשאר כפי שהוא.
+  assert.equal((await read({ responsa_scale: 1.12 })).scale, 1.1);
+  assert.equal((await read({ responsa_scale: 1.15 })).scale, 1.15);
+  assert.equal((await read({ responsa_scale: 0.9 })).scale, 0.9);
+  assert.equal((await read({ responsa_scale: 1.5 })).scale, 1.5);
+  for (const scale of [0, 0.85, 1.6, '1.3', 9, Number.NaN, Infinity]) {
     assert.equal((await read({ responsa_scale: scale })).scale, 1);
   }
 });

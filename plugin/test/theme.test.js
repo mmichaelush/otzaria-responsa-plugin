@@ -46,7 +46,7 @@ test('applyAppearance: הגופן שנבחר גובר על אוצריא, גם א
   assert.equal(doc.props.get('--ui-scale'), '1.3');
   Theme.applyTheme(theme('Tinos'), doc);
   assert.equal(doc.props.get('--font-ui'), "'Shofar', system-ui, sans-serif");
-  // האריח "כמו באוצריא" נשאר בגופן של אוצריא.
+  // "כמו באוצריא" בתפריט נשאר בגופן של אוצריא.
   assert.equal(doc.props.get('--font-host'), "'Tinos', system-ui, sans-serif");
   Theme.applyAppearance({ font: 'KeterYG', scale: 1 }, doc);
   assert.equal(doc.props.get('--font-ui'), "'KeterYG', 'David', serif");

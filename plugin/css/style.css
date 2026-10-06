@@ -51,7 +51,7 @@
   --font-icons: OtzariaIcons, sans-serif;
   /* הגופנים שבבורר "גופן" (הגדרות); כל אחד מוצג בגופן עצמו. גופן חדש נוסף
      בשלושה מקומות: FONTS (responsa-settings.js), FONT_LABELS
-     (responsa-panels.js), ומשתנה וכלל .option-tile כאן. */
+     (responsa-panels.js), ומשתנה וכלל [data-font] כאן. */
   --font-david: 'TaameyDavidCLM', serif;
   --font-frank: 'FrankRuhlCLM', serif;
   --font-ashkenaz: 'TaameyAshkenaz', serif;
@@ -1419,81 +1419,211 @@ span.breadcrumb {
   height: 1.1em;
 }
 
-/* בורר הגופן: אריחים שנשברים לשורות, כל שם בגופן שלו. */
-.option-grid {
-  display: grid;
-  /* תשעה גופנים: 3×3 בכל רוחב, בלי שורה יתומה. */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-2);
+/* בורר הגופן, כמו FontDropdownField באוצריא: שדה מתאר עם שם הגופן הנבחר,
+   ותפריט שבו כל גופן בגופן שלו ולצדו דוגמה. */
+.font-picker {
+  flex-shrink: 0;
 }
 
-.option-tile {
+.font-field {
   display: inline-flex;
-  gap: var(--space-1);
+  gap: var(--space-3);
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  min-width: 11em;
   min-height: 2.8em;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
   font: inherit;
   font-size: 1.07em;
   color: var(--color-on-surface);
   cursor: pointer;
-  background: var(--color-surface);
-  border: 1px solid var(--color-outline-variant);
+  background: var(--card-surface);
+  border: 1px solid var(--color-outline);
   border-radius: var(--radius-sm);
-  transition: background var(--motion);
+  transition: border-color var(--motion);
+  anchor-name: --font-field;
 }
 
-.option-tile:hover:not([aria-checked='true']) {
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+.font-field:hover {
+  border-color: var(--color-on-surface);
 }
 
-.option-tile[aria-checked='true'] {
-  font-weight: 600;
-  color: var(--color-on-secondary-container);
-  background: var(--color-secondary-container);
-  border-color: var(--color-secondary-container);
-}
-
-.option-tile:focus-visible {
-  outline: 3px solid var(--color-secondary);
+.font-field:focus-visible {
+  outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
 
-.option-tile[data-font='host'] {
+.font-field-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.font-field-chevron {
+  flex-shrink: 0;
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--color-on-surface-variant);
+}
+
+/* popover בשכבה העליונה, צמוד לשדה (anchor). בלי מקום מתחת — נפתח מעליו. */
+.font-menu {
+  inset: auto;
+  top: anchor(bottom);
+  inset-inline-start: anchor(start);
+  min-width: anchor-size(width);
+  max-height: min(26em, 70vh);
+  padding: var(--space-1) 0;
+  margin: 0.3em 0;
+  overflow-y: auto;
+  color: var(--color-on-surface);
+  background: var(--color-surface-container);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-shadow) 22%, transparent);
+  position-anchor: --font-field;
+  position-try-fallbacks: flip-block;
+}
+
+.font-option {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  min-height: 2.6em;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: 1.07em;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.font-option:hover {
+  background: var(--hover-overlay);
+}
+
+.font-option:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.font-option[aria-selected='true'] {
+  color: var(--color-on-secondary-container);
+  background: var(--color-secondary-container);
+}
+
+.font-option-check {
+  flex-shrink: 0;
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.font-option-name {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.font-option-sample {
+  white-space: nowrap;
+  opacity: 0.6;
+}
+
+:is(.font-field, .font-option)[data-font='host'] {
   font-family: var(--font-host);
 }
 
-.option-tile[data-font='TaameyDavidCLM'] {
+:is(.font-field, .font-option)[data-font='TaameyDavidCLM'] {
   font-family: var(--font-david);
 }
 
-.option-tile[data-font='FrankRuhlCLM'] {
+:is(.font-field, .font-option)[data-font='FrankRuhlCLM'] {
   font-family: var(--font-frank);
 }
 
-.option-tile[data-font='TaameyAshkenaz'] {
+:is(.font-field, .font-option)[data-font='TaameyAshkenaz'] {
   font-family: var(--font-ashkenaz);
 }
 
-.option-tile[data-font='KeterYG'] {
+:is(.font-field, .font-option)[data-font='KeterYG'] {
   font-family: var(--font-keter);
 }
 
-.option-tile[data-font='Shofar'] {
+:is(.font-field, .font-option)[data-font='Shofar'] {
   font-family: var(--font-shofar);
 }
 
-.option-tile[data-font='NotoSerifHebrew'] {
+:is(.font-field, .font-option)[data-font='NotoSerifHebrew'] {
   font-family: var(--font-noto);
 }
 
-.option-tile[data-font='Tinos'] {
+:is(.font-field, .font-option)[data-font='Tinos'] {
   font-family: var(--font-tinos);
 }
 
-.option-tile[data-font='Rubik'] {
+:is(.font-field, .font-option)[data-font='Rubik'] {
   font-family: var(--font-rubik);
+}
+
+/* "גודל תצוגה", כמו המחוונים בהגדרות אוצריא: הערך בצבע הראשי בסוף שורת
+   הכותרת, ומסילה שהחלק המלא שלה (--fill, מה-JS) בצבע הראשי. */
+.scale-value {
+  flex-shrink: 0;
+  font-size: 1.07em;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.scale-slider {
+  --fill: 0%;
+  --track-direction: to right;
+
+  width: 100%;
+  height: 1.6em;
+  margin: 0;
+  cursor: pointer;
+  background: transparent;
+  appearance: none;
+}
+
+/* ב-RTL המינימום בימין, והמסילה מתמלאת משם. */
+:root[dir='rtl'] .scale-slider {
+  --track-direction: to left;
+}
+
+.scale-slider::-webkit-slider-runnable-track {
+  height: 0.3em;
+  background: linear-gradient(
+    var(--track-direction),
+    var(--color-primary) var(--fill),
+    var(--color-secondary-container) var(--fill)
+  );
+  border-radius: var(--radius-pill);
+}
+
+.scale-slider::-webkit-slider-thumb {
+  width: 1.25em;
+  height: 1.25em;
+  margin-top: -0.475em;
+  background: var(--color-primary);
+  border: 0;
+  border-radius: 50%;
+  transition: box-shadow var(--motion);
+  appearance: none;
+}
+
+.scale-slider:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 0.5em var(--hover-overlay);
+}
+
+.scale-slider:focus-visible {
+  outline: none;
+}
+
+.scale-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 0.3em color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
 /* ---------- דיאלוג (מסך הפתיחה) ---------- */
@@ -2741,6 +2871,16 @@ span.breadcrumb {
     display: none;
   }
 
+  /* בורר הגופן בשורה משלו, לכל הרוחב: לצד הטקסט הוא דוחף את הדף הצידה. */
+  .settings-row:has(.font-picker) {
+    flex-wrap: wrap;
+  }
+
+  .font-picker,
+  .font-field {
+    width: 100%;
+  }
+
   .segmented {
     flex-direction: column;
   }
@@ -2749,10 +2889,6 @@ span.breadcrumb {
     border-inline-start: 0;
     border-top: 1px solid var(--color-outline);
   }
-
-  .option-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 /* מסך מגע: מטרות לחיצה של 44px לפחות (M3). */
@@ -2760,7 +2896,8 @@ span.breadcrumb {
   .button,
   .segment,
   .chip,
-  .option-tile {
+  .font-field,
+  .font-option {
     min-height: 2.95em;
   }
 

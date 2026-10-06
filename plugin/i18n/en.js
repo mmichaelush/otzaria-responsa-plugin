@@ -189,7 +189,7 @@
     'טקסט': 'Text',
     'איתור': 'Locate',
     'הגופן של התוסף. "כמו באוצריא" הוא גופן הממשק שנבחר בהגדרות אוצריא.':
-      'The plugin font. "As in Otzaria" is the interface font chosen in the Otzaria settings.',
+      'The plugin font. "Same as Otzaria" is the interface font chosen in the Otzaria settings.',
     'גודל תצוגה': 'Display size',
     'מגדיל או מקטין את כל מה שבלשונית: טקסט, כפתורים ורשימות.':
       'Makes everything in the tab larger or smaller: text, buttons and lists.',

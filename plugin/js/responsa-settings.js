@@ -9,7 +9,7 @@
     language: 'responsa_language',
     /** גופן התוסף: שם מ-[FONTS], או '' לגופן הממשק של אוצריא. */
     font: 'responsa_font',
-    /** גודל התצוגה: מכפיל מ-[SCALES]. */
+    /** גודל התצוגה: מכפיל בטווח [SCALE]. */
     scale: 'responsa_scale',
     libraryBooks: 'responsa_library_books',
     contextMenu: 'responsa_context_menu',
@@ -65,8 +65,17 @@
     'Rubik',
   ]);
 
-  /** גדלי התצוגה, כמכפיל של גודל הממשק. */
-  const SCALES = Object.freeze([0.9, 1, 1.15, 1.3, 1.5]);
+  /** טווח "גודל תצוגה" (מכפיל של גודל הממשק) והקפיצה של המחוון. */
+  const SCALE = Object.freeze({ min: 0.9, max: 1.5, step: 0.05 });
+
+  /** מכפיל בטווח, מעוגל לקפיצה; אחר — `null`. */
+  function normalizeScale(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    const steps = Math.round(value / SCALE.step);
+    // toFixed: 23 * 0.05 הוא 1.1500000000000001.
+    const rounded = Number((steps * SCALE.step).toFixed(2));
+    return rounded >= SCALE.min && rounded <= SCALE.max ? rounded : null;
+  }
 
   const DEFAULTS = Object.freeze({
     language: 'auto',
@@ -90,7 +99,7 @@
     return {
       language: LANGUAGES.includes(value.language) ? value.language : DEFAULTS.language,
       font: FONTS.includes(value.font) ? value.font : DEFAULTS.font,
-      scale: SCALES.includes(value.scale) ? value.scale : DEFAULTS.scale,
+      scale: normalizeScale(value.scale) ?? DEFAULTS.scale,
       libraryBooks:
         typeof value.libraryBooks === 'boolean' ? value.libraryBooks : DEFAULTS.libraryBooks,
       contextMenu:
@@ -163,7 +172,7 @@
     }
   }
 
-  const api = { KEYS, LANGUAGES, FONTS, SCALES, TABS, MAX_LOCATE_HISTORY, DEFAULTS, normalize, SettingsStore };
+  const api = { KEYS, LANGUAGES, FONTS, SCALE, TABS, MAX_LOCATE_HISTORY, DEFAULTS, normalize, SettingsStore };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaSettings = api;
 })(typeof self !== 'undefined' ? self : globalThis);
