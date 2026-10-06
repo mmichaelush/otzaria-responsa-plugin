@@ -13,6 +13,7 @@
   "sdkVersion": "1.x",
   "permissions": [
     "network.localhost",
+    "plugin.storage.read",
     "app.open_url",
     "app.startup_contributions",
     "app.shortcuts",

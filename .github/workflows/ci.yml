@@ -41,14 +41,21 @@ jobs:
       - name: minAppVersion
         id: manifest
         run: echo "min-app-version=$(node -p "require('./plugin/manifest.json').minAppVersion")" >> "$GITHUB_OUTPUT"
-      # אותן בדיקות שהחנות מריצה, כולל בדיקת העיצוב.
+      # אותן בדיקות שהחנות מריצה, כולל בדיקת העיצוב. שגיאה מכשילה כאן; את
+      # האזהרות בודק השלב הבא.
       - name: Official validator
+        id: validator
         uses: Otzaria/otzaria-plugin-validator@v1
         with:
           path: plugin
           app-version: ${{ steps.manifest.outputs.min-app-version }}
-          fail-on-warnings: true
+          fail-on-warnings: false
           publish: false
+      # מותרות רק ההמלצות להסיר הרשאת בסיס מוצהרת (tools/validator-warnings.js).
+      - name: Validator warnings
+        env:
+          WARNINGS: ${{ steps.validator.outputs.total-warnings }}
+        run: node tools/validator-warnings.js plugin/manifest.json "$WARNINGS"
 
   installer:
     needs: [helper, plugin]
@@ -149,7 +156,8 @@ jobs:
         with:
           path: build/store-plugin
           app-version: ${{ steps.inputs.outputs.min-app-version }}
-          fail-on-warnings: true
+          # האזהרות נבדקו ב-job plugin על אותם קבצים; כאן הוולידטור רק מפרסם.
+          fail-on-warnings: false
           publish: auto
           otzaria-user: ${{ secrets.OTZARIA_USER }}
           otzaria-password: ${{ secrets.OTZARIA_PASSWORD }}

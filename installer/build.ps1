@@ -65,13 +65,17 @@ $env:INPUT_BUILD = 'true'
 # לחריגה. קוד היציאה הוא מה שמכריע.
 $ErrorActionPreference = 'Continue'
 $output = node (Join-Path $validator 'src/cli.js') (Join-Path $root 'plugin') `
-  --fail-on-warnings --app-version $manifest.minAppVersion --publish false 2>&1 |
+  --app-version $manifest.minAppVersion --publish false 2>&1 |
   ForEach-Object { "$_" }
 $validatorExit = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
 $env:INPUT_BUILD = $null
 $output | Where-Object { $_ -notmatch '^OUTPUT ' } | Write-Host
 if ($validatorExit -ne 0) { throw 'הוולידטור נכשל' }
+# כמו ב-CI: מותרות רק ההמלצות להסיר הרשאת בסיס מוצהרת.
+$warnings = ($output | Where-Object { $_ -match '^OUTPUT total-warnings=(\d+)' } | Select-Object -First 1) -replace '^OUTPUT total-warnings=', ''
+node (Join-Path $root 'tools/validator-warnings.js') (Join-Path $root 'plugin/manifest.json') $warnings
+if ($LASTEXITCODE -ne 0) { throw 'אזהרות בוולידטור' }
 # לפי השם ולא לפי הפלט: ב-GitHub Actions הוולידטור כותב את הנתיב ל-
 # $GITHUB_OUTPUT ולא ל-stdout.
 $pluginFile = Join-Path $root "$($manifest.id)-$version.otzplugin"
@@ -86,7 +90,7 @@ $iscc = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw 'ISCC.exe לא נמצא. יש להתקין Inno Setup 6.' }
 # המתקין בודק את גרסת התוסף שבאוצריא מול AppVersion, בתיקייה שנקראת לפי ה-id.
-& $iscc "/DAppVersion=$version" "/DPluginId=$($manifest.id)" (Join-Path $installer 'OtzariaResponsa.iss')
+& $iscc "/DAppVersion=$version" "/DPluginId=$($manifest.id)" "/DMinAppVersion=$($manifest.minAppVersion)" (Join-Path $installer 'OtzariaResponsa.iss')
 if ($LASTEXITCODE -ne 0) { throw 'ISCC נכשל' }
 
 $setup = Join-Path $installer "output/OtzariaResponsa-Setup-$version.exe"

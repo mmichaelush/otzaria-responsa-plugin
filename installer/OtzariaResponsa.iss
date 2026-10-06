@@ -11,6 +11,10 @@
 #define HelperExe "responsa_helper.exe"
 #define PluginFile "OtzariaResponsa.otzplugin"
 ; ה-id שבמניפסט: שם התיקייה שאוצריא מתקינה אליה את התוסף. build.ps1 מעביר אותו.
+; minAppVersion של התוסף: אוצריא ישנה ממנה מסרבת להתקין אותו (OtzariaTooOld).
+#ifndef MinAppVersion
+  #define MinAppVersion "0.0.0"
+#endif
 #ifndef PluginId
   #define PluginId "com.otzaria-responsa"
 #endif
@@ -64,6 +68,7 @@ he.UpdatePlugin=לעדכן את התוסף באוצריא לגרסה %1 (מומ�
 he.FinishInstall=ההתקנה הסתיימה.%n%nעם הסימון שלמטה אוצריא תיפתח ותציע להתקין את התוסף. בחלון ההתקנה של אוצריא הדליקו את "הוספת רכיבים לתוכנה", ולחצו "התקן".%n%nהתוסף נמצא בכלים ← תוספים ← "בר אילן". בפעם הראשונה הוא יקרא את רשימת הספרים מבר אילן; זה לוקח כחמש דקות, פעם אחת.
 he.FinishUpdate=ההתקנה הסתיימה.%n%nעם הסימון שלמטה אוצריא תיפתח ותציע לעדכן את התוסף. ההרשאות שכבר הדלקתם נשמרות; אם עוד לא הדלקתם את "הוספת רכיבים לתוכנה": הגדרות אוצריא ← כלים ← "בר אילן".
 he.FinishCurrent=ההתקנה הסתיימה. התוסף באוצריא כבר מותקן ומעודכן (גרסה %1).%n%nהתוסף נמצא בכלים ← תוספים ← "בר אילן". אם עוד לא עשיתם זאת: הגדרות אוצריא ← כלים ← "בר אילן", והדליקו את "הוספת רכיבים לתוכנה".
+he.OtzariaTooOld=ההתקנה הסתיימה, והשירות פועל.%n%nגרסה %1 של התוסף דורשת אוצריא %2 ומעלה, והאוצריא שבמחשב ישנה ממנה. תוסף שכבר מותקן באוצריא ממשיך לעבוד עם השירות.%n%nאחרי שאוצריא תתעדכן, התקינו את התוסף מחנות התוספים של אוצריא, או מהקובץ הזה:%n%3
 he.OtzariaNotFound=לא נמצאה אוצריא במחשב, ולכן התוסף לא הותקן בה.%n%nאחרי שתתקינו את אוצריא, פתחו את הקובץ הזה כדי להתקין את התוסף:%n%1
 
 [Files]
@@ -213,10 +218,47 @@ begin
   end;
 end;
 
+{ "0.9.98" -> 0, 9, 98: חלק אחד בכל קריאה, מהתחלת המחרוזת. }
+function TakeVersionPart(var Text: String): Integer;
+var
+  At: Integer;
+begin
+  At := Pos('.', Text);
+  if At = 0 then
+  begin
+    Result := StrToIntDef(Text, 0);
+    Text := '';
+  end
+  else
+  begin
+    Result := StrToIntDef(Copy(Text, 1, At - 1), 0);
+    Delete(Text, 1, At);
+  end;
+end;
+
+{ אוצריא ישנה מ-minAppVersion: התקנת התוסף הייתה נגמרת בשגיאה של אוצריא.
+  רק major.minor.patch: החלק הרביעי של גרסת הקובץ הוא מספר בנייה שנחתך
+  ל-16 סיביות. גרסה שאינה נקראת (בנייה מקומית) אינה "ישנה". }
+function OtzariaTooOld(): Boolean;
+var
+  MS, LS: Cardinal;
+  Need: String;
+  Have, Wanted: Int64;
+begin
+  Result := False;
+  if not FindOtzaria() or not GetVersionNumbers(OtzariaPath, MS, LS) then Exit;
+  Have := ((Int64(MS shr 16) * 65536) + (MS and $FFFF)) * 65536 + (LS shr 16);
+  Need := '{#MinAppVersion}';
+  Wanted := TakeVersionPart(Need) * 65536;
+  Wanted := (Wanted + TakeVersionPart(Need)) * 65536;
+  Wanted := Wanted + TakeVersionPart(Need);
+  Result := Have < Wanted;
+end;
+
 function PluginNeeded(): Boolean;
 begin
   CheckPlugin();
-  Result := not PluginCurrent;
+  Result := not PluginCurrent and not OtzariaTooOld();
 end;
 
 function PluginRunLabel(Param: String): String;
@@ -239,6 +281,8 @@ begin
   CheckPlugin();
   if PluginCurrent then
     Text := FmtMessage(CustomMessage('FinishCurrent'), ['{#AppVersion}'])
+  else if OtzariaTooOld() then
+    Text := FmtMessage(CustomMessage('OtzariaTooOld'), ['{#AppVersion}', '{#MinAppVersion}', ExpandConstant('{app}\{#PluginFile}')])
   else if PluginFound then
     Text := FmtMessage(CustomMessage('FinishUpdate'), [''])
   else
