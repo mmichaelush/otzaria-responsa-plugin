@@ -20,7 +20,14 @@ class ResponsaAuthorTableReader {
     ResponsaInstallation installation,
   ) {
     final archive = installation.archivePath;
-    return archive == null ? ResponsaAuthorTable.empty : forArchive(archive);
+    if (archive == null) {
+      logLine(
+        'ResponsaAuthorTable: אין ארכיון (FILE00) ל-${installation.installPath}; '
+        'המחברים רק מהביבליוגרפיה',
+      );
+      return ResponsaAuthorTable.empty;
+    }
+    return forArchive(archive);
   }
 
   @visibleForTesting

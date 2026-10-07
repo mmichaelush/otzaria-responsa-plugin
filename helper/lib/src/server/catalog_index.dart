@@ -131,9 +131,46 @@ class _Entry {
   /// אותיות השימוש שמתחברות לתחילת מילה (`והרשב"א`, `לרמב"ם`).
   static const String _prefixLetters = 'והבכלמש';
 
+  /// תארים שמקלידים לפני שם (`הרב עובדיה יוסף`), כשבבר אילן המחבר רשום
+  /// `ר' עובדיה יוסף` או בלי תואר. מילה שלא נמצאה פוסלת ספר, ולכן תואר
+  /// שאינו בספר אינו נספר, כל עוד יש בשאילתה מילה אחרת.
+  static final Set<String> _honorifics = {
+    for (final word in const [
+      'הרב',
+      'הרבנים',
+      'רבי',
+      'ר\'',
+      'רבנו',
+      'רבינו',
+      'מרן',
+      'הגאון',
+      'הגה"ק',
+      'הרה"ג',
+      'הרה"ק',
+      'מהר"ר',
+      'מוהר"ר',
+      'אדמו"ר',
+      'האדמו"ר',
+      'הקדוש',
+      'זצ"ל',
+      'זצוק"ל',
+      'זיע"א',
+      'ז"ל',
+      'שליט"א',
+    ])
+      ResponsaHebrew.spellingKey(word),
+  };
+
   /// מילה ששאילתה מתחילה אותה, ולא תת-מחרוזת בכל מקום: `שת` (מ"שו"ת") אסור
-  /// שיתאים ל"החדשות". מילה שמתחילה באות שימוש נבדקת גם בלעדיה.
-  static bool _matches(List<String> words, String token) {
+  /// שיתאים ל"החדשות". מילה שמתחילה באות שימוש נבדקת גם בלעדיה, וכך גם
+  /// שאילתה שמתחילה בה' הידיעה (`החיד"א`, `הרמב"ם`), כשהשם רשום בלעדיה.
+  static bool _matches(List<String> words, String token) =>
+      _startsAny(words, token) ||
+      (token.length > 3 &&
+          token.startsWith('ה') &&
+          _startsAny(words, token.substring(1)));
+
+  static bool _startsAny(List<String> words, String token) {
     for (final word in words) {
       if (word.startsWith(token)) return true;
       if (word.length > token.length &&
@@ -147,22 +184,30 @@ class _Entry {
 
   /// `null` = לא מתאים. דרגה נמוכה = התאמה טובה יותר: כותרת זהה, כותרת
   /// שמתחילה בשאילתה, כל המילים בכותרת, בכותרת ובמחבר, ולבסוף בנתיב.
+  /// תואר שלא נמצא (`_honorifics`) אינו נספר.
   int? rank(List<String> tokens, String whole) {
     var inTitle = 0;
     var inAuthor = 0;
+    var unmatchedHonorifics = 0;
     for (final token in tokens) {
       if (_matches(titleWords, token)) {
         inTitle++;
       } else if (_matches(authorWords, token)) {
         inAuthor++;
-      } else if (!_matches(pathWords, token)) {
+      } else if (_matches(pathWords, token)) {
+        continue;
+      } else if (_honorifics.contains(token)) {
+        unmatchedHonorifics++;
+      } else {
         return null;
       }
     }
+    final counted = tokens.length - unmatchedHonorifics;
+    if (counted == 0) return null;
     if (title == whole) return 0;
     if (title.startsWith(whole)) return 1;
-    if (inTitle == tokens.length) return 2;
-    if (inTitle + inAuthor == tokens.length) return 3;
+    if (inTitle == counted) return 2;
+    if (inTitle + inAuthor == counted) return 3;
     return 4;
   }
 }

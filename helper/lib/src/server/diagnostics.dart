@@ -123,7 +123,10 @@ class HelperDiagnostics {
         'edition ${info.sourceVersion ?? '?'}, '
         'schema ${info.schemaVersion ?? '?'}'
         '${info.isOutdated ? ' (outdated)' : ''}, '
-        '${info.nodeCount ?? '?'} rows, read ${info.builtAt ?? '?'}';
+        '${info.nodeCount ?? '?'} rows, read ${info.builtAt ?? '?'}, '
+        // מחבר חסר = חיפוש לפי מחבר לא ימצא את הספר. בלי ארכיון אין טבלה.
+        'author for ${info.fingerprint['books_with_author'] ?? '?'} books '
+        '(author table: ${info.fingerprint['author_table_entries'] ?? '?'})';
   }
 
   static String _logTail() {

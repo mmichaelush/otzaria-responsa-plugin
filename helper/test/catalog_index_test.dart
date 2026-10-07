@@ -140,6 +140,37 @@ void main() {
     expect(index.search('שבא'), isEmpty);
   });
 
+  group('חיפוש מחבר כפי שמקלידים אותו', () {
+    final authors = CatalogIndex([
+      book('10', 'יביע אומר', author: "ר' עובדיה יוסף"),
+      book('11', 'אגרות משה', author: "ר' משה פיינשטיין"),
+      book('12', 'ברכי יוסף', author: "ר' חיים יוסף דוד אזולאי (חיד\"א)"),
+      book('13', 'רב פעלים', author: "ר' יוסף חיים"),
+      book('14', 'משנה תורה', author: 'רמב"ם'),
+    ]);
+    List<String> found(String query) => [
+      for (final hit in authors.search(query)) hit.key,
+    ];
+
+    test('תואר לפני השם אינו פוסל', () {
+      expect(found('הרב עובדיה יוסף'), ['10']);
+      expect(found('הגאון רבי משה פיינשטיין זצ"ל'), ['11']);
+      expect(found('מרן הרב עובדיה'), ['10']);
+    });
+
+    test('ה\' הידיעה לפני שם שרשום בלעדיה', () {
+      expect(found('החיד"א'), ['12']);
+      expect(found('הרמב"ם'), ['14']);
+    });
+
+    test('תואר שהוא חלק מהכותרת עדיין נספר; תואר לבדו אינו מוצא הכול', () {
+      expect(found('רב פעלים'), ['13']);
+      expect(found('הרב'), isEmpty);
+      // מילה אחרת שלא נמצאה עדיין פוסלת.
+      expect(found('הרב עובדיה כהן'), isEmpty);
+    });
+  });
+
   test('חיפוש לפי מפתח', () {
     expect(index.byKey('4')?.title, 'משנה ברורה');
     expect(index.byKey('404'), isNull);
