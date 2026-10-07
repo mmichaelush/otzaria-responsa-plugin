@@ -28,7 +28,13 @@
     // כמו HelperService.normalizeReference, כדי ש"אחרונים" לא יכיל כפילויות
     // שנראות זהות (סימני כיווניות מהדבקה).
     return String(value || '')
-      .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
+      // אות עם ניקוד בתו אחד (`שׁ`, `בּ`) ← האות וסימניה; CGJ ושאר הבלתי-נראים
+      // נמחקים בלי רווח (CGJ בא בתנ"ך באמצע מילה). כמו בשירות.
+      .replace(/[\uFB1D-\uFB4F]/g, (char) => char.normalize('NFKD'))
+      .replace(/\u05F0/g, 'וו')
+      .replace(/\u05F1/g, 'וי')
+      .replace(/\u05F2/g, 'יי')
+      .replace(/[\u00AD\u034F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, '')
       .replace(/[\u0591-\u05C7]/g, (char) => (char === '\u05BE' ? ' ' : ''))
       .replace(/[\u05F3\u2018\u2019\u00B4`]/g, "'")
       .replace(/[\u05F4\u201C\u201D]|''/g, '"')

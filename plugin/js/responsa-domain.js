@@ -529,11 +529,15 @@
     const query = (result && result.query) || '';
     const note = result && result.truncated ? ' ' + t('החיפוש כלל רק את תחילת הטקסט שסומן.') : '';
     // שאילתה מתקדמת מוצגת בדיאלוג עצמו; ציטוט שלה בתוך משפט היה מתערבב
-    // (`8: (...)` בין מילים עבריות).
-    if (result && result.advanced) {
+    // (`8: (...)` בין מילים עבריות). כך גם משפט של ניסוח חופשי, שכבר בשדה.
+    if (result && (result.advanced || result.freeForm)) {
       if (result.outcome === 'found') {
-        return typeof result.count === 'number'
-          ? t('בר אילן מצא {count} תוצאות. הן פתוחות בחלון של בר אילן.', { count: formatCount(result.count) })
+        // בחלון התוצאות של ניסוח חופשי אין "נמצאו N", ולכן גם אין `count`.
+        if (typeof result.count === 'number' && result.count > 0) {
+          return t('בר אילן מצא {count} תוצאות. הן פתוחות בחלון של בר אילן.', { count: formatCount(result.count) });
+        }
+        return result.freeForm
+          ? t('בר אילן מצא מקורות לפי הניסוח. הם פתוחים בחלון של בר אילן.')
           : t('התוצאות פתוחות בחלון של בר אילן.');
       }
       if (result.outcome === 'asked') {

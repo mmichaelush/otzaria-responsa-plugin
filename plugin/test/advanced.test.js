@@ -520,3 +520,87 @@ test('fromOtzariaSearch: שאילתה ארוכה מ-300 תווים מאבדת ח
   assert.equal(mapped.approximate, true);
   assert.ok(mapped.missing.length > 0);
 });
+
+test('simpleWords: ניקוד וטעמים עם CGJ, ואותיות עם ניקוד בתו אחד — המילים שלמות', () => {
+  assert.deepEqual(Advanced.simpleWords('בְּ\u05AD\u034Fרֵאשִׁ֖ית בָּרָ֣א\u05C3'), ['בראשית', 'ברא']);
+  assert.deepEqual(Advanced.simpleWords('\uFB31רא\uFB2Aית \uFB4Fהים'), ['בראשית', 'אלהים']);
+});
+
+// ------------------------------------------------------ ניסוח חופשי
+
+const free = (text, overrides) => query({ mode: 'free', freeText: text, ...overrides });
+
+test('ניסוח חופשי: משפט עם רווחים ופיסוק; ניקוד, לועזית, ספרות וסימני חיפוש נמחקים', () => {
+  assert.equal(buildQuery(free('  הַאִם   מותר לנסוע\nבאופניים בשבת ?')), 'האם מותר לנסוע באופניים בשבת?');
+  assert.equal(buildQuery(free('״מוקצה״ (לדעת הרמב״ם), ב-bike 12: #נר*!')), 'מוקצה (לדעת הרמב"ם), ב: נר!');
+  // אותיות עם ניקוד בתו אחד ו-CGJ, כמו בחיפוש רגיל.
+  assert.equal(buildQuery(free('\uFB31רא\uFB2Aית ב\u05BC\u05B8\u034Fר\u05B8א\u05C3')), 'בראשית ברא');
+  assert.equal(buildQuery(free('?! 123')), '');
+});
+
+test('ניסוח חופשי: בדיקה — צריך מילה עברית, ועד 300 תווים', () => {
+  assert.match(validate(free('')).message, /שאלה או משפט בעברית/);
+  assert.match(validate(free('why? 42')).message, /שאלה או משפט בעברית/);
+  assert.equal(validate(free('האם מותר לנסוע באופניים בשבת')), null);
+  // `normalize` כבר חותך ל-300; כאן מודל שלא עבר בו.
+  assert.match(validate({ ...free('שבת'), freeText: 'שבת '.repeat(80) }).message, /300/);
+  assert.match(validate(free('שבת', { scope: { mode: 'pick', items: [] } })).message, /קטגוריה או ספר/);
+});
+
+test('ניסוח חופשי: גוף הבקשה — freeForm בלי advanced, ובלי ראשי תיבות וצורות', () => {
+  const options = { abbreviations: true, showForms: true };
+  assert.deepEqual(toRequest(free(' האם  מותר לנסוע? ', { options })), {
+    q: 'האם מותר לנסוע?',
+    freeForm: true,
+    options: { allDatabases: true },
+  });
+  assert.deepEqual(toRequest(free('שבת', { scope: { mode: 'current', items: [] } })).options, { allDatabases: false });
+  const picked = toRequest(
+    free('שבת', { scope: { mode: 'pick', items: [{ type: 'book', key: '90', name: 'אבני נזר', path: 'שו"ת' }] } }),
+  );
+  assert.deepEqual(picked, { q: 'שבת', freeForm: true, options: {}, scope: { paths: [], books: ['90'] } });
+  assert.equal('advanced' in picked, false);
+});
+
+test('ניסוח חופשי: "מה יחופש" — המשפט והמקום, בלי אפשרויות', () => {
+  const q = free('האם מותר לנסוע באופניים בשבת', { options: { abbreviations: true, showForms: true } });
+  assert.deepEqual(Advanced.describe(q, 'בכל הספרים.'), [
+    'בר אילן יחפש מקורות לפי הניסוח: "האם מותר לנסוע באופניים בשבת"',
+    'בכל הספרים.',
+  ]);
+  assert.deepEqual(Advanced.describe(free('123'), 'בכל הספרים.'), ['בכל הספרים.']);
+});
+
+test('ניסוח חופשי: נשמר ונטען; מודל ישן בלי freeText נטען כמו קודם', () => {
+  const saved = normalize(JSON.parse(JSON.stringify(free('שאלה', { scope: { mode: 'current', items: [] } }))));
+  assert.equal(saved.mode, 'free');
+  assert.equal(saved.freeText, 'שאלה');
+  assert.equal(normalize({ mode: 'free', freeText: 'א'.repeat(400) }).freeText.length, 300);
+  assert.equal(normalize({ mode: 'free', freeText: 7 }).freeText, '');
+  // שמור מלפני ניסוח חופשי.
+  const old = normalize({ mode: 'simple', simpleText: 'נר שבת', options: { abbreviations: true, showForms: false } });
+  assert.equal(old.mode, 'simple');
+  assert.equal(old.freeText, '');
+  assert.equal(normalize({ manual: true, manualText: 'נר' }).mode, 'manual');
+  // מעבר בין האופנים שומר את מה שנכתב בכל אחד.
+  const back = Advanced.setMode(Advanced.setMode(free('שאלה', { simpleText: 'נר' }), 'simple'), 'free');
+  assert.equal(back.freeText, 'שאלה');
+  assert.equal(back.simpleText, 'נר');
+});
+
+test('ניסוח חופשי: שירות שאינו מכיר אותו — הערה; שאר האופנים אינם תלויים בו', () => {
+  const old = (name) => name === 'advancedSearch';
+  const fresh = (name) => name === 'advancedSearch' || name === 'freeFormSearch';
+  assert.equal(Advanced.capability(free('שבת')), 'freeFormSearch');
+  assert.equal(Advanced.capability(query({ mode: 'simple' })), 'advancedSearch');
+  assert.match(Advanced.serviceNote(free('שבת'), old), /ישן ואינו מכיר את החיפוש הזה/);
+  assert.equal(Advanced.serviceNote(free('שבת'), fresh), null);
+  for (const mode of ['simple', 'builder', 'manual']) assert.equal(Advanced.serviceNote(query({ mode }), old), null);
+});
+
+test('ניסוח חופשי: חיפוש מדיאלוג החיפוש של אוצריא עובר לחיפוש רגיל או לבונה, לא לניסוח חופשי', () => {
+  const current = free('שאלה');
+  assert.equal(Advanced.fromOtzariaSearch(current, { query: 'נר שבת', mode: 'exact' }).query.mode, 'simple');
+  const spaced = Advanced.fromOtzariaSearch(current, { query: 'נר שבת', mode: 'advanced', distance: 3 });
+  assert.equal(spaced.query.mode, 'builder');
+});

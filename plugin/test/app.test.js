@@ -1172,6 +1172,94 @@ test('חיפוש מתקדם: נשמר אחרי הפסקה בהקלדה, ונטע
   second.app.suspend();
 });
 
+const freeFormHealth = reply(200, {
+  ok: true,
+  service: 'otzaria-responsa',
+  apiVersion: 1,
+  capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'advancedSearch', 'freeFormSearch'],
+});
+
+test('ניסוח חופשי: המשפט נשלח עם freeForm, נרשם ביומן, והתשובה מוצגת', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/health': freeFormHealth,
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 64, query: 'האם מותר לנסוע באופניים בשבת?', freeForm: true }),
+  });
+  app.actions.selectTab('text');
+  app.actions.advancedMode('free');
+  assert.equal(app.model.advanced.query.mode, 'free');
+  app.advancedSet({ freeText: '  הַאִם מותר   לנסוע באופניים בשבת ?' }, { light: true });
+  await app.runAdvanced();
+  const sent = requests(bridge, '/text/search')[0].body;
+  assert.deepEqual(sent, { q: 'האם מותר לנסוע באופניים בשבת?', freeForm: true, options: { allDatabases: true } });
+  assert.equal(app.model.advanced.status.kind, 'success');
+  assert.equal(app.model.advanced.status.text, 'בר אילן מצא 64 תוצאות. הן פתוחות בחלון של בר אילן.');
+  assert.match(view.announced.at(-1), /64/);
+  assert.ok(app.log.entries('info').some((entry) => entry.message === 'חיפוש בטקסט (free): האם מותר לנסוע באופניים בשבת?'));
+  app.suspend();
+});
+
+test('ניסוח חופשי: נמצא בלי מספר (כך בחלון של בר אילן) — הודעת הצלחה בלי מספר', async () => {
+  let answer = { ok: true, outcome: 'found', query: 'האם מותר', freeForm: true, broughtToFront: true };
+  const { app } = await bootAdvanced({ '/health': freeFormHealth, '/text/search': () => reply(200, answer) });
+  app.actions.advancedMode('free');
+  app.advancedSet({ freeText: 'האם מותר' });
+  for (const count of [undefined, 0, null]) {
+    answer = { ...answer, count };
+    await app.runAdvanced();
+    assert.equal(app.model.advanced.status.kind, 'success');
+    assert.equal(app.model.advanced.status.text, 'בר אילן מצא מקורות לפי הניסוח. הם פתוחים בחלון של בר אילן.');
+  }
+  app.suspend();
+});
+
+test('ניסוח חופשי מול שירות ישן: אין בקשה; שאר סוגי החיפוש ממשיכים לעבוד', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'נר', advanced: true }),
+  });
+  app.actions.selectTab('text');
+  app.actions.advancedMode('free');
+  app.advancedSet({ freeText: 'האם מותר לנסוע באופניים בשבת' });
+  await app.runAdvanced();
+  assert.equal(requests(bridge, '/text/search').length, 0);
+  assert.equal(app.model.advanced.status, null);
+  assert.equal(app.model.advanced.problem, null);
+  app.actions.advancedMode('simple');
+  app.advancedSet({ simpleText: 'נר' });
+  await app.runAdvanced();
+  assert.equal(requests(bridge, '/text/search').length, 1);
+  app.suspend();
+});
+
+test('ניסוח חופשי: חיפוש שמור מלפניו נטען כמו קודם, וניסוח חופשי שמור נטען כמו שהוא', async () => {
+  for (const [saved, mode] of [
+    [{ mode: 'simple', simpleText: 'נר שבת', options: { abbreviations: true, showForms: false } }, 'simple'],
+    [{ manual: true, manualText: 'נר [1:4] שבת' }, 'manual'],
+    [{ mode: 'free', freeText: 'האם מותר', scope: { mode: 'current', items: [] } }, 'free'],
+  ]) {
+    const context = setup({ '/health': freeFormHealth, '/status': reply(200, ready) });
+    context.bridge.methods['storage.get'] = ({ key }) => (key === 'responsa_advanced_query' ? saved : null);
+    await context.app.boot(windows);
+    const query = context.app.model.advanced.query;
+    assert.equal(query.mode, mode);
+    assert.equal(query.freeText, saved.freeText || '');
+    if (saved.simpleText) assert.equal(query.simpleText, saved.simpleText);
+    context.app.suspend();
+  }
+});
+
+test('ניסוח חופשי: חיפוש מדיאלוג החיפוש של אוצריא עובר לחיפוש רגיל', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/health': freeFormHealth,
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 5, query: 'נר שבת', advanced: true }),
+  });
+  app.actions.advancedMode('free');
+  app.advancedSet({ freeText: 'שאלה' });
+  await app.searchFromOtzaria({ query: 'נר שבת', mode: 'exact', distance: 0 });
+  assert.equal(app.model.advanced.query.mode, 'simple');
+  assert.deepEqual(requests(bridge, '/text/search')[0].body.advanced, true);
+  app.suspend();
+});
+
 test('פתיחת בר אילן מהפס העליון: הצלחה בשקט, חלון מאחור או כשל — הודעה של אוצריא', async () => {
   let answer = reply(200, { ok: true, broughtToFront: true });
   const { app, bridge } = await bootAdvanced({ '/responsa/show': () => answer });

@@ -850,8 +850,8 @@
     }
 
     /**
-     * חיפוש רגיל, בונה, או תחביר של בר אילן. בלחיצה הפוקוס עובר לשדה
-     * הראשון; בחצים הוא נשאר על הבקר, כדי שאפשר יהיה לחזור.
+     * חיפוש רגיל, בונה, תחביר של בר אילן או ניסוח חופשי. בלחיצה הפוקוס עובר
+     * לשדה הראשון; בחצים הוא נשאר על הבקר, כדי שאפשר יהיה לחזור.
      */
     advancedMode(mode, how) {
       const query = this.model.advanced.query;
@@ -938,6 +938,8 @@
     async _runAdvanced() {
       const state = this.model.advanced;
       if (!Domain.serviceCan(this.model.health, 'advancedSearch')) return;
+      // שירות ישן מניסוח חופשי: הלשונית כבר מסבירה, והכפתור כבוי.
+      if (Advanced.serviceNote(state.query, (name) => Domain.serviceCan(this.model.health, name))) return;
       const query = Advanced.withAvailableScope(state.query, Domain.catalogReady(this.model.status));
       const problem = Advanced.validate(query);
       state.problem = problem;

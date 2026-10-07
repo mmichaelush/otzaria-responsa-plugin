@@ -160,3 +160,7 @@ test('headingsAt: לכל רמה הכותרת האחרונה שלפני השור�
   assert.equal(Locate.headingsAt([], 3), null);
   assert.equal(Locate.headingsAt(null, 3), null);
 });
+
+test('normalize: CGJ ואותיות עם ניקוד בתו אחד', () => {
+  assert.equal(Locate.normalize('\uFB31ְּ\u034Fרֵא\uFB2Aִית א'), 'בראשית א');
+});

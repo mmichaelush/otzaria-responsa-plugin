@@ -2542,6 +2542,8 @@ span.breadcrumb {
 }
 
 .manual-input {
+  /* בלי הרווח של שורת טקסט מתחתיו, כמו שדה החיפוש הרגיל. */
+  display: block;
   width: 100%;
   padding: var(--space-3);
   font-size: 1.1em;

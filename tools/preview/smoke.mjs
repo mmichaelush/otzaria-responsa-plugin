@@ -24,6 +24,8 @@ const scenarios = [
   'scenario=ready&page=text&adv=words',
   'scenario=ready&page=text&adv=scope',
   'scenario=ready&page=text&adv=manual&run=1',
+  'scenario=ready&page=text&adv=free&run=1',
+  'scenario=ready&page=text&adv=free&nofree=1',
   'scenario=ready&page=text&oldservice=1',
   'scenario=needsCatalog&page=text&adv=scope',
   'scenario=serviceMissing&page=text',

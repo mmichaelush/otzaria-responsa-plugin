@@ -582,6 +582,19 @@
     'סוג החיפוש': 'Search type',
     'חיפוש רגיל': 'Regular search',
     'חיפוש מתקדם': 'Advanced search',
+    // ---- ניסוח חופשי
+    'ניסוח חופשי': 'Free wording',
+    'למשל: האם מותר לנסוע באופניים בשבת': 'e.g. האם מותר לנסוע באופניים בשבת',
+    'שאלה או משפט לחיפוש בבר אילן': 'A question or sentence to search in Bar-Ilan',
+    'כותבים שאלה או משפט במילים שלכם, ובר אילן מחפש מקורות שעוסקים בזה.':
+      'Write a question or sentence in your own words, and Bar-Ilan looks for sources that deal with it.',
+    'כותבים שאלה או משפט, וכאן יוסבר מה יחופש.': 'Write a question or sentence, and this will explain what will be searched.',
+    'בר אילן יחפש מקורות לפי הניסוח: "{text}"': 'Bar-Ilan will look for sources by the wording: "{text}"',
+    'כתבו שאלה או משפט בעברית.': 'Write a question or sentence in Hebrew.',
+    'בר אילן מצא מקורות לפי הניסוח. הם פתוחים בחלון של בר אילן.':
+      'Bar-Ilan found sources by the wording. They are open in the Bar-Ilan window.',
+    'שירות בר אילן שבמחשב ישן ואינו מכיר את החיפוש הזה. כדאי להוריד את הגרסה החדשה.':
+      'The Bar-Ilan service on this computer is old and does not support this search. Download the new version.',
     'חיפוש בטקסט': 'Text search',
     'החיפוש רץ בבר אילן, והתוצאות נפתחות בחלון שלו.': 'The search runs in Bar-Ilan, and the results open in its window.',
     'כתבו מילה אחת או יותר בעברית לחיפוש.': 'Write one or more Hebrew words to search.',

@@ -1,6 +1,6 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
 // המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|settings|help|about&tab=...
-// &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&service=<גרסה>&waiting=1&notice=1
+// &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&nofree=1&service=<גרסה>&waiting=1&notice=1
 // &noicons=1&scale=1.3&font=Shofar`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
 (function () {
@@ -155,6 +155,8 @@
                     'autoStart',
                     'diagnostics',
                     'showForms',
+                    // `nofree=1`: שירות שמכיר את החיפוש המתקדם, אבל לא ניסוח חופשי.
+                    ...(params.get('nofree') ? [] : ['freeFormSearch']),
                   ],
             };
       case '/status':
@@ -179,7 +181,10 @@
       case '/responsa/show':
         return { ok: true, broughtToFront: true };
       case '/text/search':
-        return { ok: true, outcome: 'found', count: 191, query: body.q, advanced: body.advanced, broughtToFront: true };
+        return body.freeForm
+          ? // בחלון התוצאות של ניסוח חופשי אין מספר, ולכן גם השירות אינו מחזיר אותו.
+            { ok: true, outcome: 'found', query: body.q, freeForm: true, broughtToFront: true }
+          : { ok: true, outcome: 'found', count: 191, query: body.q, advanced: body.advanced, broughtToFront: true };
       // "בראשית ב ג": כמה מקורות לבחירה, כמו בבר אילן; כל השאר נפתח מיד.
       case '/reference/open':
         return body.index === undefined && String(body.ref).startsWith('בראשית')
@@ -255,6 +260,7 @@
       },
     },
     manual: { mode: 'manual', manualText: '8: ($שומר/%מצא) #(אכל/גנב/מכר) *(פקדון/אבידה)*' },
+    free: { mode: 'free', freeText: 'האם מותר לנסוע באופניים בשבת?', options: { abbreviations: true, showForms: false } },
   }[params.get('adv')];
   if (advanced) storage.responsa_advanced_query = advanced;
   window.Otzaria = {

@@ -1,8 +1,9 @@
 // החיפוש בטקסט: מודל, בניית השאילתה בתחביר של בר אילן, הסבר במילים, בדיקה
 // ודוגמאות. לוגיקה טהורה בלבד; הלשונית נבנית ב-responsa-advanced-ui.js.
 //
-// שלושה אופנים: חיפוש רגיל (שדה אחד, המילים צמודות), בונה (מילה בכל שדה,
-// ולכל מילה איך לחפש אותה ומה המרחק לבאה), ותחביר של בר אילן שנכתב ביד.
+// ארבעה אופנים: חיפוש רגיל (שדה אחד, המילים צמודות), בונה (מילה בכל שדה,
+// ולכל מילה איך לחפש אותה ומה המרחק לבאה), תחביר של בר אילן שנכתב ביד,
+// וניסוח חופשי (שאלה או משפט, ל"חיפוש בניסוח חופשי" של בר אילן).
 //
 // התחביר נמדד מול "חיפוש מתקדם" של בר אילן (גרסה 25), והסימנים נבנו על ידי
 // הכפתורים של בר אילן עצמו: `#נר` אותיות שימוש, `נר#` סיומות דקדוקיות, `!`
@@ -47,7 +48,7 @@
 
   const Scope = Object.freeze({ all: 'all', current: 'current', pick: 'pick' });
 
-  const Mode = Object.freeze({ simple: 'simple', builder: 'builder', manual: 'manual' });
+  const Mode = Object.freeze({ simple: 'simple', builder: 'builder', manual: 'manual', free: 'free' });
 
   const MAX_TERMS = 8;
   const MAX_ALTERNATIVES = 6;
@@ -62,6 +63,8 @@
   const LETTER = /[א-ת]/;
   /** כל מה שהשירות מקבל בשאילתה. */
   const QUERY = /^[א-ת0-9"' #*!+$\-%^<>{}?~@()/[\]:]+$/;
+  /** הפיסוק שנשאר במשפט של ניסוח חופשי. */
+  const PUNCTUATION = /([.,;:?!()])/;
 
   function newTerm(word) {
     return { words: [word || ''], form: 'exact', exclude: false };
@@ -80,6 +83,7 @@
       anyOrder: false,
       within: 10,
       manualText: '',
+      freeText: '',
       scope: { mode: Scope.all, items: [] },
       options: { abbreviations: false, showForms: false },
     };
@@ -125,6 +129,7 @@
     result.within = clampInt(value.within, 1, MAX_DISTANCE, 10);
     result.manualText = text(value.manualText, MAX_QUERY_LENGTH);
     result.simpleText = text(value.simpleText, MAX_QUERY_LENGTH);
+    result.freeText = text(value.freeText, MAX_QUERY_LENGTH);
     // שמור מגרסה 0.4: `manual: true`, או בונה שכבר מולא.
     result.mode = Object.values(Mode).includes(value.mode)
       ? value.mode
@@ -185,13 +190,37 @@
    */
   function simpleWords(value) {
     return String(value || '')
-      .replace(/[\u0591-\u05C7]/g, (char) => (char === '\u05BE' ? ' ' : ''))
+      // אות עם ניקוד בתו אחד (`שׁ`, `בּ`) ← האות וסימניה; CGJ ושאר הבלתי-נראים
+      // נמחקים בלי רווח (CGJ בא בתנ"ך באמצע מילה). כמו בשירות.
+      .replace(/[\uFB1D-\uFB4F]/g, (char) => char.normalize('NFKD'))
+      .replace(/\u05F0/g, 'וו')
+      .replace(/\u05F1/g, 'וי')
+      .replace(/\u05F2/g, 'יי')
+      .replace(/[\u00AD\u034F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, '')
+      .replace(/[\u0591-\u05C7]/g, (char) => ('\u05BE\u05C0\u05C3'.includes(char) ? ' ' : ''))
       .replace(/[\u05F4\u201C\u201D]/g, '"')
       .replace(/[\u05F3\u2018\u2019]/g, "'")
       .replace(/[^א-ת"']+/g, ' ')
       .split(' ')
       .map((word) => word.replace(/^["']+|"+$/g, ''))
       .filter((word) => LETTER.test(word));
+  }
+
+  /**
+   * המשפט של ניסוח חופשי: כל מילה מנוקה כמו בחיפוש רגיל (`simpleWords`),
+   * והפיסוק הבסיסי נשאר במקומו. לועזית, ספרות וסימני חיפוש נמחקים. בלי
+   * מילה עברית — ריק.
+   */
+  function freeText(value) {
+    const sentence = String(value || '')
+      .split(PUNCTUATION)
+      .map((part, i) => (i % 2 ? part : ' ' + simpleWords(part).join(' ') + ' '))
+      .join('')
+      .replace(/\s+/g, ' ')
+      .replace(/ ([.,;:?!)])/g, '$1')
+      .replace(/\( /g, '(')
+      .trim();
+    return LETTER.test(sentence) ? sentence : '';
   }
 
   // ------------------------------------------------------ מדיאלוג החיפוש של אוצריא
@@ -450,6 +479,7 @@
   function buildQuery(query) {
     if (query.mode === Mode.simple) return simpleWords(query.simpleText).join(' ');
     if (query.mode === Mode.manual) return query.manualText.replace(/\s+/g, ' ').trim();
+    if (query.mode === Mode.free) return freeText(query.freeText);
     const parts = [];
     query.terms.forEach((term, i) => {
       const value = termText(term);
@@ -483,6 +513,12 @@
         return { message: t('כתבו מילה אחת או יותר בעברית לחיפוש.') };
       }
       if (buildQuery(query).length > MAX_QUERY_LENGTH) {
+        return { message: t('הטקסט ארוך מדי. אפשר עד {max} תווים.', { max: MAX_QUERY_LENGTH }) };
+      }
+    } else if (query.mode === Mode.free) {
+      const value = buildQuery(query);
+      if (!LETTER.test(value)) return { message: t('כתבו שאלה או משפט בעברית.') };
+      if (value.length > MAX_QUERY_LENGTH) {
         return { message: t('הטקסט ארוך מדי. אפשר עד {max} תווים.', { max: MAX_QUERY_LENGTH }) };
       }
     } else if (query.mode === Mode.manual) {
@@ -540,14 +576,20 @@
     return { ...query, scope: { ...query.scope, mode: Scope.all } };
   }
 
-  /** גוף הבקשה ל-`POST /text/search` (docs/PROTOCOL.md). */
+  /**
+   * גוף הבקשה ל-`POST /text/search` (docs/PROTOCOL.md). ניסוח חופשי נשלח
+   * עם `freeForm` ובלי `advanced`, ובלי ראשי תיבות וצורות: אין להם מקום בו.
+   */
   function toRequest(query) {
-    const options = {
-      abbreviations: query.options.abbreviations,
-      // בחיפוש רגיל אין "ניהול הצורות": המילים נשלחות כפי שנכתבו.
-      showForms: query.mode !== Mode.simple && query.options.showForms,
-    };
-    const body = { q: buildQuery(query), advanced: true, options };
+    const free = query.mode === Mode.free;
+    const options = free
+      ? {}
+      : {
+          abbreviations: query.options.abbreviations,
+          // בחיפוש רגיל אין "ניהול הצורות": המילים נשלחות כפי שנכתבו.
+          showForms: query.mode !== Mode.simple && query.options.showForms,
+        };
+    const body = { q: buildQuery(query), ...(free ? { freeForm: true } : { advanced: true }), options };
     if (query.scope.mode === Scope.all) options.allDatabases = true;
     else if (query.scope.mode === Scope.current) options.allDatabases = false;
     else {
@@ -598,10 +640,17 @@
 
   /**
    * מה יחופש, במשפטים פשוטים, למי שאינו מכיר את התחביר: המילים, המקום
-   * והאפשרויות. בכתיבה ידנית — רק המקום והאפשרויות.
+   * והאפשרויות. בכתיבה ידנית — רק המקום והאפשרויות; בניסוח חופשי — המשפט
+   * והמקום.
    */
   function describe(query, scopeLabel) {
     const lines = [];
+    if (query.mode === Mode.free) {
+      const sentence = freeText(query.freeText);
+      if (sentence) lines.push(t('בר אילן יחפש מקורות לפי הניסוח: "{text}"', { text: sentence }));
+      if (scopeLabel) lines.push(scopeLabel);
+      return lines;
+    }
     if (query.mode === Mode.simple) {
       const words = simpleWords(query.simpleText);
       if (words.length === 1) lines.push(t('מקורות שבהם מופיעה המילה "{word}".', { word: words[0] }));
@@ -670,6 +719,21 @@
     }
     if (mode === Mode.manual && !query.manualText.trim()) next.manualText = buildQuery(query);
     return next;
+  }
+
+  /** היכולת שהשירות צריך כדי לחפש באופן של [query] (`/health`). */
+  function capability(query) {
+    return query.mode === Mode.free ? 'freeFormSearch' : 'advancedSearch';
+  }
+
+  /**
+   * הערה כשהשירות שבמחשב אינו מכיר את האופן שנבחר, או `null`. [can] — שם
+   * יכולת ← האם השירות מכיר אותה (`Domain.serviceCan`). כשאין גם
+   * `advancedSearch`, הלשונית כולה מציגה הערה משלה.
+   */
+  function serviceNote(query, can) {
+    if (capability(query) === 'advancedSearch' || can(capability(query))) return null;
+    return t('שירות בר אילן שבמחשב ישן ואינו מכיר את החיפוש הזה. כדאי להוריד את הגרסה החדשה.');
   }
 
   // ------------------------------------------------------ עריכה
@@ -838,6 +902,7 @@
     emptyQuery,
     normalize,
     simpleWords,
+    freeText,
     buildQuery,
     describe,
     setMode,
@@ -847,6 +912,8 @@
     validate,
     withAvailableScope,
     toRequest,
+    capability,
+    serviceNote,
     addTerm,
     removeTerm,
     updateTerm,

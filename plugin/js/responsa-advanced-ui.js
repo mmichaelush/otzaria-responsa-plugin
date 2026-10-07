@@ -1,7 +1,8 @@
-// לשונית "חיפוש בטקסט": חיפוש רגיל בשדה אחד, וחיפוש מתקדם עם כל האפשרויות
+// לשונית "חיפוש בטקסט": חיפוש רגיל בשדה אחד, חיפוש מתקדם עם כל האפשרויות
 // של "חיפוש מתקדם" בבר אילן בצורה גרפית — מילים וחלופות, צורות, מרחקים,
-// תחום ואפשרויות. בשני האופנים מוסבר במילים מה יחופש. כמו responsa-panels.js:
-// מודל ופעולות נכנסים, אלמנט יוצא, וטקסט רק דרך textContent.
+// תחום ואפשרויות — וניסוח חופשי, שאלה או משפט. בכל האופנים מוסבר במילים מה
+// יחופש. כמו responsa-panels.js: מודל ופעולות נכנסים, אלמנט יוצא, וטקסט רק
+// דרך textContent.
 (function (root) {
   'use strict';
 
@@ -302,6 +303,27 @@
     ];
   }
 
+  /** ניסוח חופשי: שאלה או משפט, ל"חיפוש בניסוח חופשי" של בר אילן. */
+  function freeEditor(state, actions) {
+    const input = el('textarea', {
+      class: 'manual-input',
+      dir: 'rtl',
+      rows: '2',
+      maxlength: String(Advanced.MAX_QUERY_LENGTH),
+      placeholder: t('למשל: האם מותר לנסוע באופניים בשבת'),
+      'aria-label': t('שאלה או משפט לחיפוש בבר אילן'),
+      spellcheck: 'false',
+      dataset: { focusKey: 'adv-free' },
+    });
+    input.value = state.query.freeText;
+    input.addEventListener('input', () => actions.advancedSet({ freeText: input.value }, { light: true }));
+    onEnter(input, () => actions.runAdvanced());
+    return [
+      input,
+      el('p', { class: 'advanced-hint' }, t('כותבים שאלה או משפט במילים שלכם, ובר אילן מחפש מקורות שעוסקים בזה.')),
+    ];
+  }
+
   function wordsSection(state, actions) {
     const query = state.query;
     const Mode = Advanced.Mode;
@@ -311,13 +333,15 @@
       heading(
         t('מה לחפש'),
         query.mode === Mode.builder ? t('מילה בכל שדה. לכל מילה בוחרים איך לחפש אותה, וביניהן — כמה הן רחוקות.') : null,
-        query.mode === Mode.simple ? null : 1,
+        query.mode === Mode.simple || query.mode === Mode.free ? null : 1,
       ),
       query.mode === Mode.simple
         ? simpleEditor(state, actions)
-        : query.mode === Mode.manual
-          ? manualEditor(state, actions)
-          : builder(state, actions),
+        : query.mode === Mode.free
+          ? freeEditor(state, actions)
+          : query.mode === Mode.manual
+            ? manualEditor(state, actions)
+            : builder(state, actions),
     );
   }
 
@@ -534,7 +558,13 @@
       { class: 'summary-lines', 'data-role': 'adv-summary' },
       lines.length
         ? lines.map((line) => el('p', { class: 'summary-line' }, line))
-        : el('p', { class: 'summary-line is-empty' }, t('כותבים מילים, וכאן יוסבר מה יחופש.')),
+        : el(
+            'p',
+            { class: 'summary-line is-empty' },
+            query.mode === Advanced.Mode.free
+              ? t('כותבים שאלה או משפט, וכאן יוסבר מה יחופש.')
+              : t('כותבים מילים, וכאן יוסבר מה יחופש.'),
+          ),
     );
   }
 
@@ -542,7 +572,8 @@
     const state = model.advanced;
     const query = state.query;
     const text = Advanced.buildQuery(query);
-    const advanced = query.mode !== Advanced.Mode.simple;
+    // ניסוח חופשי אינו שאילתה בתחביר של בר אילן.
+    const advanced = query.mode === Advanced.Mode.builder || query.mode === Advanced.Mode.manual;
     return el(
       'section',
       // לא אזור חי: הוא משתנה בכל הקשה, וקורא מסך היה חוזר עליו שוב ושוב.
@@ -605,7 +636,8 @@
     );
   }
 
-  function footer(model, state, actions) {
+  /** [blocked] — השירות אינו מכיר את האופן שנבחר, ואין מה להריץ. */
+  function footer(model, state, actions, blocked) {
     const status = state.status;
     return el(
       'footer',
@@ -629,6 +661,7 @@
           key: 'adv-run',
           busy: state.running,
           busyLabel: t('מחפש…'),
+          disabled: blocked,
         }),
       ),
     );
@@ -640,7 +673,10 @@
     const Mode = Advanced.Mode;
     const supported = Domain.serviceCan(model.health, 'advancedSearch');
     const catalogReady = Domain.catalogReady(model.status);
-    const advanced = state.query.mode !== Mode.simple;
+    const mode = state.query.mode;
+    const advanced = mode === Mode.builder || mode === Mode.manual;
+    // הסגמנט נשאר גלוי גם מול שירות ישן; רק בחירה בו מסבירה שצריך לעדכן.
+    const note = Advanced.serviceNote(state.query, (name) => Domain.serviceCan(model.health, name));
     const body = supported
       ? [
           segmented(
@@ -648,16 +684,28 @@
             [
               { value: Mode.simple, label: t('חיפוש רגיל') },
               { value: Mode.builder, label: t('חיפוש מתקדם') },
+              { value: Mode.free, label: t('ניסוח חופשי') },
             ],
-            advanced ? Mode.builder : Mode.simple,
-            (mode, how) => actions.advancedMode(mode, how),
+            advanced ? Mode.builder : mode,
+            (value, how) => actions.advancedMode(value, how),
             'adv-kind-',
           ),
-          wordsSection(state, actions),
-          scopeSection(state, actions, advanced ? 2 : null, catalogReady),
-          optionsSection(state, actions, advanced ? 3 : null),
-          summaryCard(model, actions),
-          advanced ? guideSection(actions) : null,
+          note
+            ? el(
+                'div',
+                { class: 'notice' },
+                icon('warning_24_regular'),
+                el('p', { class: 'notice-text' }, note),
+                button('tonal', t('הורדת הגרסה החדשה'), actions.download, { key: 'adv-free-download' }),
+              )
+            : [
+                wordsSection(state, actions),
+                scopeSection(state, actions, advanced ? 2 : null, catalogReady),
+                // ראשי תיבות ו"ניהול הצורות" אינם חלק מניסוח חופשי.
+                mode === Mode.free ? null : optionsSection(state, actions, advanced ? 3 : null),
+                summaryCard(model, actions),
+                advanced ? guideSection(actions) : null,
+              ],
         ]
       : el(
           'div',
@@ -680,7 +728,7 @@
         el('p', { class: 'page-lead' }, t('החיפוש רץ בבר אילן, והתוצאות נפתחות בחלון שלו.')),
       ),
       el('div', { class: 'advanced-body' }, body),
-      supported ? footer(model, state, actions) : null,
+      supported ? footer(model, state, actions, Boolean(note)) : null,
     );
   }
 
