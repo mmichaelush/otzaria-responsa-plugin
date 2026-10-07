@@ -55,7 +55,7 @@
     issues: REPOSITORY_URL + '/issues',
     store: 'https://otzaria.org/plugins/6abfbb96f4aadb0d88fd755a',
     /** ההודעה בפורום אוצריא שמציגה את התוסף ומבהירה את מעמדו. */
-    forum: 'https://otzaria.org/forum/post/40010',
+    forum: 'https://otzaria.org/forum/post/40770',
   });
 
   /** כתובת המייל לפניות ולדיווחים, מחוץ לדיווח המובנה של אוצריא. */

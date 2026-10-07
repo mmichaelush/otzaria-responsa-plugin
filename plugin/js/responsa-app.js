@@ -260,14 +260,20 @@
 
     /**
      * `contextMenu.itemClicked`: "איתור המקום בבר אילן" מספר שפתוח באוצריא.
-     * המקום הוא של השורה שסומנה, מתוכן העניינים; בלי ההרשאה לכך — הכותרת
-     * שאוצריא שולחת, של השורה הראשונה במסך.
+     * טקסט מסומן שנראה כמקום (`ב"מ לא, א`) — הוא המקום, כמו "חיפוש בבר
+     * אילן" שמחפש את הטקסט המסומן. אחרת המקום הוא של השורה שסומנה, מתוכן
+     * העניינים; בלי ההרשאה לכך — הכותרת שאוצריא שולחת, של השורה הראשונה
+     * במסך.
      */
     async contextMenuClicked(payload) {
       if (!payload || payload.itemId !== Domain.LOCATE_MENU_ITEM) return;
       await this.ready;
       const headings = await this._readerHeadings(payload);
-      await this.locateFromReader(payload.currentBook, headings || payload.currentRef);
+      await this.locateFromReader(
+        payload.currentBook,
+        headings || payload.currentRef,
+        Locate.fromSelection(payload.selectedText),
+      );
     }
 
     /** הכותרות של השורה שסומנה (`Locate.headingsAt`), או `null`. */
@@ -1087,11 +1093,19 @@
      * אילן אינו מכיר אותה — כללית יותר (`Locate.fromReader`). מקור יחיד
      * שמתאים לספר נפתח מיד; כמה — לבחירה, המתאימים ראשונים.
      */
-    async locateFromReader(book, place) {
+    async locateFromReader(book, place, selected) {
       this.selectTab('locate');
       const state = this.model.locate;
       await this._idle('locateTask');
       const reader = Locate.fromReader(book, place);
+      if (selected) {
+        if (Domain.SETUP_SCREENS.has(this.model.screen) || !Domain.serviceCan(this.model.health, 'locate')) {
+          this._fillLocate(selected);
+          return;
+        }
+        await this._track('locateTask', this._locateSelection(selected, reader && reader.refs.length ? reader : null));
+        return;
+      }
       if (!reader || !reader.refs.length) {
         const hebrew = Boolean(reader && /[א-ת]/.test(reader.title));
         this._fillLocate(hebrew ? Locate.startFrom(reader.title) : '');
@@ -1115,6 +1129,18 @@
       await this._track('locateTask', this._locateLadder(reader));
     }
 
+    /**
+     * טקסט שסומן בספר ונראה כמקום (`Locate.fromSelection`). מילים רגילות
+     * יכולות להיראות כך (`ויאמר לא`), ולכן כשבר אילן אינו מכיר אותו —
+     * המקום שפתוח באוצריא ([reader]), כאילו לא היה סימון.
+     */
+    async _locateSelection(ref, reader) {
+      const outcome = await this._locateRef(ref, { selection: true, quiet: Boolean(reader) });
+      if (outcome !== 'notFound' || !reader) return;
+      this.log.info('איתור מקום: בר אילן אינו מכיר את הטקסט המסומן, ולכן המקום שפתוח');
+      await this._locateLadder(reader);
+    }
+
     async _locateLadder(reader) {
       for (let i = 0; i < reader.refs.length; i++) {
         const last = i === reader.refs.length - 1;
@@ -1126,11 +1152,13 @@
     /**
      * מאתר [ref] ומחזיר 'opened' | 'choices' | 'notFound' | 'failed'. עם
      * [reader] (`Locate.fromReader`) המקורות מדורגים לפי הספר, ו"לא נמצא"
-     * שאינו [last] אינו מוצג: ההפניה הכללית הבאה מנסה במקומו.
+     * שאינו [last] אינו מוצג: ההפניה הכללית הבאה מנסה במקומו. כך גם עם
+     * [quiet], לטקסט מסומן שאחריו בא המקום שפתוח.
      */
     async _locateRef(ref, options) {
       const opts = options || {};
       const reader = opts.reader || null;
+      const quiet = reader ? !opts.last : Boolean(opts.quiet);
       const state = this.model.locate;
       Object.assign(state, {
         text: ref,
@@ -1143,8 +1171,10 @@
         readerTitle: reader ? reader.title : null,
       });
       this._renderPage();
-      if (reader) this.view.setInputValue('locate-input', ref);
-      this.log.info('איתור מקום: ' + ref + (reader ? ' (מספר שפתוח באוצריא)' : ''));
+      if (reader || opts.selection) this.view.setInputValue('locate-input', ref);
+      this.log.info(
+        'איתור מקום: ' + ref + (reader ? ' (מספר שפתוח באוצריא)' : opts.selection ? ' (טקסט שסומן באוצריא)' : ''),
+      );
       let outcome = 'failed';
       let best = null;
       try {
@@ -1164,12 +1194,12 @@
         }
       } catch (error) {
         outcome = error && error.code === 'referenceNotFound' ? 'notFound' : 'failed';
-        if (outcome === 'failed' || !reader || opts.last) {
+        if (outcome === 'failed' || !quiet) {
           state.status = { kind: 'error', text: Domain.errorMessage(error) };
         }
       }
       state.running = false;
-      if (outcome === 'notFound' && reader && !opts.last) return outcome;
+      if (outcome === 'notFound' && quiet) return outcome;
       this._renderPage();
       if (best !== null) {
         await this._openLocateChoice(best);

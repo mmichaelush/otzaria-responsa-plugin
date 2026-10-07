@@ -46,6 +46,24 @@ test('normalize: סימני כיווניות, גרשיים כפולים וגרש
 
 // ------------------------------------------------ מספר שפתוח באוצריא
 
+test('fromSelection: טקסט מסומן שהוא מקום — בלי הסוגריים; קטע מהספר או שם בלבד — null', () => {
+  assert.equal(Locate.fromSelection('(ב"מ לא, א)'), 'ב"מ לא, א');
+  assert.equal(Locate.fromSelection(' [שו"ע או"ח סי\' רצט]; '), 'שו"ע או"ח סי\' רצט');
+  assert.equal(Locate.fromSelection('ברכות ב.'), 'ברכות ב.');
+  assert.equal(Locate.fromSelection('(שם)'), null);
+  assert.equal(Locate.fromSelection(''), null);
+  assert.equal(Locate.fromSelection(undefined), null);
+  assert.equal(Locate.fromSelection('ויכל אלהים ביום השביעי מלאכתו אשר עשה וישבת ביום השביעי'), null);
+  // בלי מקום בסופו: מילים מהספר.
+  assert.equal(Locate.fromSelection('ויאמר משה'), null);
+  assert.equal(Locate.fromSelection('אמר רבי יוחנן'), null);
+  assert.equal(Locate.fromSelection('שבועות יד'), 'שבועות יד');
+  assert.equal(Locate.fromSelection('יבמות ט"ו'), 'יבמות ט"ו');
+  assert.equal(Locate.fromSelection('משנה ברורה סימן רצט'), 'משנה ברורה סימן רצט');
+  assert.equal(Locate.fromSelection('שבת 31'), 'שבת 31');
+});
+
+
 test('fromReader: שם הספר בצורה של בר אילן, וכותרת שהיא שם הספר נמחקת', () => {
   assert.deepEqual(Locate.fromReader('בראשית', 'בראשית, פרק ב'), { title: 'בראשית', refs: ['בראשית פרק ב'] });
   assert.deepEqual(Locate.fromReader('רש"י על בראשית', 'רש"י על בראשית, פרשת בראשית, פרק ב').refs, ['רש"י בראשית פרק ב']);

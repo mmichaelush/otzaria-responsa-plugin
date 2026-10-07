@@ -1283,6 +1283,41 @@ test('"איתור המקום בבר אילן": המקום שבספר נכתב ב
   app.suspend();
 });
 
+test('"איתור המקום בבר אילן" עם טקסט מסומן שהוא מקום: הטקסט, ולא המקום שפתוח', async () => {
+  const { app, bridge, view } = await bootAdvanced({ '/reference/open': located('בבא מציעא דף לא עמוד א') });
+  await app.contextMenuClicked({ ...fromReader('בראשית', 'בראשית, פרק ב'), selectedText: '(ב"מ לא, א)' });
+  assert.deepEqual(
+    requests(bridge, '/reference/open').map((r) => r.body.ref),
+    ['ב"מ לא, א'],
+  );
+  assert.equal(view.inputs['locate-input'], 'ב"מ לא, א');
+  assert.equal(app.model.locate.status.kind, 'success');
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן" עם טקסט מסומן שבר אילן אינו מכיר: המקום שפתוח, בלי הודעת שגיאה', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/reference/open': (params) => (JSON.parse(params.body).ref === 'ויאמר לא' ? notFound : located('בראשית פרק ב')),
+  });
+  await app.contextMenuClicked({ ...fromReader('בראשית', 'בראשית, פרק ב'), selectedText: 'ויאמר לא' });
+  assert.deepEqual(
+    requests(bridge, '/reference/open').map((r) => r.body.ref),
+    ['ויאמר לא', 'בראשית פרק ב'],
+  );
+  assert.equal(app.model.locate.status.kind, 'success');
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן" עם קטע ארוך מסומן: המקום שפתוח', async () => {
+  const { app, bridge } = await bootAdvanced({ '/reference/open': located('בראשית פרשת בראשית פרק ב') });
+  await app.contextMenuClicked({
+    ...fromReader('בראשית', 'בראשית, פרק ב'),
+    selectedText: 'ויכל אלהים ביום השביעי מלאכתו אשר עשה וישבת ביום השביעי מכל מלאכתו אשר עשה',
+  });
+  assert.deepEqual(requests(bridge, '/reference/open')[0].body, { ref: 'בראשית פרק ב' });
+  app.suspend();
+});
+
 test('"איתור המקום בבר אילן": מקום שבר אילן אינו מכיר — ההפניה הכללית, בלי הודעת שגיאה בדרך', async () => {
   const { app, bridge } = await bootAdvanced({
     '/reference/open': (params) => (JSON.parse(params.body).ref.endsWith('סעיף ב') ? notFound : located('סימן א')),

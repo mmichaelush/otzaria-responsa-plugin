@@ -300,7 +300,7 @@ test('setupChecklist: מה מוכן, מה חסר ומה עוד לא ידוע', (
 
 test('Links: כתובות https בלבד, והפורום מצביע על ההבהרה', () => {
   for (const url of Object.values(Domain.Links)) assert.match(url, /^https:\/\//);
-  assert.equal(Domain.Links.forum, 'https://otzaria.org/forum/post/40010');
+  assert.equal(Domain.Links.forum, 'https://otzaria.org/forum/post/40770');
 });
 
 test('Links.setup: המתקין האחרון בשם הקבוע שה-CI מצרף לכל גרסה', () => {

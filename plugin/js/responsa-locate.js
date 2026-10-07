@@ -51,6 +51,48 @@
     return null;
   }
 
+  /** טקסט מסומן ארוך מזה הוא קטע מהספר, ולא מקום. */
+  const MAX_SELECTION_LENGTH = 60;
+  const MAX_SELECTION_WORDS = 8;
+
+  const LETTER_VALUES = 'אבגדהוזחטיכלמנסעפצקרשת';
+
+  /** ערך האות בגימטריה (סופית כרגילה). */
+  function letterValue(letter) {
+    const index = LETTER_VALUES.indexOf('ךםןףץ'.includes(letter) ? 'כמנפצ'['ךםןףץ'.indexOf(letter)] : letter);
+    if (index < 0) return 0;
+    return index < 10 ? index + 1 : index < 19 ? (index - 8) * 10 : (index - 17) * 100;
+  }
+
+  /** מספר בגימטריה (`לא`, `רצט`, `ט"ו`, `ב.`): עד ארבע אותיות, בסדר יורד. */
+  function isNumeral(word) {
+    const letters = word.replace(/["'.:]/g, '');
+    if (!/^[א-ת]{1,4}$/.test(letters)) return false;
+    if (letters === 'טו' || letters === 'טז') return true;
+    for (let i = 1; i < letters.length; i++) {
+      if (letterValue(letters[i]) > letterValue(letters[i - 1])) return false;
+    }
+    return true;
+  }
+
+  /**
+   * טקסט שסומן בספר, כשהוא נראה כמקום (`ב"מ לא, א`): קצר, שם ומקום בו
+   * (`validate`), ומילת מקום (`סימן`), ספרות, או מספר בגימטריה בסופו.
+   * סוגריים סביבו ופסיק או נקודה-פסיק בסופו נמחקים; נקודה ונקודתיים
+   * נשארים, כי הם העמוד (`ברכות ב.`). `null` — אין סימון, או קטע מהספר.
+   */
+  function fromSelection(text) {
+    const ref = normalize(text).replace(/^[([{\s]+|[)\]}\s,;]+$/g, '');
+    if (ref.length > MAX_SELECTION_LENGTH || validate(ref)) return null;
+    const tokens = ref.replace(/[,;]/g, ' ').split(' ').filter(Boolean);
+    if (tokens.length > MAX_SELECTION_WORDS) return null;
+    const place =
+      /\d/.test(ref) ||
+      tokens.slice(1).some((token) => PLACE.has(wordKey(token))) ||
+      isNumeral(tokens[tokens.length - 1]);
+    return place ? ref : null;
+  }
+
   /** המקום האחרון בראש הרשימה, בלי כפילויות. */
   function remember(history, value) {
     const ref = normalize(value);
@@ -269,6 +311,7 @@
     startFrom,
     headingsAt,
     fromReader,
+    fromSelection,
     rankChoices,
     displayOrder,
   };
