@@ -210,6 +210,39 @@ void main() {
       expect(outcome.state, ResponsaSearchState.forms);
     });
 
+    test('תיבה נלחצת רק כשהכיתוב שלה מתאים למזהה (נמדד ב-CD25)', () {
+      expect(
+        ResponsaSearchSetup.labelMatches(
+          ResponsaSearchSetup.showFormsId,
+          ' &הצג חלון ניהול הצורות',
+        ),
+        isTrue,
+      );
+      expect(
+        ResponsaSearchSetup.labelMatches(
+          ResponsaSearchSetup.allDatabasesId,
+          ' חיפוש בכל ה&מאגרים  ',
+        ),
+        isTrue,
+      );
+      expect(
+        ResponsaSearchSetup.labelMatches(
+          ResponsaSearchSetup.abbreviationsId,
+          'כולל &ראשי תיבות',
+        ),
+        isTrue,
+      );
+      // ב"חיפוש טבלאי" 1173 הוא אותה תיבה, אבל מזהה במהדורה אחרת עשוי להיות
+      // פקד אחר.
+      expect(
+        ResponsaSearchSetup.labelMatches(
+          ResponsaSearchSetup.showFormsId,
+          'בתוך פסקה',
+        ),
+        isFalse,
+      );
+    });
+
     test('ההגדרות שלא נקבעו אינן נוגעות בתיבות', () {
       expect(ResponsaSearchSetup.none.checks, isEmpty);
       expect(

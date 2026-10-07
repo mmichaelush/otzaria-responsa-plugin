@@ -559,7 +559,7 @@ void main() {
       expect(setup.scope, isNull);
     });
 
-    test('חיפוש רגיל אינו נוגע בהגדרות של בר אילן', () async {
+    test('חיפוש רגיל: רק "ניהול הצורות", כבוי בלי הגדרה', () async {
       await call(
         'POST',
         '/text/search',
@@ -570,7 +570,14 @@ void main() {
       );
       final setup = backend.searchCalls.single.setup;
       expect(setup.advanced, isFalse);
-      expect(setup.checks, isEmpty);
+      expect(setup.checks, {ResponsaSearchSetup.showFormsId: false});
+    });
+
+    test('חיפוש רגיל עם showForms מהתוסף', () async {
+      await call('POST', '/text/search', body: {'q': 'שבת', 'showForms': true});
+      expect(backend.searchCalls.single.setup.checks, {
+        ResponsaSearchSetup.showFormsId: true,
+      });
     });
 
     test(

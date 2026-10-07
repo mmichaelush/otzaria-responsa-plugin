@@ -50,6 +50,7 @@ class HelperService {
     'locate',
     'autoStart',
     'diagnostics',
+    'showForms',
   ];
 
   static const int maxPageSize = 200;
@@ -395,6 +396,9 @@ class HelperService {
       }
       text = query.text;
       truncated = query.truncated;
+      // "חלון ניהול הצורות" בחיפוש מטקסט מסומן: הגדרה בתוסף, ובלעדיה —
+      // לא. התיבה שבבר אילן חוזרת אחרי החיפוש למצבה.
+      setup = ResponsaSearchSetup(showForms: _bool(body, 'showForms') ?? false);
     }
     return _exclusive(_Automation.search, () async {
       final report = await _backend.searchText(

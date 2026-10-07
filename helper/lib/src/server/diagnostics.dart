@@ -4,9 +4,11 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
 import 'package:responsa_helper/src/catalog/responsa_catalog_repository.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
+import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
 
 /// `GET /diagnostics`: מה שצריך כדי למצוא את שורש התקלה ממחשב שאין לנו גישה
@@ -109,12 +111,54 @@ class HelperDiagnostics {
         'archive ${installation.archivePath == null ? 'NOT FOUND' : 'ok'}, '
         'running: ${instances.isEmpty ? 'no' : instances.join(', ')}',
       );
+      if (installation.archivePath == null && installation.exists) {
+        lines.add('  no archive: ${archiveHints(installation)}');
+      }
     }
     final unavailable = ResponsaInstallationDiscovery.unavailableDrives();
     if (unavailable.isNotEmpty) {
       lines.add('unavailable drives (skipped): ${unavailable.join(', ')}');
     }
     return lines;
+  }
+
+  /// קבצים גדולים מזה נרשמים בתיקיית ההתקנה: אחד מהם הוא כנראה הארכיון.
+  static const int _largeFileBytes = 5 << 20;
+  static const int _maxListedEntries = 40;
+
+  /// בלי ארכיון אין טבלת מחברים (ב-CD30 ומעלה: "author for 0 books"). מה
+  /// שהשירות בדק, ומה יש בתיקייה, כדי שדיווח אחד יראה איפה הארכיון שם.
+  @visibleForTesting
+  static String archiveHints(ResponsaInstallation installation) {
+    final settings = installation.iniSettings;
+    final parts = [
+      'data ${installation.dataLocation ?? 'none'}',
+      'sh_hdisk ${settings['sh_hdisk'] ?? 'none'}',
+      'sh_cdrom ${settings['sh_cdrom'] ?? 'none'}',
+    ];
+    try {
+      final entries = Directory(
+        installation.installPath,
+      ).listSync(followLinks: false)..sort((a, b) => a.path.compareTo(b.path));
+      final listed = <String>[];
+      for (final entry in entries) {
+        final name = p.basename(entry.path);
+        if (entry is Directory) {
+          listed.add('$name/');
+        } else if (entry is File) {
+          final size = entry.lengthSync();
+          if (size >= _largeFileBytes) listed.add('$name ${size >> 20}MB');
+        }
+      }
+      final shown = listed.take(_maxListedEntries).join(', ');
+      parts.add(
+        'folder: $shown'
+        '${listed.length > _maxListedEntries ? ', … (${listed.length})' : ''}',
+      );
+    } catch (error) {
+      parts.add('folder: $error');
+    }
+    return parts.join('; ');
   }
 
   static String _catalogLine(ResponsaCatalogInfo info) {

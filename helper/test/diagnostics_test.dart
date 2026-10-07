@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/server/diagnostics.dart';
 import 'package:test/test.dart';
 
@@ -15,6 +19,29 @@ void main() {
     '2026-10-06T00:$time.300000 GET /status 500 ${ms}ms internal: '
         'שגיאה פנימית בשירות',
   ].join('\n');
+
+  test('בלי ארכיון: מה נבדק, ותיקיות וקבצים גדולים בתיקיית ההתקנה', () {
+    final root = Directory.systemTemp.createTempSync('responsa_archive');
+    addTearDown(() => root.deleteSync(recursive: true));
+    Directory(p.join(root.path, 'Data')).createSync();
+    File(p.join(root.path, 'RESPONSA.exe')).writeAsBytesSync([0]);
+    // קובץ של 6MB בלי לכתוב אותו: כתיבה אחרי הסוף.
+    File(p.join(root.path, 'BIG.DAT')).openSync(mode: FileMode.write)
+      ..setPositionSync(6 << 20)
+      ..writeByteSync(0)
+      ..closeSync();
+    final hints = HelperDiagnostics.archiveHints(
+      ResponsaInstallation(
+        version: 31,
+        installPath: root.path,
+        displayName: 'test',
+        source: 'registry',
+      ),
+    );
+    expect(hints, contains('data none'));
+    expect(hints, contains('folder: BIG.DAT 6MB, Data/'));
+    expect(hints, isNot(contains('RESPONSA.exe')));
+  });
 
   test('בקשות שהצליחו מסוננות, ועקבות המחסנית נשארות עם הרשומה', () {
     final tail = HelperDiagnostics.tail(status('18:26', 152));

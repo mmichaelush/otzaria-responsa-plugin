@@ -108,6 +108,22 @@ class ResponsaSearchSetup {
     abbreviationsId: ?abbreviations,
     showFormsId: ?showForms,
   };
+
+  /// מילה מהכיתוב של כל תיבה. המזהים נמדדו ב-CD25, ובמהדורה אחרת אותו
+  /// מזהה עשוי להיות פקד אחר; תיבה שהכיתוב שלה אחר אינה נלחצת.
+  static const Map<int, List<String>> checkLabels = {
+    allDatabasesId: ['מאגרים', 'database', 'bases'],
+    abbreviationsId: ['ראשי תיבות', 'abbreviation', 'abréviation'],
+    showFormsId: ['צורות', 'forms', 'formes'],
+  };
+
+  /// האם [label] (הכיתוב של התיבה [id]) הוא של התיבה הזו.
+  static bool labelMatches(int id, String label) {
+    final words = checkLabels[id];
+    if (words == null) return true;
+    final text = label.replaceAll('&', '').toLowerCase();
+    return words.any(text.contains);
+  }
 }
 
 /// מה שנקרא מדיאלוג עליון נראה, כדי שהסיווג יהיה פונקציה טהורה.
@@ -149,9 +165,21 @@ class ResponsaSearchAutomation {
   /// מודאל הסיכום עולה כחצי שנייה אחרי חלון התוצאות.
   static const Duration _summaryGrace = Duration(seconds: 3);
 
-  /// הכפתור שעובר ל"חיפוש מתקדם", והפקד שקיים רק בו ("תרגום לארמית").
-  static const int _advancedModeButtonId = 1209;
+  /// כפתורי המעבר בין סוגי החיפוש (קל, מתקדם, טבלאי, ניסוח חופשי), שבכל
+  /// אחד מחלונות החיפוש. ב-CD25 1209 הוא "חיפוש מתקדם" (נמדד); במהדורות
+  /// אחרות הסדר לא נמדד, וב-CD31 נפתח "חיפוש טבלאי" ונשאר על המסך. לכן
+  /// כל לחיצה נבדקת, וממשיכים לכפתור הבא מהחלון שנפתח.
+  static const List<int> _modeButtonIds = [1209, 1207, 1208, 1210];
+
+  /// הפקד שבין חלונות החיפוש עם שדה שאילתה קיים רק ב"חיפוש מתקדם" ("תרגום
+  /// לארמית"). גם ב"חיפוש טבלאי" יש 1065, אבל אין בו שדה שאילתה.
   static const int _advancedOnlyId = 1065;
+
+  /// "ביטול" בחלון חיפוש: מסתיר אותו.
+  static const int _cancelId = 2;
+
+  /// לחיצה על כפתור מעבר מחליפה חלון תוך פחות משנייה (נמדד ב-CD25).
+  static const Duration _switchBudget = Duration(seconds: 4);
 
   /// "שגיאה בהגדרת השאילתה".
   static const DialogHints queryErrorHints = DialogHints(
@@ -272,26 +300,92 @@ class ResponsaSearchAutomation {
     ResponsaDeadline deadline,
   ) {
     if (_hasChild(dialog.hwnd, _advancedOnlyId)) return dialog;
-    final button = _childById(dialog.hwnd, _advancedModeButtonId);
-    if (button == null) {
-      throw const ResponsaAutomationException(
-        ResponsaFailure.searchDialogNotFound,
-        'בחלון החיפוש של בר אילן אין מעבר ל"חיפוש מתקדם"',
-      );
-    }
-    ResponsaWin32.postClick(button);
-    final own = deadline.within(ResponsaAutomation.dialogBudget);
-    while (!own.expired) {
-      _automation.pause(ResponsaAutomation.poll, deadline);
-      final found = findSearchDialog();
-      if (found != null && _hasChild(found.hwnd, _advancedOnlyId)) {
-        return found;
+    final visibleBefore = _visibleSearchKinds().toSet();
+    final tried = <String>[];
+    final switched = _switchMode(
+      dialog.hwnd,
+      (found) => _hasChild(found.hwnd, _advancedOnlyId),
+      deadline,
+      tried,
+    );
+    if (switched != null) {
+      if (tried.isNotEmpty) {
+        logLine('ResponsaSearch: "חיפוש מתקדם" אחרי ${tried.join(', ')}');
       }
+      return switched;
+    }
+    // אף לחיצה לא הציגה אותו. חלון מתקדם מוסתר עדיין מריץ חיפוש (נמדד),
+    // אבל מה שנפתח בדרך נסגר: חלון שנשאר על המסך מבלבל את המשתמש.
+    _hideOpened(visibleBefore);
+    final hidden = findSearchDialog();
+    logLine(
+      'ResponsaSearch: לא עבר ל"חיפוש מתקדם"; ${tried.join(', ')}'
+      '${hidden != null && _hasChild(hidden.hwnd, _advancedOnlyId) ? '; משתמשים בחלון המוסתר' : ''}',
+    );
+    if (hidden != null && _hasChild(hidden.hwnd, _advancedOnlyId)) {
+      return hidden;
     }
     throw const ResponsaAutomationException(
       ResponsaFailure.searchDialogNotFound,
       'בר אילן לא עבר ל"חיפוש מתקדם" בזמן',
     );
+  }
+
+  /// לוחץ על כפתורי המעבר, מ-[from] ואחר כך מכל חלון שנפתח, עד שעל המסך
+  /// חלון חיפוש עם שדה שאילתה ש-[accept] מקבל. [tried] מקבל שורה לכל
+  /// לחיצה שלא הגיעה אליו, ליומן.
+  DiscoveredDialog? _switchMode(
+    int from,
+    bool Function(DiscoveredDialog) accept,
+    ResponsaDeadline deadline,
+    List<String> tried,
+  ) {
+    var current = from;
+    for (final id in _modeButtonIds) {
+      final button = _childById(current, id);
+      if (button == null) continue;
+      // חלון שכבר היה על המסך אינו תוצאה של הלחיצה.
+      final before = _visibleSearchKinds().toSet();
+      ResponsaWin32.postClick(button);
+      final own = deadline.within(_switchBudget);
+      int? opened;
+      while (!own.expired) {
+        _automation.pause(ResponsaAutomation.poll, deadline);
+        final found = findSearchDialog();
+        if (found != null &&
+            ResponsaWin32.isVisible(found.hwnd) &&
+            accept(found)) {
+          return found;
+        }
+        opened = _visibleSearchKinds()
+            .where((h) => h != current && !before.contains(h))
+            .firstOrNull;
+        if (opened != null) break;
+      }
+      tried.add(
+        opened == null
+            ? '$id: לא נפתח חלון'
+            : '$id: "${ResponsaWin32.windowText(opened)}"',
+      );
+      if (opened != null) current = opened;
+    }
+    return null;
+  }
+
+  /// חלונות סוגי החיפוש שעל המסך, לפי כפתורי המעבר שבכולם.
+  List<int> _visibleSearchKinds() => [
+    for (final hwnd in _visibleDialogHandles())
+      if (_modeButtonIds.every((id) => _hasChild(hwnd, id))) hwnd,
+  ];
+
+  /// מסתיר ב"ביטול" חלונות חיפוש שלא היו על המסך לפני [before].
+  void _hideOpened(Set<int> before) {
+    for (final hwnd in _visibleSearchKinds()) {
+      if (before.contains(hwnd)) continue;
+      if (_childById(hwnd, _cancelId) case final cancel?) {
+        ResponsaWin32.postClick(cancel);
+      }
+    }
   }
 
   /// מסמן או מנקה תיבות לפי [wanted], ומחזיר את אלה ששונו עם מצבן הקודם.
@@ -302,6 +396,11 @@ class ResponsaSearchAutomation {
     for (final MapEntry(key: id, value: on) in wanted.entries) {
       final box = _childById(dialog, id);
       if (box == null) continue;
+      final label = ResponsaWin32.windowText(box);
+      if (!ResponsaSearchSetup.labelMatches(id, label)) {
+        logLine('ResponsaSearch: תיבה $id היא "$label"; לא נלחצת');
+        continue;
+      }
       final current = ResponsaWin32.isChecked(box);
       if (current == null || current == on) continue;
       if (ResponsaWin32.click(box, timeoutMs: ResponsaWin32.scanTimeoutMs)) {
@@ -360,6 +459,22 @@ class ResponsaSearchAutomation {
       _automation.pause(const Duration(milliseconds: 600), deadline);
       final found = findSearchDialog();
       if (found != null) return found;
+      // בר אילן פותח את הסוג האחרון שנבחר בו. "חיפוש טבלאי" אינו מתאים
+      // (אין בו שדה שאילתה), ופקודה חוזרת רק הייתה פותחת אותו שוב.
+      for (final hwnd in _visibleSearchKinds()) {
+        final tried = <String>[];
+        final switched = _switchMode(hwnd, (_) => true, deadline, tried);
+        if (switched != null) {
+          logLine(
+            'ResponsaSearch: נפתח "${ResponsaWin32.windowText(hwnd)}", '
+            'ועברנו ל"${ResponsaWin32.windowText(switched.hwnd)}"',
+          );
+          return switched;
+        }
+        logLine(
+          'ResponsaSearch: אין מעבר לחלון עם שדה שאילתה; ${tried.join(', ')}',
+        );
+      }
     }
     throw const ResponsaAutomationException(
       ResponsaFailure.searchDialogNotFound,
