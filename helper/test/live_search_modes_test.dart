@@ -49,11 +49,13 @@ Future<bool> _showTabular(int pid) async {
 
 void main() {
   test('search modes', () async {
-    final controller = ResponsaController(allowAutoStart: () => false);
-    // מופעים חונים מחוץ למסך אינם נבחרים, כמו בשירות.
-    final pid = ResponsaWin32.topWindowsByClass(
+    final controller = ResponsaController(allowAutoStart: () => true);
+    // נקבע אחרי החיפוש הראשון, שמפעיל את בר אילן כשהוא סגור. מופעים חונים
+    // מחוץ למסך אינם נבחרים, כמו בשירות.
+    int pidNow() => ResponsaWin32.topWindowsByClass(
       'ResponsaProject',
     ).firstWhere((w) => ResponsaWin32.isOnScreen(w.hwnd)).pid;
+    var pid = 0;
     Future<void> run(
       String label,
       String query,
@@ -61,6 +63,7 @@ void main() {
     ) async {
       final watch = Stopwatch()..start();
       final report = await controller.searchText(query, setup: setup);
+      pid = pidNow();
       print(
         '$label "$query" ${watch.elapsedMilliseconds}ms: '
         '${report.ok ? report.outcome!.state.name : 'FAILED ${report.failure?.name} ${report.message}'}'
