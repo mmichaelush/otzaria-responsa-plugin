@@ -13,8 +13,83 @@ class ResponsaHebrew {
   static final RegExp _whitespace = RegExp(r'\s+');
   static final RegExp _matres = RegExp('[יו]');
 
-  /// תווים בלתי-נראים ששוברים כל השוואה.
-  static final RegExp _invisible = RegExp('[​‎‏ ﻿]');
+  /// תווים בלתי-נראים ששוברים כל השוואה. נמחקים בלי רווח: CGJ (U+034F)
+  /// בא בתנ"ך בין סימני ניקוד באמצע מילה, ורווח במקומו היה שובר אותה.
+  static final RegExp _invisible = RegExp(
+    '[\u00AD\u034F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]',
+  );
+
+  /// אות עם ניקוד שמקודדת כתו אחד (U+FB1D–U+FB4F: `שׁ`, `בּ`, `וֹ`) ← האות
+  /// לבדה; '' לסימן שאינו אות. בלי זה האות נמחקת כ"לא אות", והמילה נשברת.
+  static const List<String> _presentationForms = [
+    'י',
+    '',
+    'יי',
+    'ע',
+    'א',
+    'ד',
+    'ה',
+    'כ',
+    'ל',
+    'ם',
+    'ר',
+    'ת',
+    '',
+    'ש',
+    'ש',
+    'ש',
+    'ש',
+    'א',
+    'א',
+    'א',
+    'ב',
+    'ג',
+    'ד',
+    'ה',
+    'ו',
+    'ז',
+    '',
+    'ט',
+    'י',
+    'ך',
+    'כ',
+    'ל',
+    '',
+    'מ',
+    '',
+    'נ',
+    'ס',
+    '',
+    'ף',
+    'פ',
+    '',
+    'צ',
+    'ק',
+    'ר',
+    'ש',
+    'ת',
+    'ו',
+    'ב',
+    'כ',
+    'פ',
+    'אל',
+  ];
+
+  /// [_presentationForms] על כל הטקסט.
+  static String foldPresentationForms(String text) {
+    if (!text.runes.any((rune) => rune >= 0xFB1D && rune <= 0xFB4F)) {
+      return text;
+    }
+    final out = StringBuffer();
+    for (final rune in text.runes) {
+      if (rune >= 0xFB1D && rune <= 0xFB4F) {
+        out.write(_presentationForms[rune - 0xFB1D]);
+      } else {
+        out.writeCharCode(rune);
+      }
+    }
+    return out.toString();
+  }
 
   static const Map<String, String> _finals = {
     'ך': 'כ',
@@ -26,7 +101,7 @@ class ResponsaHebrew {
 
   static String normalize(String? text) {
     if (text == null || text.isEmpty) return '';
-    var value = text.replaceAll(_invisible, ' ');
+    var value = foldPresentationForms(text).replaceAll(_invisible, '');
     value = value.replaceAll(_nikud, '');
     value = value.replaceAll(_intraWordMarks, '');
     value = value.replaceAll(_punctuation, ' ');

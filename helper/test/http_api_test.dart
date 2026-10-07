@@ -573,6 +573,35 @@ void main() {
       expect(setup.checks, {ResponsaSearchSetup.showFormsId: false});
     });
 
+    test('ניסוח חופשי: משפט שלם, תחום, ובלי תיבות של חיפוש מתקדם', () async {
+      final result = await call(
+        'POST',
+        '/text/search',
+        body: {
+          'q': 'הַאִם מותר לנסוע #באופניים בשבת?',
+          'freeForm': true,
+          'options': {'allDatabases': true, 'abbreviations': true},
+        },
+      );
+      expect(result.status, 200);
+      expect((result.json as Map)['freeForm'], isTrue);
+      final call0 = backend.searchCalls.single;
+      expect(call0.query, 'האם מותר לנסוע באופניים בשבת');
+      expect(call0.setup.freeForm, isTrue);
+      expect(call0.setup.advanced, isFalse);
+      expect(call0.setup.checks, {ResponsaSearchSetup.allDatabasesId: true});
+    });
+
+    test('ניסוח חופשי בלי מילה עברית: 400', () async {
+      final result = await call(
+        'POST',
+        '/text/search',
+        body: {'q': 'hello 123', 'freeForm': true},
+      );
+      expect(result.status, 400);
+      expect(backend.searchCalls, isEmpty);
+    });
+
     test('חיפוש רגיל עם showForms מהתוסף', () async {
       await call('POST', '/text/search', body: {'q': 'שבת', 'showForms': true});
       expect(backend.searchCalls.single.setup.checks, {

@@ -2,6 +2,8 @@ import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_automation.dart';
 import 'package:responsa_helper/src/native/responsa_discovery.dart';
+import 'package:responsa_helper/src/native/responsa_edition_probe.dart';
+import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
 import 'package:responsa_helper/src/native/responsa_profile.dart';
 import 'package:responsa_helper/src/native/responsa_search_scope.dart';
 import 'package:responsa_helper/src/native/responsa_win32.dart';
@@ -76,6 +78,9 @@ class ResponsaSearchSetup {
   /// מעבר ל"חיפוש מתקדם": רק בו התחביר (`#נר`, `[1:4]`) מתפרש.
   final bool advanced;
 
+  /// מעבר ל"חיפוש בניסוח חופשי": משפט במילים של המשתמש. סותר את [advanced].
+  final bool freeForm;
+
   /// "חיפוש בכל המאגרים".
   final bool? allDatabases;
 
@@ -90,6 +95,7 @@ class ResponsaSearchSetup {
 
   const ResponsaSearchSetup({
     this.advanced = false,
+    this.freeForm = false,
     this.allDatabases,
     this.abbreviations,
     this.showForms,
@@ -165,11 +171,16 @@ class ResponsaSearchAutomation {
   /// מודאל הסיכום עולה כחצי שנייה אחרי חלון התוצאות.
   static const Duration _summaryGrace = Duration(seconds: 3);
 
-  /// כפתורי המעבר בין סוגי החיפוש (קל, מתקדם, טבלאי, ניסוח חופשי), שבכל
-  /// אחד מחלונות החיפוש. ב-CD25 1209 הוא "חיפוש מתקדם" (נמדד); במהדורות
-  /// אחרות הסדר לא נמדד, וב-CD31 נפתח "חיפוש טבלאי" ונשאר על המסך. לכן
-  /// כל לחיצה נבדקת, וממשיכים לכפתור הבא מהחלון שנפתח.
-  static const List<int> _modeButtonIds = [1209, 1207, 1208, 1210];
+  /// כפתורי המעבר בין סוגי החיפוש, שבכל אחד מחלונות החיפוש. נמדד ב-CD25:
+  /// 1209 "חיפוש מתקדם", 1207 "חיפוש קל", 1208 "חיפוש טבלאי", 1189 "חיפוש
+  /// בניסוח חופשי". שכניהם אינם סוגים: 1210 פותח "ניהול המאגרים" ו-1368
+  /// מקלדת מדומה, ולכן לעולם אינם נלחצים כאן. במהדורות אחרות הסדר לא נמדד
+  /// (ב-CD31 נפתח "חיפוש טבלאי" ונשאר על המסך), ולכן כל לחיצה נבדקת,
+  /// וממשיכים לכפתור הבא מהחלון שנפתח.
+  static const List<int> _modeButtonIds = [1209, 1207, 1208, 1189];
+  static const int _advancedButtonId = 1209;
+  static const int _freeFormButtonId = 1189;
+  static const int _easyButtonId = 1207;
 
   /// הפקד שבין חלונות החיפוש עם שדה שאילתה קיים רק ב"חיפוש מתקדם" ("תרגום
   /// לארמית"). גם ב"חיפוש טבלאי" יש 1065, אבל אין בו שדה שאילתה.
@@ -212,8 +223,7 @@ class ResponsaSearchAutomation {
         : ResponsaWin32.directChildren(client).toSet();
     final atLimit = before.length >= _profile.mdiSoftLimit;
 
-    var dialog = ensureSearchDialog(deadline);
-    if (setup.advanced) dialog = _ensureAdvanced(dialog, deadline);
+    var dialog = _ensureKind(ensureSearchDialog(deadline), setup, deadline);
     if (setup.scope case final scope?) {
       final missing = ResponsaSearchScope(
         _automation,
@@ -226,12 +236,22 @@ class ResponsaSearchAutomation {
         );
       }
       // אחרי "אישור" בר אילן עשוי להחזיר חלון חיפוש אחר.
-      dialog = ensureSearchDialog(deadline);
-      if (setup.advanced) dialog = _ensureAdvanced(dialog, deadline);
+      dialog = _ensureKind(ensureSearchDialog(deadline), setup, deadline);
     }
     final restore = _applyChecks(dialog.hwnd, setup.checks);
+    _probeEdition(main);
     try {
-      return _run(query, dialog, deadline, main, client, before, atLimit);
+      return _run(
+        query,
+        dialog,
+        deadline,
+        main,
+        client,
+        before,
+        atLimit,
+        // גם כשלא עברנו ממנו: התוצאות שלו בלי "נמצאו N".
+        anyWindowIsResult: setup.freeForm || isFreeForm(dialog.hwnd),
+      );
     } finally {
       // חלון החיפוש עשוי להיות מושבת מתחת למודאל התוצאות; לחיצה על תיבת
       // סימון עדיין מגיעה אליה.
@@ -246,8 +266,9 @@ class ResponsaSearchAutomation {
     int main,
     int? client,
     Set<int> before,
-    bool atLimit,
-  ) {
+    bool atLimit, {
+    bool anyWindowIsResult = false,
+  }) {
     final edit = dialog.handle('query_edit')!;
     final button = dialog.handle('run_button')!;
     ResponsaWin32.setWindowText(edit, query);
@@ -270,6 +291,7 @@ class ResponsaSearchAutomation {
         mdiClient: client,
         mdiBefore: before,
         stale: stale,
+        anyWindowIsResult: anyWindowIsResult,
       );
     } on ResponsaAutomationException catch (error) {
       // בתקרה, "אין חלון תוצאות" אינו איטיות אלא סירוב שקט של התוכנה.
@@ -291,6 +313,82 @@ class ResponsaSearchAutomation {
     }
     // המודאלים שייכים לחלון הראשי ועולים איתו.
     return outcome.withFront(ResponsaWin32.bringToFront(main));
+  }
+
+  /// מה שונה בחלונות החיפוש של המהדורה הזו לעומת CD25 (ליומן ולאבחון).
+  void _probeEdition(int main) {
+    final title = ResponsaWin32.windowText(main);
+    final version = ResponsaInstallationDiscovery.versionFromWindowTitle(title);
+    ResponsaEditionProbe.probe(_pid, 'edition ${version ?? '?'}');
+  }
+
+  /// סוג החיפוש ש-[setup] מבקש; בלי בקשה — מה שבר אילן פתח.
+  DiscoveredDialog _ensureKind(
+    DiscoveredDialog dialog,
+    ResponsaSearchSetup setup,
+    ResponsaDeadline deadline,
+  ) {
+    if (setup.advanced) return _ensureAdvanced(dialog, deadline);
+    if (setup.freeForm) return _ensureFreeForm(dialog, deadline);
+    if (!isFreeForm(dialog.hwnd)) return dialog;
+    // בר אילן זוכר את "ניסוח חופשי" מהחיפוש הקודם, אבל מילים מטקסט מסומן
+    // אינן שאלה: עוברים ל"חיפוש קל", כמו בבר אילן כשהוא נפתח.
+    final tried = <String>[];
+    final switched = _switchMode(
+      dialog.hwnd,
+      (found) => !isFreeForm(found.hwnd),
+      deadline,
+      tried,
+      first: _easyButtonId,
+    );
+    logLine(
+      switched == null
+          ? 'ResponsaSearch: נשאר "חיפוש בניסוח חופשי"; ${tried.join(', ')}'
+          : 'ResponsaSearch: מ"חיפוש בניסוח חופשי" ל"${ResponsaWin32.windowText(switched.hwnd)}"',
+    );
+    return switched ?? dialog;
+  }
+
+  /// פקדים שקיימים ב"חיפוש קל" (1163, "ללא תוספות") וב"חיפוש מתקדם" (1173,
+  /// "ניהול הצורות"), ולא ב"חיפוש בניסוח חופשי" (נמדד ב-CD25).
+  static const List<int> _notFreeFormIds = [1163, 1173, _advancedOnlyId];
+
+  /// "חיפוש בניסוח חופשי": בכותרת, או חלון עם שדה שאילתה בלי פקדי הסוגים
+  /// האחרים.
+  static bool isFreeForm(int dialog) =>
+      ResponsaWin32.windowText(dialog).contains('חופשי') ||
+      _notFreeFormIds.every((id) => !_hasChild(dialog, id));
+
+  /// חלון החיפוש במצב "חיפוש בניסוח חופשי", כמו [_ensureAdvanced].
+  DiscoveredDialog _ensureFreeForm(
+    DiscoveredDialog dialog,
+    ResponsaDeadline deadline,
+  ) {
+    if (isFreeForm(dialog.hwnd)) return dialog;
+    final visibleBefore = _visibleSearchKinds().toSet();
+    final tried = <String>[];
+    final switched = _switchMode(
+      dialog.hwnd,
+      (found) => isFreeForm(found.hwnd),
+      deadline,
+      tried,
+      first: _freeFormButtonId,
+    );
+    if (switched != null) {
+      logLine(
+        'ResponsaSearch: "${ResponsaWin32.windowText(switched.hwnd)}"'
+        '${tried.isEmpty ? '' : ' אחרי ${tried.join(', ')}'}',
+      );
+      return switched;
+    }
+    _hideOpened(visibleBefore);
+    logLine(
+      'ResponsaSearch: לא עבר ל"חיפוש בניסוח חופשי"; ${tried.join(', ')}',
+    );
+    throw const ResponsaAutomationException(
+      ResponsaFailure.searchDialogNotFound,
+      'בר אילן לא עבר ל"חיפוש בניסוח חופשי" בזמן',
+    );
   }
 
   /// חלון החיפוש במצב "חיפוש מתקדם". בר אילן זוכר את הסוג האחרון שנבחר,
@@ -338,10 +436,11 @@ class ResponsaSearchAutomation {
     int from,
     bool Function(DiscoveredDialog) accept,
     ResponsaDeadline deadline,
-    List<String> tried,
-  ) {
+    List<String> tried, {
+    int first = _advancedButtonId,
+  }) {
     var current = from;
-    for (final id in _modeButtonIds) {
+    for (final id in [first, ..._modeButtonIds.where((id) => id != first)]) {
       final button = _childById(current, id);
       if (button == null) continue;
       // חלון שכבר היה על המסך אינו תוצאה של הלחיצה.
@@ -505,6 +604,7 @@ class ResponsaSearchAutomation {
     required int? mdiClient,
     required Set<int> mdiBefore,
     required Set<int> stale,
+    bool anyWindowIsResult = false,
   }) {
     final own = deadline.within(outcomeBudget);
     final wasVisible = ResponsaWin32.isVisible(dialog.hwnd);
@@ -519,6 +619,7 @@ class ResponsaSearchAutomation {
         profile: _profile,
         dialogs: dialogs,
         newMdiTitles: _newMdiTitles(mdiClient, mdiBefore),
+        anyWindowIsResult: anyWindowIsResult,
       );
       switch (outcome.state) {
         case ResponsaSearchState.asked ||
@@ -643,6 +744,7 @@ class ResponsaSearchAutomation {
     required ResponsaVersionProfile profile,
     required List<ResponsaDialogSnapshot> dialogs,
     Iterable<String> newMdiTitles = const [],
+    bool anyWindowIsResult = false,
   }) {
     String? window;
     int? windowCount;
@@ -652,6 +754,11 @@ class ResponsaSearchAutomation {
         windowCount = count;
         break;
       }
+    }
+    // "חיפוש בניסוח חופשי" פותח חלון תוצאות בלי "נמצאו N" בכותרת (`    1-6`,
+    // נמדד ב-CD25), ובלי מודאל סיכום: כל חלון חדש הוא התשובה.
+    if (window == null && anyWindowIsResult && newMdiTitles.isNotEmpty) {
+      window = newMdiTitles.first.trim();
     }
 
     for (final dialog in dialogs) {

@@ -150,4 +150,17 @@ void main() {
       expect(ResponsaQuery.parse('${char(0x05B8)}${char(0x0596)}'), isNull);
     });
   });
+
+  test('ניקוד וטעמים עם CGJ, ואותיות עם ניקוד בתו אחד: המילה שלמה', () {
+    // בְּ֭ + CGJ באמצע מילה, כמו בטקסט התנ"ך באוצריא.
+    expect(
+      ResponsaQuery.parse('בְּ\u05AD\u034Fרֵאשִׁ֖ית בָּרָ֣א')!.text,
+      'בראשית ברא',
+    );
+    // בּ (U+FB31) ושׁ (U+FB2A): קודם נמחקו, ונשארו "ראית".
+    expect(
+      ResponsaQuery.parse('\uFB31רא\uFB2Aית \uFB4Fהים')!.text,
+      'בראשית אלהים',
+    );
+  });
 }

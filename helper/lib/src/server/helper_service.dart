@@ -15,6 +15,7 @@ import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 import 'package:responsa_helper/src/text/responsa_advanced_query.dart';
+import 'package:responsa_helper/src/text/responsa_hebrew.dart';
 import 'package:responsa_helper/src/text/responsa_query.dart';
 
 /// הלוגיקה של השירות, בלי HTTP: כל נקודת קצה ב-docs/PROTOCOL.md היא מתודה
@@ -51,6 +52,7 @@ class HelperService {
     'autoStart',
     'diagnostics',
     'showForms',
+    'freeFormSearch',
   ];
 
   static const int maxPageSize = 200;
@@ -367,6 +369,7 @@ class HelperService {
   /// נשען על הקטלוג כדי למצוא את הקטגוריות בעץ המאגרים.
   Future<Map<String, Object?>> searchText(Map<String, Object?> body) async {
     final advanced = _bool(body, 'advanced') ?? false;
+    final freeForm = !advanced && (_bool(body, 'freeForm') ?? false);
     final notify = _bool(body, 'notify') ?? false;
     final autoStart = _bool(body, 'autoStart') ?? true;
     final String text;
@@ -384,6 +387,22 @@ class HelperService {
         );
       }
       setup = await _searchSetup(body);
+    } else if (freeForm) {
+      // משפט במילים של המשתמש: רק מילים עבריות, כמו בטקסט מסומן, אבל ארוך
+      // יותר. בלי אופרטורים: בחלון הזה הם אינם תחביר.
+      final query = ResponsaQuery.parse(
+        _string(body, 'q', maxLength: ResponsaQuery.maxSentenceLength * 4),
+        maxWords: ResponsaQuery.maxSentenceWords,
+        maxLength: ResponsaQuery.maxSentenceLength,
+      );
+      if (query == null) {
+        throw const ApiError.badRequest(
+          'בניסוח שנכתב אין מילים בעברית לחיפוש בבר אילן.',
+        );
+      }
+      text = query.text;
+      truncated = query.truncated;
+      setup = await _searchSetup(body, freeForm: true);
     } else {
       final query = ResponsaQuery.parse(
         _string(body, 'q', maxLength: maxSelectionLength, truncate: true),
@@ -412,7 +431,11 @@ class HelperService {
           outcome != null &&
           outcome.state != ResponsaSearchState.pending) {
         logLine(
-          'search${advanced ? ' (advanced)' : ''} "$text": '
+          'search${advanced
+              ? ' (advanced)'
+              : freeForm
+              ? ' (free)'
+              : ''} "$text": '
           '${outcome.state.name}'
           '${outcome.count == null ? '' : ' ${outcome.count}'}'
           '${outcome.broughtToFront ? '' : ' (not brought to front)'}',
@@ -439,6 +462,7 @@ class HelperService {
           'query': text,
           'truncated': truncated,
           if (advanced) 'advanced': true,
+          if (freeForm) 'freeForm': true,
           'broughtToFront': outcome.broughtToFront,
         };
       }
@@ -454,7 +478,10 @@ class HelperService {
 
   /// `options` ו-`scope` של חיפוש מתקדם. תחום גובר על "חיפוש בכל המאגרים",
   /// שבבר אילן מבטל כל בחירה.
-  Future<ResponsaSearchSetup> _searchSetup(Map<String, Object?> body) async {
+  Future<ResponsaSearchSetup> _searchSetup(
+    Map<String, Object?> body, {
+    bool freeForm = false,
+  }) async {
     final options = body['options'];
     if (options != null && options is! Map) {
       throw const ApiError.badRequest('options חייב להיות אובייקט.');
@@ -467,10 +494,12 @@ class HelperService {
 
     final scope = await _scope(body['scope']);
     return ResponsaSearchSetup(
-      advanced: true,
+      advanced: !freeForm,
+      freeForm: freeForm,
       allDatabases: scope != null ? false : option('allDatabases'),
-      abbreviations: option('abbreviations'),
-      showForms: option('showForms'),
+      // ב"חיפוש בניסוח חופשי" אין את התיבות האלה.
+      abbreviations: freeForm ? null : option('abbreviations'),
+      showForms: freeForm ? null : option('showForms'),
       scope: scope,
     );
   }
@@ -607,15 +636,19 @@ class HelperService {
   /// ניקוד וטעמים נמחקים, מקף הופך לרווח, וגרשיים מנורמלים: המנתח של בר אילן
   /// מצפה לכתיב מלא בלי ניקוד. סימני כיווניות ורוחב אפס, שמגיעים בהדבקה
   /// מאוצריא או מ-Word, אינם נראים אבל מפילים את הניתוח.
-  static String normalizeReference(String value) => value
-      .replaceAll(RegExp('[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'), '')
-      .replaceAll(RegExp('[\u0591-\u05BD\u05BF-\u05C7]'), '')
-      .replaceAll('\u05BE', ' ')
-      .replaceAll(RegExp('[\u05F3\u2018\u2019\u00B4`]'), "'")
-      .replaceAll(RegExp("[\u05F4\u201C\u201D]|''"), '"')
-      .replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
+  static String normalizeReference(String value) =>
+      ResponsaHebrew.foldPresentationForms(value)
+          .replaceAll(
+            RegExp('[\u034F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'),
+            '',
+          )
+          .replaceAll(RegExp('[\u0591-\u05BD\u05BF-\u05C7]'), '')
+          .replaceAll('\u05BE', ' ')
+          .replaceAll(RegExp('[\u05F3\u2018\u2019\u00B4`]'), "'")
+          .replaceAll(RegExp("[\u05F4\u201C\u201D]|''"), '"')
+          .replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
 
   /// "פתיחת בר אילן": מפעיל אותו אם צריך ומביא אותו לחזית.
   Future<Map<String, Object?>> showResponsa(Map<String, Object?> body) async {

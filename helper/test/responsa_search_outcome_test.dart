@@ -243,6 +243,24 @@ void main() {
       );
     });
 
+    test('ניסוח חופשי: חלון בלי "נמצאו N" הוא התשובה, בלי ספירה', () {
+      // הכותרת כפי שנמדדה ב-CD25 (7.10.2026).
+      final free = ResponsaSearchAutomation.classify(
+        profile: profile,
+        dialogs: const [],
+        newMdiTitles: const ['    1-6'],
+        anyWindowIsResult: true,
+      );
+      expect(free.state, ResponsaSearchState.found);
+      expect(free.count, isNull);
+      expect(free.window, '1-6');
+      // בחיפוש אחר, חלון כזה אינו תשובה (למשל ספר שנפתח באותו רגע).
+      expect(
+        classify(const [], const ['    1-6']).state,
+        ResponsaSearchState.pending,
+      );
+    });
+
     test('ההגדרות שלא נקבעו אינן נוגעות בתיבות', () {
       expect(ResponsaSearchSetup.none.checks, isEmpty);
       expect(

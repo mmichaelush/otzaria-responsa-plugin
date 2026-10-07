@@ -1,3 +1,5 @@
+import 'package:responsa_helper/src/text/responsa_hebrew.dart';
+
 /// טקסט שנבחר באוצריא, כשאילתה לחיפוש בבר אילן: מילים עבריות בלבד. תווי
 /// החיפוש המתקדם של בר אילן (`# * ! + $ - < > { } % ^ ~ ?`) הם אופרטורים,
 /// ומשפט שמכיל אותם היה מחפש משהו אחר ממה שנבחר.
@@ -52,7 +54,7 @@ class ResponsaQuery {
   /// בלי ניקוד, טעמים ותווים בלתי-נראים, ועם גרש וגרשיים פשוטים: כך בר אילן
   /// מחפש. משותף לשאילתה מטקסט מסומן ולשאילתה המתקדמת.
   static String normalize(String input) {
-    var value = input
+    var value = ResponsaHebrew.foldPresentationForms(input)
         .replaceAll(_invisible, '')
         .replaceAll(_hebrewSeparators, ' ')
         .replaceAll(_marks, '');
@@ -63,8 +65,16 @@ class ResponsaQuery {
     return value;
   }
 
+  /// משפט ל"חיפוש בניסוח חופשי": אותן מילים, ויותר מהן.
+  static const int maxSentenceWords = 40;
+  static const int maxSentenceLength = 300;
+
   /// `null` כשלא נשארה אף מילה עברית.
-  static ResponsaQuery? parse(String? input) {
+  static ResponsaQuery? parse(
+    String? input, {
+    int maxWords = maxWords,
+    int maxLength = maxLength,
+  }) {
     if (input == null || input.isEmpty) return null;
     final value = normalize(input);
 

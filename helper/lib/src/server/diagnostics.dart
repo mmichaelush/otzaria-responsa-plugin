@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:responsa_helper/src/catalog/responsa_catalog_repository.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
+import 'package:responsa_helper/src/native/responsa_edition_probe.dart';
 import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
 
@@ -66,6 +67,10 @@ class HelperDiagnostics {
       ...installations,
       ...catalogLines,
       if (runningBuild != null) 'book list: reading now, $runningBuild',
+      // שורה לכל מהדורה שחיפשו בה: מה שונה בחלונות החיפוש לעומת CD25.
+      if (ResponsaEditionProbe.summary() case final editions?)
+        for (final line in editions.split('\n'))
+          'search windows vs CD25: $line',
       'last book list read: ${lastBuild ?? 'none since the service started'}',
       if (skipFile != null)
         if (ResponsaBuildSkipList.describe(skipFile) case final skips?)

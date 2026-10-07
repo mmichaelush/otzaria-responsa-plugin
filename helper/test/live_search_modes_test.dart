@@ -1,5 +1,5 @@
 // כלי מדידה ידני: חיפוש מתקדם ורגיל בבר אילן החי, גם כשעל המסך "חיפוש
-// טבלאי" (כמו שדווח מבר אילן 31), ובלי חלון ניהול הצורות.
+// טבלאי" (כמו שדווח מבר אילן 31), ובלי חלון ניהול הצורות; וניסוח חופשי.
 // dart test --run-skipped test/live_search_modes_test.dart
 @Tags(['live'])
 library;
@@ -13,7 +13,7 @@ import 'package:responsa_helper/src/native/responsa_win32.dart';
 import 'package:test/test.dart';
 
 /// כפתורי המעבר בין סוגי החיפוש, כמו ב-ResponsaSearchAutomation.
-const List<int> _modeButtons = [1207, 1208, 1209, 1210];
+const List<int> _modeButtons = [1207, 1208, 1209, 1189];
 
 List<int> _searchKinds(int pid, {bool visibleOnly = false}) => [
   for (final hwnd in ResponsaWin32.topWindows(pid))
@@ -47,8 +47,25 @@ Future<bool> _showTabular(int pid) async {
   return false;
 }
 
+/// חלונות תוצאות שחיפושים קודמים של הבדיקה השאירו (`נמצאו N תוצאות`, ושל
+/// ניסוח חופשי `    1-6`): בתקרת החלונות של בר אילן החיפוש הבא נכשל.
+void _closeResultWindows() {
+  final results = RegExp(r'^\s*(נמצאו \d[\d,]* תוצאות\s+)?\d+-\d+\s*$');
+  for (final instance in ResponsaWin32.topWindowsByClass('ResponsaProject')) {
+    if (!ResponsaWin32.isOnScreen(instance.hwnd)) continue;
+    final client = ResponsaWin32.mdiClient(instance.hwnd);
+    if (client == null) continue;
+    for (final child in ResponsaWin32.directChildren(client)) {
+      if (results.hasMatch(ResponsaWin32.windowText(child))) {
+        ResponsaWin32.destroyMdiChild(instance.hwnd, child);
+      }
+    }
+  }
+}
+
 void main() {
   test('search modes', () async {
+    _closeResultWindows();
     final controller = ResponsaController(allowAutoStart: () => true);
     // נקבע אחרי החיפוש הראשון, שמפעיל את בר אילן כשהוא סגור. מופעים חונים
     // מחוץ למסך אינם נבחרים, כמו בשירות.
@@ -85,11 +102,21 @@ void main() {
       '#שבת [1:3] #נר',
       const ResponsaSearchSetup(advanced: true, showForms: false),
     );
+    await run(
+      'free',
+      'האם מותר לנסוע באופניים בשבת',
+      const ResponsaSearchSetup(freeForm: true),
+    );
     print('tabular shown: ${await _showTabular(pid)}');
     await run(
-      'simple from tabular',
-      'נר שבת',
-      const ResponsaSearchSetup(showForms: false),
+      'free from tabular',
+      'האם מותר לנסוע באופניים בשבת',
+      const ResponsaSearchSetup(freeForm: true),
+    );
+    await run(
+      'advanced after free',
+      '#שבת [1:3] #נר',
+      const ResponsaSearchSetup(advanced: true, showForms: false),
     );
   }, timeout: const Timeout(Duration(minutes: 10)));
 }
