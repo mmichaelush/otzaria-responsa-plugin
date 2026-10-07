@@ -23,7 +23,6 @@
     "library.content.read",
     "navigation.write",
     "ui.create_shortcut",
-    "feedback.send_email",
     "events.subscribe:plugin.permissions_changed",
     "events.subscribe:settings.changed"
   ],
@@ -61,7 +60,8 @@
               "body": {
                 "q": { "$selection": "selectedText" },
                 "notify": true,
-                "autoStart": { "$storage": "responsa_auto_start" }
+                "autoStart": { "$storage": "responsa_auto_start" },
+                "showForms": { "$storage": "responsa_show_forms" }
               },
               "pendingMessage": "מחפש בבר אילן…",
               "unavailableMessage": "שירות בר אילן אינו פועל. כדי לבדוק מה חסר, פותחים את לשונית \"בר אילן\".",

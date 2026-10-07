@@ -1,5 +1,5 @@
 // מחבר את המודל ל-DOM. התוסף בנוי מלשוניות: "ספרים", "חיפוש בטקסט", "איתור
-// מקום", "הגדרות" ו"עזרה". [render] בונה את הלשונית הנוכחית מחדש; [update]
+// מקום", "הגדרות", "עזרה" ו"אודות ודיווח". [render] בונה את הלשונית הנוכחית מחדש; [update]
 // מעדכן אותה במקום (התקדמות, הערות), כדי שלחיצה, פוקוס ואנימציה לא ייקטעו
 // כמה פעמים בשנייה. מסך הפתיחה הוא הדיאלוג היחיד.
 (function (root) {
@@ -17,7 +17,7 @@
 
   /**
    * הלשוניות, לפי הסדר. `short` — השם בסרגל התחתון של חלון צר, שבו לכל
-   * לשונית חמישית מהרוחב.
+   * לשונית שישית מהרוחב.
    */
   const TABS = Object.freeze([
     { id: 'books', label: N('ספרים'), short: N('ספרים'), iconName: 'library_24_regular' },
@@ -25,6 +25,7 @@
     { id: 'locate', label: N('איתור מקום'), short: N('איתור'), iconName: 'document_search_24_regular' },
     { id: 'settings', label: N('הגדרות'), short: N('הגדרות'), iconName: 'settings_24_regular' },
     { id: 'help', label: N('עזרה'), short: N('עזרה'), iconName: 'question_circle_24_regular' },
+    { id: 'about', label: N('אודות ודיווח'), short: N('אודות'), iconName: 'info_24_regular' },
   ]);
 
   const SETUP_SCREENS = Domain.SETUP_SCREENS;
@@ -183,6 +184,8 @@
           return Panels.settingsPage(model, actions);
         case 'help':
           return Panels.helpPage(model, actions);
+        case 'about':
+          return Panels.aboutPage(model, actions);
         default:
           return Ui.screenView(model, actions);
       }

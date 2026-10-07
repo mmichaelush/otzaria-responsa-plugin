@@ -101,7 +101,7 @@
 - **`I18n.language` הוא getter.** `const { language } = I18n` מקפיא את הערך של רגע הטעינה. קוראים `I18n.language` בכל שימוש.
 - **הכותרת בתפריט הלחיצה הימנית** מגיעה מהמניפסט בעברית. הלשונית מעדכנת אותה בכל מעבר שפה (`engine.patchContextMenuTitle`); העדכון שומר על ה-`action` של הפריט.
 - **תצוגה מקדימה:** `tools/preview/build-preview.mjs` משכתב נתיבי `js/`, `css/` ו-`i18n/`. תיקייה חדשה ב-`plugin/` צריכה שורה שם, אחרת הקובץ לא נטען בתצוגה ואין שגיאה.
-  - **פרמטרים של `stub.js`:** `scenario`, `mode=dark`, `lang=en`, `query`, `page=books|text|locate|settings|help`, `tab` (כרטיסייה בעזרה), `adv=simple|words|scope|manual`, `run=1`, `loc=<מקום>`, `history=1`, `guide=1`, `welcome=1`, `details=<key>`, `offline=1`, `oldservice=1`, `service=<גרסה>`, `waiting=1`, `notice=1`, `scale=<מכפיל>`, `font=<גופן>`. בלי `welcome=1` מסך הפתיחה מסומן כ"כבר הוצג". פירוט ב-`CONTRIBUTING.md`.
+  - **פרמטרים של `stub.js`:** `scenario`, `mode=dark`, `lang=en`, `query`, `page=books|text|locate|settings|help|about`, `tab` (כרטיסייה בעזרה), `adv=simple|words|scope|manual`, `run=1`, `loc=<מקום>`, `history=1`, `guide=1`, `welcome=1`, `details=<key>`, `offline=1`, `oldservice=1`, `service=<גרסה>`, `waiting=1`, `notice=1`, `scale=<מכפיל>`, `font=<גופן>`. בלי `welcome=1` מסך הפתיחה מסומן כ"כבר הוצג". פירוט ב-`CONTRIBUTING.md`.
   - **`smoke.mjs` מתעלם משורות `[responsa] …`:** היומן רושם כשלים צפויים בכוונה (שירות שלא עונה הוא תרחיש). רק `[responsa] event … failed` נחשב שגיאה.
 
 ## בדיקה חיה של הממשק

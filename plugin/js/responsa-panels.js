@@ -1,4 +1,5 @@
-// הלשוניות "הגדרות" ו"עזרה", ומסך הפתיחה (הדיאלוג היחיד בתוסף). כמו
+// הלשוניות "הגדרות", "עזרה" ו"אודות ודיווח", ומסך הפתיחה (הדיאלוג היחיד
+// בתוסף). כמו
 // responsa-ui.js: מודל ופעולות נכנסים, אלמנט יוצא, וטקסט רק דרך textContent.
 (function (root) {
   'use strict';
@@ -18,7 +19,6 @@
     guide: 'guide',
     troubleshoot: 'troubleshoot',
     status: 'status',
-    about: 'about',
   });
 
   function has(model, permission) {
@@ -391,6 +391,24 @@
     });
   }
 
+  /** בשירות 0.5.3 ומטה ההגדרה אינה מגיעה לבר אילן (`showForms`). */
+  function showFormsRow(model, actions) {
+    const supported = Domain.serviceCan(model.health, 'showForms');
+    return switchRow({
+      iconName: 'document_bullet_list_24_regular',
+      title: t('חלון ניהול הצורות בחיפוש מטקסט מסומן'),
+      subtitle: t('ב"חיפוש בבר אילן" מהלחיצה הימנית, בר אילן מציג קודם את צורות המילים לבחירה, ורק אחר כך את התוצאות. כשהמתג כבוי, התוצאות מוצגות מיד. ההגדרה בבר אילן עצמו לא משתנה.'),
+      note:
+        supported || !model.health
+          ? null
+          : t('שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן החלון נפתח לפי ההגדרה בבר אילן. כדאי להוריד את הגרסה החדשה.'),
+      checked: model.settings.showForms,
+      disabled: Boolean(model.health) && !supported,
+      key: 'setting-show-forms',
+      onToggle: (value) => actions.setSetting('showForms', value),
+    });
+  }
+
   function catalogRows(model, actions) {
     const status = model.status || {};
     const catalog = status.catalog || {};
@@ -505,7 +523,7 @@
           contextMenuRow(model, actions),
           searchDialogRow(model, actions),
         ),
-        section(t('בר אילן'), null, autoStartRow(model, actions)),
+        section(t('בר אילן'), null, autoStartRow(model, actions), showFormsRow(model, actions)),
         section(t('תצוגה ושפה'), null, displayRows(model, actions)),
         section(t('רשימת הספרים'), null, catalogRows(model, actions)),
         shortcuts.length ? section(t('קיצורי דרך'), null, shortcuts) : null,
@@ -730,7 +748,7 @@
         el(
           'p',
           { class: 'help-tip' },
-          t('מה שחסר מוסבר בלשונית עצמה, צעד אחר צעד. אפשר לחזור למסך הזה מ"עזרה" ← "אודות ודיווח" ← "מסך הפתיחה".'),
+          t('מה שחסר מוסבר בלשונית עצמה, צעד אחר צעד. אפשר לחזור למסך הזה מהלשונית "אודות ודיווח" ← "מסך הפתיחה".'),
         ),
         el(
           'div',
@@ -856,6 +874,7 @@
       [t('לחיצה ימנית'), onOff(startup && model.settings.contextMenu)],
       [t('דיאלוג החיפוש'), onOff(startup && model.settings.searchDialog)],
       [t('הפעלת בר אילן כשהוא סגור'), onOff(model.settings.autoStart)],
+      [t('חלון ניהול הצורות בחיפוש מטקסט מסומן'), onOff(model.settings.showForms)],
       [t('הוספת רכיבים לתוכנה'), yesNo(startup)],
       [t('פורט השירות'), model.servicePort ? String(model.servicePort) : '—', 'ltr'],
     ].filter(Boolean);
@@ -960,7 +979,7 @@
             'p',
             { class: 'offline-note' },
             icon('wifi_off_24_regular'),
-            t('אין כרגע חיבור לאינטרנט, ולכן הקישורים לא ייפתחו. כל ההדרכה זמינה כאן, בכרטיסייה "איך משתמשים".'),
+            t('אין כרגע חיבור לאינטרנט, ולכן הקישורים לא ייפתחו. כל ההדרכה זמינה בלשונית "עזרה".'),
           )
         : null,
       linkRow('book_24_regular', t('מדריך למשתמש'), t('המדריך המלא, עם תמונות'), () => actions.openLink('guide'), 'link-guide'),
@@ -971,7 +990,13 @@
     );
   }
 
-  function aboutTab(model, actions) {
+  // ------------------------------------------------------- אודות ודיווח
+
+  /**
+   * לשונית ראשית ולא כרטיסייה בעזרה: הדיווח הוא הדרך היחידה לפנות מתוך
+   * התוסף, ולכן הוא במרחק לחיצה אחת. פנייה אחרת — רק ב-GitHub.
+   */
+  function aboutPage(model, actions) {
     const report = model.report;
     const details = el('textarea', {
       class: 'report-text',
@@ -987,79 +1012,61 @@
     details.addEventListener('input', () => actions.editReport(details.value));
     return el(
       'div',
-      { class: 'help-about' },
+      {},
+      pageHeader('about-title', t('אודות ודיווח')),
       el(
-        'section',
-        { class: 'about-card' },
-        el('h3', { class: 'about-name' }, t('בר אילן באוצריא')),
+        'div',
+        { class: 'page-body' },
         el(
-          'p',
-          { class: 'about-text' },
-          t('חיפוש ספרי פרויקט השו"ת של בר אילן המותקן במחשב, ופתיחתם בבר אילן — מתוך אוצריא.'),
-        ),
-        el(
-          'p',
-          { class: 'about-meta' },
-          t('גרסה {version} · מאת מיכאלוש', { version: model.pluginVersion || '—' }),
-        ),
-        el(
-          'div',
-          { class: 'help-actions' },
-          button('text', t('מסך הפתיחה'), actions.openWelcome, {
-            key: 'about-welcome',
-            icon: 'hand_wave_24_regular',
-          }),
-        ),
-      ),
-      clarification(actions),
-      linksCard(model, actions),
-      el(
-        'section',
-        { class: 'report-card' },
-        el('h3', { class: 'report-title' }, t('פנייה במייל')),
-        el(
-          'p',
-          { class: 'report-hint' },
-          t('לשאלות, להצעות ולדיווחים אפשר לכתוב גם ישירות למפתח:'),
-        ),
-        el(
-          'p',
-          { class: 'contact-email' },
-          el('span', { class: 'contact-address', dir: 'ltr' }, Domain.SUPPORT_EMAIL),
-          iconButton('copy_24_regular', t('העתקת הכתובת'), actions.copyEmail, { key: 'copy-email' }),
-        ),
-        has(model, 'feedback.send_email')
-          ? el(
-              'div',
-              { class: 'help-actions' },
-              button('text', t('כתיבת מייל'), actions.writeEmail, { key: 'write-email', icon: 'mail_24_regular' }),
-            )
-          : null,
-      ),
-      el(
-        'section',
-        { class: 'report-card' },
-        el('h3', { class: 'report-title' }, t('דיווח על בעיה')),
-        el(
-          'p',
-          { class: 'report-hint' },
-          t('הדיווח נשלח למפתח דרך אוצריא, יחד עם פרטי המערכת, יומן הפעולות האחרונות (כולל חיפושים וספרים שנפתחו) ויומן השירות (מהדורות בר אילן שנמצאו ומיקומן). שם המשתמש מושמט מכל נתיב. לפני השליחה אוצריא מבקשת אישור.'),
-        ),
-        details,
-        el(
-          'div',
-          { class: 'help-actions' },
-          button('filled', t('שליחת דיווח'), actions.sendReport, {
-            key: 'send-report',
-            icon: 'send_24_regular',
-            busy: report.sending,
-            busyLabel: t('שולח…'),
-            disabled: report.text.trim().length < 10,
-          }),
+          'section',
+          { class: 'about-card' },
+          el('h3', { class: 'about-name' }, t('בר אילן באוצריא')),
           el(
-            'span',
-            { class: 'report-length', hidden: report.text.trim().length >= 10 },
-            t('לפחות עשרה תווים'),
+            'p',
+            { class: 'about-text' },
+            t('חיפוש ספרי פרויקט השו"ת של בר אילן המותקן במחשב, ופתיחתם בבר אילן — מתוך אוצריא.'),
+          ),
+          el(
+            'p',
+            { class: 'about-meta' },
+            t('גרסה {version} · מאת מיכאלוש', { version: model.pluginVersion || '—' }),
+          ),
+          el(
+            'div',
+            { class: 'help-actions' },
+            button('text', t('מסך הפתיחה'), actions.openWelcome, {
+              key: 'about-welcome',
+              icon: 'hand_wave_24_regular',
+            }),
+          ),
+        ),
+        clarification(actions),
+        linksCard(model, actions),
+        el(
+          'section',
+          { class: 'report-card' },
+          el('h3', { class: 'report-title' }, t('דיווח על בעיה')),
+          el(
+            'p',
+            { class: 'report-hint' },
+            t('הדיווח נשלח למפתח דרך אוצריא, יחד עם פרטי המערכת, יומן הפעולות האחרונות (כולל חיפושים וספרים שנפתחו) ויומן השירות (מהדורות בר אילן שנמצאו ומיקומן). שם המשתמש מושמט מכל נתיב. לפני השליחה אוצריא מבקשת אישור.'),
+          ),
+          details,
+          el(
+            'div',
+            { class: 'help-actions' },
+            button('filled', t('שליחת דיווח'), actions.sendReport, {
+              key: 'send-report',
+              icon: 'send_24_regular',
+              busy: report.sending,
+              busyLabel: t('שולח…'),
+              disabled: report.text.trim().length < 10,
+            }),
+            el(
+              'span',
+              { class: 'report-length', hidden: report.text.trim().length >= 10 },
+              t('לפחות עשרה תווים'),
+            ),
           ),
         ),
       ),
@@ -1071,7 +1078,6 @@
       { id: HelpTab.guide, label: t('איך משתמשים'), iconName: 'book_24_regular' },
       { id: HelpTab.troubleshoot, label: t('פתרון בעיות'), iconName: 'wrench_24_regular' },
       { id: HelpTab.status, label: t('מצב המערכת'), iconName: 'pulse_24_regular' },
-      { id: HelpTab.about, label: t('אודות ודיווח'), iconName: 'info_24_regular' },
     ];
     const current = model.helpTab;
     const body =
@@ -1079,9 +1085,7 @@
         ? troubleshootTab(model)
         : current === HelpTab.status
           ? statusTab(model, actions)
-          : current === HelpTab.about
-            ? aboutTab(model, actions)
-            : guideTab(model, actions);
+          : guideTab(model, actions);
     return el(
       'div',
       {},
@@ -1132,6 +1136,7 @@
     switchRow,
     settingsPage,
     helpPage,
+    aboutPage,
     welcomeDialog,
     statusFacts,
     statusText,

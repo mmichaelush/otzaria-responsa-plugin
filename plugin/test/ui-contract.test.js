@@ -21,7 +21,7 @@ const scripts = fs
   .replace(/^\s*\/\/.*$/gm, '');
 
 /** מחלקות שמשמשות רק כווי לקוד (querySelector), ואין להן עיצוב משלהן. */
-const HOOKS = new Set(['advanced-body', 'live-region', 'banner-host', 'notice-host', 'results-host', 'help-guide', 'help-faq', 'help-status', 'help-about', 'tab-label', 'show-responsa', 'simple-input', 'locate-input', 'summary-lines']);
+const HOOKS = new Set(['advanced-body', 'live-region', 'banner-host', 'notice-host', 'results-host', 'help-guide', 'help-faq', 'help-status', 'tab-label', 'show-responsa', 'simple-input', 'locate-input', 'summary-lines']);
 
 function classesUsed() {
   const used = new Set();

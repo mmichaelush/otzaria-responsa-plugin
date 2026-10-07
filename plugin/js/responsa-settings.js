@@ -20,6 +20,11 @@
      * הלחיצה של אוצריא (`$storage`), כי השירות אינו שומר הגדרות.
      */
     autoStart: 'responsa_auto_start',
+    /**
+     * "חלון ניהול הצורות" של בר אילן בחיפוש מטקסט מסומן. נשלח בפעולת הלחיצה
+     * של אוצריא (`$storage`); בלי ערך השירות מכבה אותו.
+     */
+    showForms: 'responsa_show_forms',
     /** מה נשלח לאחרונה לחיפוש הספרייה: `{ builtAt, count }`. */
     librarySync: 'responsa_library_sync',
     /** המשתמש סגר את ההערה על ההרשאה "הוספת רכיבים לתוכנה". */
@@ -42,7 +47,7 @@
   });
 
   /** הלשוניות של התוסף, לפי הסדר. */
-  const TABS = Object.freeze(['books', 'text', 'locate', 'settings', 'help']);
+  const TABS = Object.freeze(['books', 'text', 'locate', 'settings', 'help', 'about']);
 
   /** כמה מקומות אחרונים נשמרים. */
   const MAX_LOCATE_HISTORY = 8;
@@ -85,6 +90,7 @@
     contextMenu: true,
     searchDialog: true,
     autoStart: true,
+    showForms: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
@@ -107,6 +113,7 @@
       searchDialog:
         typeof value.searchDialog === 'boolean' ? value.searchDialog : DEFAULTS.searchDialog,
       autoStart: typeof value.autoStart === 'boolean' ? value.autoStart : DEFAULTS.autoStart,
+      showForms: value.showForms === true,
       startupNotice: value.startupNotice === true,
       welcomeSeen: value.welcomeSeen === true,
       browsePath:
@@ -146,6 +153,7 @@
         'contextMenu',
         'searchDialog',
         'autoStart',
+        'showForms',
         'startupNotice',
         'welcomeSeen',
         'browsePath',

@@ -67,6 +67,8 @@ test('פריט התפריט, הקיצור שלו והמתג שמסתיר אות�
   assert.ok(item, 'פריט "חיפוש בבר אילן" במניפסט');
   assert.deepEqual(conditions(item.when)[Settings.KEYS.contextMenu], { notEquals: false }, 'בלי ערך שמור — מוצג');
   assertServiceAction(item, '/text/search');
+  // "חלון ניהול הצורות": מההגדרה; בלי ערך (null) השירות מכבה אותו.
+  assert.deepEqual(item.action.args.body.showForms, { $storage: Settings.KEYS.showForms });
   assert.deepEqual(item.action.args.body.q, { $selection: 'selectedText' });
   const shortcut = startup.shortcuts.find((s) => s.contextMenuItemId === Domain.CONTEXT_MENU_ITEM);
   assert.ok(shortcut && shortcut.key, 'יש קיצור מקלדת לחיפוש');

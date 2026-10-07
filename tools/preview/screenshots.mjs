@@ -43,7 +43,7 @@ const shots = [
   ['help-guide', 'scenario=ready&page=help'],
   ['help-troubleshoot', 'scenario=ready&page=help&tab=troubleshoot'],
   ['help-status', 'scenario=ready&page=help&tab=status'],
-  ['help-about', 'scenario=ready&page=help&tab=about', '1000,1200'],
+  ['about', 'scenario=ready&page=about', '1000,1200'],
   ['english-results', 'scenario=ready&lang=en&query=' + encodeURIComponent('מהרש"א')],
   ['english-settings', 'scenario=ready&lang=en&page=settings'],
   ['not-installed', 'scenario=notInstalled'],
@@ -56,7 +56,7 @@ const shots = [
   ['welcome', 'scenario=ready&welcome=1'],
   ['welcome-first-run', 'scenario=serviceMissing&welcome=1'],
   ['book-details', 'scenario=ready&details=3232&query=' + encodeURIComponent('מהרש"א')],
-  ['help-about-offline', 'scenario=ready&page=help&tab=about&offline=1'],
+  ['about-offline', 'scenario=ready&page=about&offline=1'],
   ['service-missing-offline', 'scenario=serviceMissing&offline=1'],
   ['browse-inner', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי')],
   ['browse-books', 'scenario=ready&browse=' + encodeURIComponent('מפרשים ופוסקים על הבבלי והירושלמי/אחרונים על הבבלי/מהרש"א')],
@@ -79,13 +79,14 @@ const shots = [
   ['narrow-welcome', 'scenario=ready&welcome=1', '380,820'],
   ['narrow-settings', 'scenario=ready&page=settings', '380,820'],
   ['narrow-help', 'scenario=ready&page=help&tab=status', '380,820'],
+  ['narrow-about', 'scenario=ready&page=about', '380,820'],
   ['wide-results', 'scenario=ready&query=' + encodeURIComponent('מהרש"א'), '1600,900'],
   // "גודל תצוגה" 150%: באותו חלון הפריסה עוברת לצרה כשהתוכן כבר לא נכנס.
   ['scaled-results', 'scenario=ready&scale=1.5&query=' + encodeURIComponent('מהרש"א'), '1000,720'],
   ['scaled-narrow', 'scenario=ready&scale=1.3&page=locate&history=1', '700,720'],
 ];
 
-// SHOTS=help-about,ready-empty מצלם רק את המסכים האלה.
+// SHOTS=about,ready-empty מצלם רק את המסכים האלה.
 const only = process.env.SHOTS ? process.env.SHOTS.split(',') : null;
 for (const [name, query, size] of shots) {
   if (only && !only.includes(name)) continue;

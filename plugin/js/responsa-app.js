@@ -53,7 +53,7 @@
       this.settings = opts.settings || new SettingsStore(this.runtime);
       this.engine = opts.engine || new Engine(this.runtime, this.service, { log: this.log });
       this.model = {
-        /** הלשונית: 'books' | 'text' | 'locate' | 'settings' | 'help'. */
+        /** הלשונית: 'books' | 'text' | 'locate' | 'settings' | 'help' | 'about'. */
         tab: 'books',
         screen: Screen.loading,
         platform: null,
@@ -244,6 +244,7 @@
       const view = param && param.view;
       if (view === 'settings') this.selectTab('settings');
       else if (view === 'help') this.openHelp(param.tab);
+      else if (view === 'about') this.openAbout();
       else if (view === 'welcome') this.openSheet('welcome');
       else if (Settings.TABS.includes(view)) this.selectTab(view);
     }
@@ -653,11 +654,23 @@
       if (tab === 'text') this._ensurePicker();
     }
 
-    /** עזרה, בכרטיסייה [helpTab] (או בזו שהייתה פתוחה). */
+    /**
+     * עזרה, בכרטיסייה [helpTab] (או בזו שהייתה פתוחה). 'about' — מקיצורי דרך
+     * ומקוד מלפני ש"אודות ודיווח" הייתה לשונית — פותח אותה.
+     */
     openHelp(helpTab) {
+      if (helpTab === 'about') return this.openAbout();
       if (helpTab && Object.values(Panels.HelpTab).includes(helpTab)) this.model.helpTab = helpTab;
       if (this.model.sheet === 'welcome') this.closeSheet();
       if (this.model.tab !== 'help') this.selectTab('help');
+      else this._renderPage();
+      return undefined;
+    }
+
+    /** "אודות ודיווח". מעבר אליה ממסך הפתיחה נחשב סגירה שלו, כמו לעזרה. */
+    openAbout() {
+      if (this.model.sheet === 'welcome') this.closeSheet();
+      if (this.model.tab !== 'about') this.selectTab('about');
       else this._renderPage();
     }
 
@@ -1286,12 +1299,13 @@
     // ---------------------------------------------------- הגדרות
 
     /**
-     * מסך הפתיחה הוא הדיאלוג היחיד. 'settings' ו-'help' (מקיצורי דרך ומקוד
-     * ישן) הן לשוניות.
+     * מסך הפתיחה הוא הדיאלוג היחיד. 'settings', 'help' ו-'about' (מקיצורי דרך
+     * ומקוד ישן) הן לשוניות.
      */
     openSheet(sheet, helpTab) {
       if (sheet === 'settings') return this.selectTab('settings');
       if (sheet === 'help') return this.openHelp(helpTab);
+      if (sheet === 'about') return this.openAbout();
       if (sheet !== 'welcome') return undefined;
       this.model.sheet = 'welcome';
       this.view.renderSheet(this.model, this.actions);
@@ -1418,40 +1432,6 @@
       );
     }
 
-    async copyEmail() {
-      try {
-        await root.navigator.clipboard.writeText(Domain.SUPPORT_EMAIL);
-        await this.runtime.notify.success(t('הכתובת הועתקה.'));
-      } catch (_) {
-        await this.runtime.notify.error(t('ההעתקה לא הצליחה. הכתובת: {email}', { email: Domain.SUPPORT_EMAIL }));
-      }
-    }
-
-    /**
-     * תוכנת הדואר שבמחשב, עם פרטי המערכת וסיכום השירות. היומנים נשארים
-     * בחוץ, כדי שהמייל יהיה קצר. בלעדיה — הכתובת להעתקה.
-     */
-    async writeEmail() {
-      const service = await this._serviceForReport();
-      const sent = await this.runtime.callSoft('feedback.sendEmail', {
-        to: Domain.SUPPORT_EMAIL,
-        subject: t('בר אילן באוצריא {version}', { version: this.model.pluginVersion || '' }).trim(),
-        body:
-          '\n\n---\n' +
-          Log.scrub(
-            Domain.diagnosticsText({
-              status: Panels.statusText(this.model, { forReport: true }),
-              service: service && { summary: service.summary, note: service.note },
-            }),
-          ),
-      });
-      if (sent === null) {
-        await this.runtime.notify.info(
-          t('לא נמצאה תוכנת דואר במחשב. אפשר לכתוב מכל תיבת דואר אל {email}.', { email: Domain.SUPPORT_EMAIL }),
-        );
-      }
-    }
-
     async copyStatus() {
       const text = await this._diagnostics();
       try {
@@ -1497,7 +1477,11 @@
           );
         }
       } catch (error) {
-        await this.runtime.notify.error(t('הדיווח לא נשלח. אפשר לנסות שוב מאוחר יותר.'));
+        // אין דרך אחרת לפנות מתוך התוסף: הקישור ל-GitHub, כמו בהודעות הקישורים.
+        this.log.warn('הדיווח לא נשלח', error);
+        await this.runtime.notify.error(
+          t('הדיווח לא נשלח. אפשר לנסות שוב מאוחר יותר, או לדווח ב-GitHub: {url}', { url: Domain.Links.issues }),
+        );
       } finally {
         report.sending = false;
         this._renderPage();
@@ -1577,6 +1561,7 @@
         openLocateChoice: (index) => this.openLocateChoice(index),
         open: (book) => this.open(book),
         openHelp: (tab) => this.openHelp(tab),
+        openAbout: () => this.openAbout(),
         closeSheet: () => this.closeSheet(),
         // מסך הפתיחה אינו נסגר בלחיצה מחוץ לו: ההבהרה בו חובה.
         dismissSheet: () => {},
@@ -1585,8 +1570,6 @@
         setLanguage: (value) => this.setLanguage(value),
         createShortcut: (location) => this.createShortcut(location),
         copyStatus: () => this.copyStatus(),
-        copyEmail: () => this.copyEmail(),
-        writeEmail: () => this.writeEmail(),
         editReport: (text) => this.editReport(text),
         sendReport: () => this.sendReport(),
       };

@@ -23,7 +23,7 @@
     'הדיווח נשלח. תודה!': 'The report was sent. Thank you!',
     'הדיווח יישלח כשיהיה חיבור לאינטרנט. תודה!':
       'The report will be sent when you are online. Thank you!',
-    'הדיווח לא נשלח. אפשר לנסות שוב מאוחר יותר.': 'The report was not sent. Please try again later.',
+    'הדיווח לא נשלח. אפשר לנסות שוב מאוחר יותר, או לדווח ב-GitHub: {url}': 'The report was not sent. Please try again later, or report on GitHub: {url}',
     'לא ניתן לפתוח את הדפדפן. הכתובת: {url}': 'The browser could not be opened. The address is: {url}',
 
     // ---- פרטים לפנייה ולדיווח
@@ -266,7 +266,7 @@
     'בדיקה חוזרת': 'Check again',
     'בודק…': 'Checking…',
 
-    // ---- עזרה: אודות ודיווח
+    // ---- אודות ודיווח
     'תיאור הבעיה': 'Problem description',
     'מה ניסיתם לעשות, ומה קרה במקום?': 'What did you try to do, and what happened instead?',
     'חיפוש ספרי פרויקט השו"ת של בר אילן המותקן במחשב, ופתיחתם בבר אילן — מתוך אוצריא.':
@@ -327,7 +327,7 @@
     'התחלה': 'Start',
     'נמצא במחשב: פרויקט השו"ת, מהדורה {version}.': 'Found on this computer: the Responsa Project, edition {version}.',
     'קריאת רשימת הספרים לא הושלמה': 'Reading the book list did not finish',
-    'שום דבר לא נמחק. אפשר לנסות שוב.': 'Nothing was deleted. You can try again.',
+    'שום דבר לא נמחק.': 'Nothing was deleted.',
     'ניסיון נוסף': 'Try again',
     'התקדמות קריאת רשימת הספרים': 'Book list reading progress',
     'מבטל…': 'Cancelling…',
@@ -415,7 +415,7 @@
     'פעולות אחרונות': 'Recent activity',
     'עוד לא נרשמו פעולות.': 'No activity recorded yet.',
     'קישורים': 'Links',
-    'אין כרגע חיבור לאינטרנט, ולכן הקישורים לא ייפתחו. כל ההדרכה זמינה כאן, בכרטיסייה "איך משתמשים".': 'There is no internet connection right now, so the links will not open. All the guidance is available here, in the "How to use" tab.',
+    'אין כרגע חיבור לאינטרנט, ולכן הקישורים לא ייפתחו. כל ההדרכה זמינה בלשונית "עזרה".': 'There is no internet connection right now, so the links will not open. All the guidance is available in the "Help" tab.',
     'המדריך המלא, עם תמונות': 'The full guide, with pictures',
     'התוסף בחנות התוספים של אוצריא': 'The plugin in the Otzaria plugin store',
     'עדכונים ודירוג': 'Updates and ratings',
@@ -444,7 +444,7 @@
     'חיפוש טקסט מתוך ספר פתוח': 'Searching text from an open book',
     'בזמן הקריאה בר אילן עובד לבד: אל תלחצו בו ואל תסגרו אותו. אפשר להמשיך לעבוד באוצריא.': 'While it reads, Bar-Ilan works on its own: do not click in it or close it. You can keep working in Otzaria.',
     'התוסף אינו מוצר רשמי של אוניברסיטת בר אילן ואינו קשור אליה. כל הזכויות על התוכנה ועל התוכן שבה שמורות לבעליהן.': 'The plugin is not an official product of Bar-Ilan University and is not affiliated with it. All rights to the software and its content belong to their owners.',
-    'מה שחסר מוסבר בלשונית עצמה, צעד אחר צעד. אפשר לחזור למסך הזה מ"עזרה" ← "אודות ודיווח" ← "מסך הפתיחה".': 'Whatever is missing is explained step by step in the tab itself. You can return to this screen from "Help" → "About and report" → "Welcome screen".',
+    'מה שחסר מוסבר בלשונית עצמה, צעד אחר צעד. אפשר לחזור למסך הזה מהלשונית "אודות ודיווח" ← "מסך הפתיחה".': 'Whatever is missing is explained step by step in the tab itself. You can return to this screen from the "About and report" tab → "Welcome screen".',
     'Windows לפעמים משאיר את חלון בר אילן מאחור, והוא מהבהב בשורת המשימות. לוחצים עליו בשורת המשימות.': 'Windows sometimes keeps the Bar-Ilan window behind, and it flashes in the taskbar. Click it in the taskbar.',
     'כתוב שבבר אילן פתוחים חלונות רבים מדי': 'It says too many windows are open in Bar-Ilan',
     '"העתקת הפרטים" מעתיקה גם את יומן הפעולות ואת יומן השירות, כדי לצרף אותם לפנייה.':
@@ -610,10 +610,6 @@
     'כולל ראשי תיבות: "צער בעלי חיים" ימצא גם "צעב"ח".': 'Including abbreviations: "צער בעלי חיים" also finds "צעב"ח".',
     'לפני התוצאות בר אילן יציג את הצורות שנמצאו, לבחירה.': 'Before the results, Bar-Ilan will show the forms it found, to choose from.',
     'נמצאו {count} מקורות. בוחרים את המקור לפתיחה.': '{count} sources found. Choose the source to open.',
-    'הכתובת הועתקה.': 'The address was copied.',
-    'ההעתקה לא הצליחה. הכתובת: {email}': 'Copying failed. The address: {email}',
-    'בר אילן באוצריא {version}': 'Bar-Ilan in Otzaria {version}',
-    'לא נמצאה תוכנת דואר במחשב. אפשר לכתוב מכל תיבת דואר אל {email}.': 'No email program was found on this computer. You can write from any mailbox to {email}.',
     'לא ניתן לקרוא את רשימת הספרים. אפשר לבנות אותה מחדש בלשונית "הגדרות".': 'The book list cannot be read. You can rebuild it in the "Settings" tab.',
     'שם ספר ומקום, למשל: בראשית ב ג': 'Book and location, e.g. בראשית ב ג',
     'שם ספר ומקום בו': 'Book name and location in it',
@@ -660,10 +656,6 @@
     '"איתור מקום" לא מוצא את המקום': '"Find a location" does not find the location',
     'כותבים את שם הספר כמו בבר אילן, בכתיב מלא, ואחריו את המקום: "בראשית ב ג", "ברכות דף ב עמוד א", "שולחן ערוך אורח חיים סימן א". אפשר לבדוק את שם הספר בלשונית "ספרים".': 'Write the book name as in Bar-Ilan, in full spelling, followed by the location: "בראשית ב ג", "ברכות דף ב עמוד א", "שולחן ערוך אורח חיים סימן א". You can check the book name in the "Books" tab.',
     'פורט השירות': 'Service port',
-    'פנייה במייל': 'Contact by email',
-    'לשאלות, להצעות ולדיווחים אפשר לכתוב גם ישירות למפתח:': 'For questions, suggestions and reports you can also write directly to the developer:',
-    'העתקת הכתובת': 'Copy the address',
-    'כתיבת מייל': 'Write an email',
     'פתיחה במקום מסוים': 'Open at a location',
     'פתיחה במקום מסוים: {title}': 'Open at a location: {title}',
     'לא המילה {term}': 'not the word {term}',
@@ -671,6 +663,7 @@
     'לשוניות התוסף': 'Plugin tabs',
     'ספרים': 'Books',
     'עזרה': 'Help',
+    'אודות': 'About',
     'מחפשים בטקסט של כל הספרים, או פותחים מקום מדויק — למשל "בראשית ב ג".': 'Search the text of all books, or open an exact location — e.g. "בראשית ב ג".',
     'שירות בר אילן שבמחשב ישן, ולכן "חיפוש בבר אילן" בלחיצה ימנית ופתיחת ספרים מחיפוש הספרייה אינם זמינים. כדאי להוריד את הגרסה החדשה.':
       'The Bar-Ilan service on this computer is outdated, so "Search in Bar-Ilan" from the right-click menu and opening books from the library search are unavailable. Please download the new version.',
@@ -686,5 +679,12 @@
 
     // ---- 0.5.2: אפשרויות המילה מדיאלוג החיפוש של אוצריא
     'לא עבר במדויק: {names}.': 'Not carried over exactly: {names}.',
+
+    // ---- 0.5.4: חלון ניהול הצורות בחיפוש מטקסט מסומן
+    'חלון ניהול הצורות בחיפוש מטקסט מסומן': 'Word forms window when searching selected text',
+    'ב"חיפוש בבר אילן" מהלחיצה הימנית, בר אילן מציג קודם את צורות המילים לבחירה, ורק אחר כך את התוצאות. כשהמתג כבוי, התוצאות מוצגות מיד. ההגדרה בבר אילן עצמו לא משתנה.':
+      'With "Search in Bar-Ilan" from the right-click menu, Bar-Ilan first shows the word forms to choose from, and only then the results. When this is off, the results appear right away. The setting in Bar-Ilan itself does not change.',
+    'שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן החלון נפתח לפי ההגדרה בבר אילן. כדאי להוריד את הגרסה החדשה.':
+      'The Bar-Ilan service on this computer is old and does not know this setting, so the window follows the setting in Bar-Ilan. Downloading the new version is recommended.',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

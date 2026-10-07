@@ -48,7 +48,6 @@ ICONS = [
     'history_24_regular',
     'info_24_regular',
     'library_24_regular',
-    'mail_24_regular',
     'open_24_regular',
     'pulse_24_regular',
     'question_circle_24_regular',

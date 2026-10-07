@@ -1,5 +1,5 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
-// המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|settings|help&tab=...
+// המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|settings|help|about&tab=...
 // &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&service=<גרסה>&waiting=1&notice=1
 // &noicons=1&scale=1.3&font=Shofar`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
@@ -154,6 +154,7 @@
                     'locate',
                     'autoStart',
                     'diagnostics',
+                    'showForms',
                   ],
             };
       case '/status':
@@ -223,7 +224,8 @@
   // מסך הפתיחה מוצג רק כשמבקשים (`welcome=1`), כדי שלא יכסה כל מסך אחר.
   const storage = params.get('welcome') ? {} : { responsa_welcome_seen: true };
   if (params.get('browse')) storage.responsa_browse_path = params.get('browse');
-  // `page=<tab>`: הלשונית שנפתחת (ספרים, חיפוש בטקסט, איתור מקום, הגדרות, עזרה).
+  // `page=<tab>`: הלשונית שנפתחת (ספרים, חיפוש בטקסט, איתור מקום, הגדרות, עזרה,
+  // אודות ודיווח).
   if (params.get('page')) storage.responsa_tab = params.get('page');
   if (params.get('history')) storage.responsa_locate_history = ['שמות רבה פרשה א', 'ברכות דף ב עמוד א'];
   // `scale=<מכפיל>` ו-`font=<גופן>`: "גודל תצוגה" ו"גופן" מההגדרות.
@@ -291,7 +293,6 @@
               'search.dialog',
               'navigation.write',
               'ui.create_shortcut',
-              'feedback.send_email',
               'library.books.provide',
             ],
       theme: {

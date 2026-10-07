@@ -283,7 +283,7 @@
       iconName: 'warning_24_regular',
       error: true,
       title: t('קריאת רשימת הספרים לא הושלמה'),
-      text: [model.message, t('שום דבר לא נמחק. אפשר לנסות שוב.')],
+      text: [model.message, t('שום דבר לא נמחק.')],
       // הסיבה המלאה ביומן השירות, שנכנס לפרטים; כך אפשר לצרף אותה לפנייה.
       actions: [
         button('filled', t('ניסיון נוסף'), actions.startBuild, { key: 'start-build' }),

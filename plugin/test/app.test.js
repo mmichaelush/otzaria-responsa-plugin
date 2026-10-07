@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { loadPlugin } = require('./helpers/load');
 const { FakeBridge, reply } = require('./helpers/fake-bridge');
 
-const { App: AppModule, Domain, Log: LogModule } = loadPlugin();
+const { App: AppModule, Domain, Log: LogModule, Panels } = loadPlugin();
 const { App } = AppModule;
 const { Screen } = Domain;
 
@@ -492,6 +492,34 @@ test('הגדרות ועזרה הן לשוניות; כרטיסייה לא מוכ�
   app.suspend();
 });
 
+test('"אודות ודיווח" היא לשונית ראשית, ו-openHelp(\'about\') מקוד ישן מגיע אליה', async () => {
+  const { app, view, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  assert.equal(Object.values(Panels.HelpTab).includes('about'), false);
+  app.actions.openHelp('status');
+  app.actions.openHelp('about');
+  assert.equal(app.model.tab, 'about');
+  assert.equal(app.model.helpTab, 'status', 'הכרטיסייה בעזרה נשארת');
+  assert.equal(view.pageFocus, 'about');
+  app.actions.openHelp();
+  assert.equal(app.model.tab, 'help');
+  assert.equal(app.model.helpTab, 'status');
+  app.openSheet('about');
+  assert.equal(app.model.tab, 'about');
+  await until(() =>
+    bridge.calls.some((c) => c.method === 'storage.set' && c.payload.key === 'responsa_tab' && c.payload.value === 'about'),
+  );
+  app.suspend();
+});
+
+test('"אודות ודיווח" נפתחת שוב בהפעלה הבאה', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  bridge.methods['storage.get'] = ({ key }) => ({ responsa_tab: 'about', responsa_welcome_seen: true })[key] ?? null;
+  await app.boot(windows);
+  assert.equal(app.model.tab, 'about');
+  app.suspend();
+});
+
 test('הלשונית האחרונה נפתחת שוב בהפעלה הבאה', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   bridge.methods['storage.get'] = ({ key }) => ({ responsa_tab: 'locate', responsa_welcome_seen: true })[key] ?? null;
@@ -504,6 +532,13 @@ test('plugin.page_opened עם view פותח את הלשונית המבוקשת',
   await app.boot(windows);
   app.pageOpened({ param: { view: 'help', tab: 'troubleshoot' } });
   assert.equal(app.model.tab, 'help');
+  assert.equal(app.model.helpTab, 'troubleshoot');
+  app.pageOpened({ param: { view: 'about' } });
+  assert.equal(app.model.tab, 'about');
+  app.selectTab('books');
+  // קיצור דרך מלפני ש"אודות ודיווח" הייתה לשונית.
+  app.pageOpened({ param: { view: 'help', tab: 'about' } });
+  assert.equal(app.model.tab, 'about');
   assert.equal(app.model.helpTab, 'troubleshoot');
   app.pageOpened({ param: { view: 'settings' } });
   assert.equal(app.model.tab, 'settings');
@@ -691,6 +726,19 @@ test('מסך הפתיחה: מוצג בהפעלה הראשונה, ו"הבנתי" 
   assert.equal(again.app.model.sheet, null);
   again.app.suspend();
 });
+test('מסך הפתיחה: מעבר ממנו ל"אודות ודיווח" נחשב סגירה שלו', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  const stored = {};
+  bridge.methods['storage.get'] = () => null;
+  bridge.methods['storage.set'] = ({ key, value }) => ((stored[key] = value), true);
+  await app.boot(windows);
+  assert.equal(app.model.sheet, 'welcome');
+  app.actions.openAbout();
+  await until(() => stored.responsa_welcome_seen === true);
+  assert.equal(app.model.sheet, null);
+  assert.equal(app.model.tab, 'about');
+  app.suspend();
+});
 test('מסך הפתיחה: מעבר ממנו לעזרה נחשב סגירה שלו', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   const stored = {};
@@ -841,14 +889,19 @@ test('דיווח: סיכום השירות ויומן השירות נכנסים, 
   assert.doesNotMatch(details, /Moshe/);
 });
 
-test('מייל: סיכום השירות נכנס לגוף, בלי היומנים', async () => {
+test('דיווח שנכשל: הקישור ל-GitHub, בלי מייל, והתיאור נשאר', async () => {
   const { app, bridge } = setupWithLog(diagnosticsRoutes('svc first'));
+  bridge.methods['feedback.report'] = { error: { code: 'error.internal' } };
   await app.boot(windows);
   app.suspend();
-  await app.actions.writeEmail();
-  const { body } = bridge.calls.find((c) => c.method === 'feedback.sendEmail').payload;
-  assert.match(body, /--- שירות בר אילן ---\nService 0\.5\.1/);
-  assert.doesNotMatch(body, /יומן|Moshe/);
+  app.actions.editReport('השירות לא מגיב אחרי שחיברתי כונן');
+  await app.actions.sendReport();
+  const message = bridge.notifications('ui.showError').at(-1);
+  assert.ok(message.endsWith(Domain.Links.issues), message);
+  assert.doesNotMatch(message, /@/);
+  assert.equal(app.model.report.sending, false);
+  assert.equal(app.model.report.text, 'השירות לא מגיב אחרי שחיברתי כונן');
+  assert.equal(bridge.calls.some((c) => c.method === 'feedback.sendEmail'), false);
 });
 
 test('הורדת המתקין: הקישור הישיר למתקין האחרון; בלי אינטרנט — הסבר להורדה במחשב אחר', async () => {
@@ -1540,16 +1593,11 @@ test('"הפעלת בר אילן כשהוא סגור" כבוי: כל פעולה �
   app.suspend();
 });
 
-test('פנייה במייל: נפתחת תוכנת הדואר עם הכתובת; בלעדיה — הכתובת להעתקה', async () => {
-  const { app, bridge } = await bootAdvanced({});
-  await app.actions.writeEmail();
-  const email = bridge.calls.find((c) => c.method === 'feedback.sendEmail');
-  assert.equal(email.payload.to, 'michaelush613@gmail.com');
-  assert.match(email.payload.body, /גרסת התוסף|תוסף/);
-  bridge.methods['feedback.sendEmail'] = { error: { code: 'error.internal' } };
-  await app.actions.writeEmail();
-  assert.match(bridge.notifications('ui.showMessage').at(-1), /michaelush613@gmail.com/);
-  app.suspend();
+test('אין פנייה במייל: לא פעולה ולא כתובת', () => {
+  const { app } = setup({});
+  assert.equal('writeEmail' in app.actions, false);
+  assert.equal('copyEmail' in app.actions, false);
+  assert.equal('SUPPORT_EMAIL' in Domain, false);
 });
 test('חיפוש מתקדם: שירות ישן — אין בקשה', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });

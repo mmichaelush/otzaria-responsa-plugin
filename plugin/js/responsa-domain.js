@@ -58,9 +58,6 @@
     forum: 'https://otzaria.org/forum/post/40770',
   });
 
-  /** כתובת המייל לפניות ולדיווחים, מחוץ לדיווח המובנה של אוצריא. */
-  const SUPPORT_EMAIL = 'michaelush613@gmail.com';
-
   /** אורך התיאור בדיווח על בעיה; השאר שמור לפרטי המערכת וליומן. */
   const MAX_REPORT_TEXT = 3000;
 
@@ -801,7 +798,7 @@
   }
 
   /**
-   * הטקסט של "העתקת הפרטים" ושל המייל, בלי הגבלת אורך. `parts`:
+   * הטקסט של "העתקת הפרטים", בלי הגבלת אורך. `parts`:
    * `{ status, log, service }`; [service] מ-`ServiceClient.diagnostics`, או
    * `null` כששירות ישן אינו מוסר פרטים.
    */
@@ -868,7 +865,6 @@
     LOCATE_MENU_ITEM,
     COMMAND_TABS,
     Links,
-    SUPPORT_EMAIL,
     MAX_REPORT_TEXT,
     Command,
     Screen,

@@ -53,7 +53,7 @@
 | `js/responsa-theme.js` | ערכת אוצריא ← משתני CSS; גופן וגודל תצוגה מההגדרות |
 | `js/responsa-icons.js` | אייקוני Fluent לדף (נבנה, לא נערך) |
 | `js/responsa-ui.js` | DOM של לשונית "ספרים" ומסכי ההכנה |
-| `js/responsa-panels.js` | DOM של הלשוניות "הגדרות" ו"עזרה", ומסך הפתיחה |
+| `js/responsa-panels.js` | DOM של הלשוניות "הגדרות", "עזרה" ו"אודות ודיווח", ומסך הפתיחה |
 | `js/responsa-advanced-ui.js` | DOM של לשונית "חיפוש בטקסט" |
 | `js/responsa-locate-ui.js` | DOM של לשונית "איתור מקום" |
 | `js/responsa-view.js` | שורת הלשוניות והלשונית הנוכחית: עדכון במקום, פוקוס, `inert` |
@@ -157,7 +157,7 @@
 | `scenario=` | `ready`, `serviceMissing`, `needsCatalog`, `building`, `buildFailed`, `rebuilding`, `otherInstallation`, `notInstalled`, `portTaken`, `permissionDenied`, `serviceError`, `serviceOutdated`, `unsupported` |
 | `mode=dark` | ערכה כהה |
 | `lang=en` | אנגלית |
-| `page=` | הלשונית: `books`, `text`, `locate`, `settings`, `help` (עם `tab=guide\|troubleshoot\|status\|about`) |
+| `page=` | הלשונית: `books`, `text`, `locate`, `settings`, `help` (עם `tab=guide\|troubleshoot\|status`), `about` |
 | `query=` | חיפוש מוכן |
 | `adv=` | חיפוש שמור בלשונית "חיפוש בטקסט": `simple`, `words`, `scope`, `manual` |
 | `loc=` / `history=1` | מקום שהוקלד ב"איתור מקום" / מקומות אחרונים |
