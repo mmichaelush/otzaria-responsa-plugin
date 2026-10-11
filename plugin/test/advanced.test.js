@@ -604,3 +604,12 @@ test('ניסוח חופשי: חיפוש מדיאלוג החיפוש של אוצ�
   const spaced = Advanced.fromOtzariaSearch(current, { query: 'נר שבת', mode: 'advanced', distance: 3 });
   assert.equal(spaced.query.mode, 'builder');
 });
+
+test('חיפוש רגיל ב"חיפוש קל": הבקשה וההסבר', () => {
+  const query = normalize({ ...emptyQuery(), simpleText: 'נר שבת' });
+  assert.deepEqual(toRequest(query, { easy: true }), { q: 'נר שבת', easy: true, options: { allDatabases: true } });
+  assert.equal(toRequest(query).advanced, true);
+  const lines = Advanced.describe(query, 'בכל הספרים.', { easy: true });
+  assert.match(lines[0], /חיפוש קל/);
+  assert.equal(lines[1], 'בכל הספרים.');
+});

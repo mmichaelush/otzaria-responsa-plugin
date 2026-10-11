@@ -49,7 +49,7 @@ test('normalize: סימני כיווניות, גרשיים כפולים וגרש
 test('fromSelection: טקסט מסומן שהוא מקום — בלי הסוגריים; קטע מהספר או שם בלבד — null', () => {
   assert.equal(Locate.fromSelection('(ב"מ לא, א)'), 'ב"מ לא, א');
   assert.equal(Locate.fromSelection(' [שו"ע או"ח סי\' רצט]; '), 'שו"ע או"ח סי\' רצט');
-  assert.equal(Locate.fromSelection('ברכות ב.'), 'ברכות ב.');
+  assert.equal(Locate.fromSelection('ברכות ב.'), 'ברכות דף ב עמוד א');
   assert.equal(Locate.fromSelection('(שם)'), null);
   assert.equal(Locate.fromSelection(''), null);
   assert.equal(Locate.fromSelection(undefined), null);
@@ -163,4 +163,15 @@ test('headingsAt: לכל רמה הכותרת האחרונה שלפני השור�
 
 test('normalize: CGJ ואותיות עם ניקוד בתו אחד', () => {
   assert.equal(Locate.normalize('\uFB31ְּ\u034Fרֵא\uFB2Aִית א'), 'בראשית א');
+});
+
+test('talmudPage: דף בנקודה, בנקודתיים או ע"א/ע"ב, בצורה שבר אילן מזהה', () => {
+  assert.equal(Locate.fromSelection('(שבת לא.)'), 'שבת דף לא עמוד א');
+  assert.equal(Locate.fromSelection('ב"מ ד:'), 'ב"מ דף ד עמוד ב');
+  assert.equal(Locate.fromSelection("חולין יד' ע\"ב"), 'חולין דף יד עמוד ב');
+  assert.equal(Locate.fromSelection('ברכות דף ב.'), 'ברכות דף ב עמוד א');
+  // שני מספרים: לא ברור מה הדף, ונשאר כפי שסומן.
+  assert.equal(Locate.fromSelection("עירובין ד' ה."), "עירובין ד' ה.");
+  // בלי סימן עמוד: כמו קודם.
+  assert.equal(Locate.fromSelection('שבועות יד'), 'שבועות יד');
 });

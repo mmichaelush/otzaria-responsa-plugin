@@ -278,7 +278,7 @@
   }
 
   /** חיפוש רגיל: שדה אחד, כמו בחלון החיפוש של בר אילן. */
-  function simpleEditor(state, actions) {
+  function simpleEditor(state, actions, easy) {
     const input = el('input', {
       class: 'search-input simple-input',
       type: 'search',
@@ -298,7 +298,9 @@
       el(
         'p',
         { class: 'advanced-hint' },
-        t('המילים יחופשו צמודות, בסדר שנכתבו. לחיפוש מילים רחוקות, צורות אחרות של מילה או מילים חלופיות — "חיפוש מתקדם".'),
+        easy
+          ? t('כמו "חיפוש קל" בבר אילן, עם ההגדרות שבחרתם בו. לבחירה מדויקת של צורות, מרחקים ומילים חלופיות — "חיפוש מתקדם".')
+          : t('המילים יחופשו צמודות, בסדר שנכתבו. לחיפוש מילים רחוקות, צורות אחרות של מילה או מילים חלופיות — "חיפוש מתקדם".'),
       ),
     ];
   }
@@ -324,7 +326,7 @@
     ];
   }
 
-  function wordsSection(state, actions) {
+  function wordsSection(state, actions, easy) {
     const query = state.query;
     const Mode = Advanced.Mode;
     return el(
@@ -336,7 +338,7 @@
         query.mode === Mode.simple || query.mode === Mode.free ? null : 1,
       ),
       query.mode === Mode.simple
-        ? simpleEditor(state, actions)
+        ? simpleEditor(state, actions, easy)
         : query.mode === Mode.free
           ? freeEditor(state, actions)
           : query.mode === Mode.manual
@@ -552,7 +554,11 @@
   function summaryLines(model) {
     const query = model.advanced.query;
     const text = Advanced.buildQuery(query);
-    const lines = text ? Advanced.describe(query, scopeLabel(query, Domain.catalogReady(model.status))) : [];
+    const lines = text
+      ? Advanced.describe(query, scopeLabel(query, Domain.catalogReady(model.status)), {
+          easy: Domain.serviceCan(model.health, 'easySearch'),
+        })
+      : [];
     return el(
       'div',
       { class: 'summary-lines', 'data-role': 'adv-summary' },
@@ -675,6 +681,8 @@
     const catalogReady = Domain.catalogReady(model.status);
     const mode = state.query.mode;
     const advanced = mode === Mode.builder || mode === Mode.manual;
+    // חיפוש רגיל ב"חיפוש קל": ההגדרות שם הן של המשתמש, ואין בו ראשי תיבות.
+    const easy = mode === Mode.simple && Domain.serviceCan(model.health, 'easySearch');
     // הסגמנט נשאר גלוי גם מול שירות ישן; רק בחירה בו מסבירה שצריך לעדכן.
     const note = Advanced.serviceNote(state.query, (name) => Domain.serviceCan(model.health, name));
     const body = supported
@@ -699,10 +707,10 @@
                 button('tonal', t('הורדת הגרסה החדשה'), actions.download, { key: 'adv-free-download' }),
               )
             : [
-                wordsSection(state, actions),
+                wordsSection(state, actions, easy),
                 scopeSection(state, actions, advanced ? 2 : null, catalogReady),
                 // ראשי תיבות ו"ניהול הצורות" אינם חלק מניסוח חופשי.
-                mode === Mode.free ? null : optionsSection(state, actions, advanced ? 3 : null),
+                mode === Mode.free || easy ? null : optionsSection(state, actions, advanced ? 3 : null),
                 summaryCard(model, actions),
                 advanced ? guideSection(actions) : null,
               ],

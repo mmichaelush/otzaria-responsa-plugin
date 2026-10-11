@@ -950,11 +950,12 @@
         this.view.announce(problem.message);
         return;
       }
-      const body = Advanced.toRequest(query);
+      const easy = Domain.serviceCan(this.model.health, 'easySearch');
+      const body = Advanced.toRequest(query, { easy });
       state.running = true;
       state.status = null;
       this._renderPage();
-      this.log.info('חיפוש בטקסט (' + query.mode + '): ' + body.q, {
+      this.log.info('חיפוש בטקסט (' + (body.easy ? 'easy' : query.mode) + '): ' + body.q, {
         scope: query.scope.mode,
         items: query.scope.items.length,
       });
@@ -1154,6 +1155,15 @@
       if (outcome !== 'notFound' || !reader) return;
       this.log.info('איתור מקום: בר אילן אינו מכיר את הטקסט המסומן, ולכן המקום שפתוח');
       await this._locateLadder(reader);
+      // בלי ההסבר נראה כאילו הסימון לא נקרא כלל.
+      const state = this.model.locate;
+      if (state.status && state.status.kind === 'success') {
+        state.status = {
+          ...state.status,
+          text: t('בר אילן לא זיהה את "{ref}" כמקום, ולכן נפתח המקום שבו קוראים.', { ref }) + ' ' + state.status.text,
+        };
+        this._renderPage();
+      }
     }
 
     async _locateLadder(reader) {

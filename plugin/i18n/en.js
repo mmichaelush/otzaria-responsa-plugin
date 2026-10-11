@@ -699,5 +699,13 @@
       'With "Search in Bar-Ilan" from the right-click menu, Bar-Ilan first shows the word forms to choose from, and only then the results. When this is off, the results appear right away. The setting in Bar-Ilan itself does not change.',
     'שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן החלון נפתח לפי ההגדרה בבר אילן. כדאי להוריד את הגרסה החדשה.':
       'The Bar-Ilan service on this computer is old and does not know this setting, so the window follows the setting in Bar-Ilan. Downloading the new version is recommended.',
+
+    // ---- 0.5.6: חיפוש רגיל ב"חיפוש קל" של בר אילן
+    'בר אילן יחפש את "{words}" ב"חיפוש קל", לפי ההגדרות שבחרתם שם (למשל אותיות שימוש ומרחק בין המילים).':
+      'Bar-Ilan will search for "{words}" with its Easy Search (חיפוש קל), using the settings you chose there (for example prefixes and the distance between words).',
+    'כמו "חיפוש קל" בבר אילן, עם ההגדרות שבחרתם בו. לבחירה מדויקת של צורות, מרחקים ומילים חלופיות — "חיפוש מתקדם".':
+      'Like Easy Search (חיפוש קל) in Bar-Ilan, with the settings you chose there. For exact control of word forms, distances and alternative words, use "Advanced search".',
+    'בר אילן לא זיהה את "{ref}" כמקום, ולכן נפתח המקום שבו קוראים.':
+      'Bar-Ilan did not recognize "{ref}" as a location, so the place you are reading was opened instead.',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

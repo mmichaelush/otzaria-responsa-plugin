@@ -1070,6 +1070,24 @@ test('חיפוש רגיל: המילים נשלחות צמודות, והתשוב�
   app.suspend();
 });
 
+test('חיפוש רגיל מול שירות עם easySearch: "חיפוש קל" של בר אילן, בלי ראשי תיבות', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/health': reply(200, {
+      ok: true,
+      service: 'otzaria-responsa',
+      apiVersion: 1,
+      capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'advancedSearch', 'easySearch'],
+    }),
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 7189, query: 'נר שבת', easy: true }),
+  });
+  app.actions.selectTab('text');
+  app.advancedSet({ simpleText: 'נֵר, שַׁבָּת!', options: { abbreviations: true, showForms: false } }, { light: true });
+  await app.runAdvanced();
+  assert.deepEqual(requests(bridge, '/text/search')[0].body, { q: 'נר שבת', easy: true, options: { allDatabases: true } });
+  assert.equal(app.model.advanced.status.kind, 'success');
+  app.suspend();
+});
+
 test('חיפוש מתקדם: נבנה מהבונה ונשלח עם האפשרויות, והתשובה מוצגת', async () => {
   const { app, bridge, view } = await bootAdvanced({
     '/text/search': reply(200, { ok: true, outcome: 'found', count: 191, query: 'נר [1:4] שבת', advanced: true }),

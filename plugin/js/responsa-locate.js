@@ -96,7 +96,24 @@
       /\d/.test(ref) ||
       tokens.slice(1).some((token) => PLACE.has(wordKey(token))) ||
       isNumeral(tokens[tokens.length - 1]);
-    return place ? ref : null;
+    return place ? talmudPage(ref) : null;
+  }
+
+  /**
+   * ציון דף כמו בגמרא (`שבת לא.`, `ב"מ ד' ע"ב`) ← הצורה שבר אילן מזהה
+   * (`שבת דף לא עמוד א`); כמו [readerHeading] בכותרת. רק מספר אחד בסוף,
+   * אחרי שם: `עירובין ד' ה.` עמום, ונשאר כפי שסומן.
+   */
+  function talmudPage(ref) {
+    const match = ref.match(/^(.*\S)\s+(?:דף\s+)?([א-ת"']+?)'?\s*(?:([.:])|\s+ע"([אב]))$/);
+    if (!match || !isNumeral(match[2])) return ref;
+    const [, written, number, mark, side] = match;
+    const name = written.replace(/\s+דף$/, '');
+    // השם עצמו מסתיים במספר (`עירובין ד'`): שני מספרים, ולא ברור מה הדף.
+    const last = name.split(' ').pop();
+    if (name.split(' ').length > 1 && isNumeral(last) && !PLACE.has(wordKey(last))) return ref;
+    const amud = side || (mark === '.' ? 'א' : 'ב');
+    return name + ' דף ' + number.replace(/'$/, '') + ' עמוד ' + amud;
   }
 
   /** המקום האחרון בראש הרשימה, בלי כפילויות. */
@@ -318,6 +335,7 @@
     headingsAt,
     fromReader,
     fromSelection,
+    talmudPage,
     rankChoices,
     displayOrder,
   };

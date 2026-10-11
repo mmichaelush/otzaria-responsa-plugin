@@ -157,6 +157,8 @@
                     'showForms',
                     // `nofree=1`: שירות שמכיר את החיפוש המתקדם, אבל לא ניסוח חופשי.
                     ...(params.get('nofree') ? [] : ['freeFormSearch']),
+                    // `noeasy=1`: שירות שחיפוש רגיל בו הוא חיפוש מתקדם, המילים צמודות.
+                    ...(params.get('noeasy') ? [] : ['easySearch']),
                   ],
             };
       case '/status':
@@ -184,7 +186,7 @@
         return body.freeForm
           ? // בחלון התוצאות של ניסוח חופשי אין מספר, ולכן גם השירות אינו מחזיר אותו.
             { ok: true, outcome: 'found', query: body.q, freeForm: true, broughtToFront: true }
-          : { ok: true, outcome: 'found', count: 191, query: body.q, advanced: body.advanced, broughtToFront: true };
+          : { ok: true, outcome: 'found', count: 191, query: body.q, advanced: body.advanced, easy: body.easy, broughtToFront: true };
       // "בראשית ב ג": כמה מקורות לבחירה, כמו בבר אילן; כל השאר נפתח מיד.
       case '/reference/open':
         return body.index === undefined && String(body.ref).startsWith('בראשית')

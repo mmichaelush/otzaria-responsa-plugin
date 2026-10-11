@@ -580,16 +580,22 @@
    * גוף הבקשה ל-`POST /text/search` (docs/PROTOCOL.md). ניסוח חופשי נשלח
    * עם `freeForm` ובלי `advanced`, ובלי ראשי תיבות וצורות: אין להם מקום בו.
    */
-  function toRequest(query) {
+  function toRequest(query, how) {
     const free = query.mode === Mode.free;
-    const options = free
-      ? {}
-      : {
-          abbreviations: query.options.abbreviations,
-          // בחיפוש רגיל אין "ניהול הצורות": המילים נשלחות כפי שנכתבו.
-          showForms: query.mode !== Mode.simple && query.options.showForms,
-        };
-    const body = { q: buildQuery(query), ...(free ? { freeForm: true } : { advanced: true }), options };
+    // חיפוש רגיל ב"חיפוש קל" של בר אילן, לפי ההגדרות של המשתמש שם (שירות
+    // עם `easySearch`). בלעדיו — חיפוש מתקדם, המילים צמודות.
+    const easy = query.mode === Mode.simple && Boolean(how && how.easy);
+    const options =
+      free || easy
+        ? {}
+        : {
+            abbreviations: query.options.abbreviations,
+            // בחיפוש רגיל אין "ניהול הצורות": המילים נשלחות כפי שנכתבו.
+            showForms: query.mode !== Mode.simple && query.options.showForms,
+          };
+    const body = easy
+      ? { q: simpleWords(query.simpleText).join(' '), easy: true, options }
+      : { q: buildQuery(query), ...(free ? { freeForm: true } : { advanced: true }), options };
     if (query.scope.mode === Scope.all) options.allDatabases = true;
     else if (query.scope.mode === Scope.current) options.allDatabases = false;
     else {
@@ -643,8 +649,20 @@
    * והאפשרויות. בכתיבה ידנית — רק המקום והאפשרויות; בניסוח חופשי — המשפט
    * והמקום.
    */
-  function describe(query, scopeLabel) {
+  function describe(query, scopeLabel, how) {
     const lines = [];
+    if (query.mode === Mode.simple && how && how.easy) {
+      const words = simpleWords(query.simpleText);
+      if (words.length) {
+        lines.push(
+          t('בר אילן יחפש את "{words}" ב"חיפוש קל", לפי ההגדרות שבחרתם שם (למשל אותיות שימוש ומרחק בין המילים).', {
+            words: words.join(' '),
+          }),
+        );
+      }
+      if (scopeLabel) lines.push(scopeLabel);
+      return lines;
+    }
     if (query.mode === Mode.free) {
       const sentence = freeText(query.freeText);
       if (sentence) lines.push(t('בר אילן יחפש מקורות לפי הניסוח: "{text}"', { text: sentence }));
