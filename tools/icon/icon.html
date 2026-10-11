@@ -1,37 +1,248 @@
 <!DOCTYPE html>
 <html lang="he" dir="ltr"><head><meta charset="UTF-8"><style>
-html,body{margin:0;background:transparent;overflow:hidden} svg{position:absolute;left:0;top:0}
+html,body{margin:0;background:transparent;overflow:hidden} svg{position:absolute}
 </style></head><body>
 <!--
-  אייקון התוסף: ספר פתוח עם זכוכית מגדלת, על רקע ה-primary של אוצריא. באותו
-  רעיון כמו book_open_medium_search_24_regular של אוצריא (האייקון שבסרגל
-  הכלים), אבל ציור מקורי: ספריית האייקונים של אוצריא ברישיון GPL-3.0. לא
-  הסמל של בר אילן, שהוא סימן מסחרי. נבנה ל-PNG ול-ICO ב-build_app_icon.mjs.
+  אייקון התוסף: הסמל של שו"ת בר אילן (ספר פתוח עם שורות טקסט בשני הדפים,
+  וזכוכית מגדלת גדולה על הדף הימני, הידית יוצאת לימין למטה), מצויר מחדש
+  בסגנון האייקון של אוצריא: קווי מתאר וטקסט בזהב מתכתי, דפים לבנים, צל רך
+  ורקע שקוף. נבנה ל-PNG ול-ICO ב-build_app_icon.mjs.
+
+  ארבעה ציורים: full לגדלים 48 ומעלה, ו-s32, s24, s16 לגדלים הקטנים. בהם
+  פחות שורות, קווים עבים יותר וצבעים אחידים במקום גרדיאנט, מיושרים לפיקסלים.
+  המיקומים של ה-svg הגלויים למטה תואמים את SLOTS ב-build_app_icon.mjs.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<svg width="0" height="0" style="left:0;top:0" aria-hidden="true">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#9a6a1c"/>
-      <stop offset="1" stop-color="#6e470a"/>
+    <!-- זהב מתכתי: פסים בהירים וכהים לסירוגין, כמו באייקון של אוצריא. -->
+    <linearGradient id="gold" gradientUnits="userSpaceOnUse" x1="16" y1="24" x2="240" y2="232">
+      <stop offset="0" stop-color="#fbe6a0"/>
+      <stop offset="0.16" stop-color="#e4b24b"/>
+      <stop offset="0.34" stop-color="#b47a18"/>
+      <stop offset="0.5" stop-color="#f3d27a"/>
+      <stop offset="0.6" stop-color="#fff2c2"/>
+      <stop offset="0.74" stop-color="#d7a23a"/>
+      <stop offset="1" stop-color="#8c5c0f"/>
     </linearGradient>
-    <!-- העדשה "חותכת" את הדף שמתחתיה, כמו באייקוני אוצריא. -->
-    <mask id="lens-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
-      <rect width="24" height="24" fill="#ffffff"/>
-      <circle cx="16.4" cy="13.9" r="4.55" fill="#000000"/>
-    </mask>
-  </defs>
-  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#g)"/>
-  <g transform="translate(32 30) scale(8)" fill="none" stroke="#ffffff" stroke-width="1.55"
-     stroke-linecap="round" stroke-linejoin="round">
-    <g mask="url(#lens-cut)">
-      <!-- שני הדפים והשדרה. -->
-      <path d="M12 7.1 C10 5.7 7.3 5.2 3.9 5.5 V17.6 C7.3 17.3 10 17.8 12 19.2 Z"/>
-      <path d="M12 7.1 C14 5.7 16.7 5.2 20.1 5.5 V17.6 C16.7 17.3 14 17.8 12 19.2"/>
-      <!-- שורות טקסט בדף הימני (ספר עברי נפתח מימין). -->
-      <path d="M14.3 9.2 H17.7"/>
+    <linearGradient id="cover" gradientUnits="userSpaceOnUse" x1="0" y1="56" x2="0" y2="222">
+      <stop offset="0" stop-color="#f7dc8a"/>
+      <stop offset="0.4" stop-color="#dcaa40"/>
+      <stop offset="0.75" stop-color="#b47d1c"/>
+      <stop offset="1" stop-color="#7f520c"/>
+    </linearGradient>
+    <!-- שורת טקסט: מוט זהב עם שיפוע, בהיר למעלה וכהה למטה. -->
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde7a4"/>
+      <stop offset="0.35" stop-color="#ebbd55"/>
+      <stop offset="0.7" stop-color="#c78c24"/>
+      <stop offset="1" stop-color="#94610f"/>
+    </linearGradient>
+    <!-- הדף מוצל ליד השדרה. ההשתקפות של הדף הימני הופכת גם אותו. -->
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fffdf7"/>
+      <stop offset="0.72" stop-color="#fbf7ee"/>
+      <stop offset="0.93" stop-color="#efe6d3"/>
+      <stop offset="1" stop-color="#e2d4b6"/>
+    </linearGradient>
+    <linearGradient id="stack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f1e8d4"/>
+      <stop offset="1" stop-color="#dccba5"/>
+    </linearGradient>
+    <linearGradient id="ring" gradientUnits="userSpaceOnUse" x1="99" y1="83" x2="201" y2="185">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.25" stop-color="#e9b94f"/>
+      <stop offset="0.5" stop-color="#9f6a14"/>
+      <stop offset="0.75" stop-color="#e6b54c"/>
+      <stop offset="1" stop-color="#fbe3a0"/>
+    </linearGradient>
+    <!-- הידית מסובבת ב-45°, ולכן הגרדיאנט האנכי הוא לרוחבה. -->
+    <linearGradient id="handle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a4f0a"/>
+      <stop offset="0.28" stop-color="#d9a640"/>
+      <stop offset="0.48" stop-color="#fbe39c"/>
+      <stop offset="0.72" stop-color="#c38a24"/>
+      <stop offset="1" stop-color="#6c4507"/>
+    </linearGradient>
+    <!-- הזכוכית: תכלת עדין (כמו העדשה של בר אילן) ושוליים בגוון זהב. -->
+    <radialGradient id="glass" cx="0.36" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#e3f0f8" stop-opacity="0.3"/>
+      <stop offset="0.85" stop-color="#cfe0ea" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#a7782a" stop-opacity="0.45"/>
+    </radialGradient>
+    <filter id="drop" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="3.5" stdDeviation="3.5" flood-color="#4a3000" flood-opacity="0.32"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <clipPath id="glass-clip"><circle cx="150" cy="134" r="40.5"/></clipPath>
+
+    <!-- הדף השמאלי. הימני הוא השתקפות שלו סביב השדרה (x=128). -->
+    <path id="page" d="M128 54 C108 40 70 34 30 39 Q24 40 24 46 V181 Q24 186.5 30 186 C70 181 106 184 128 198 Z"/>
+
+    <!-- הדפים עם השורות, בלי הכריכה: מצוירים שוב, מוגדלים, בתוך העדשה. -->
+    <g id="pages">
+      <g>
+        <use href="#page" transform="translate(-6 8)" fill="url(#stack)" stroke="#8a5c12" stroke-width="6" stroke-linejoin="round"/>
+        <use href="#page" transform="translate(-6 8)" fill="none" stroke="url(#gold)" stroke-width="3.5" stroke-linejoin="round"/>
+        <use href="#page" transform="matrix(-1 0 0 1 262 8)" fill="url(#stack)" stroke="#8a5c12" stroke-width="6" stroke-linejoin="round"/>
+        <use href="#page" transform="matrix(-1 0 0 1 262 8)" fill="none" stroke="url(#gold)" stroke-width="3.5" stroke-linejoin="round"/>
+      </g>
+      <use href="#page" fill="url(#paper)" stroke="#8a5c12" stroke-width="9" stroke-linejoin="round"/>
+      <use href="#page" transform="matrix(-1 0 0 1 256 0)" fill="url(#paper)" stroke="#8a5c12" stroke-width="9" stroke-linejoin="round"/>
+      <use href="#page" fill="none" stroke="url(#gold)" stroke-width="6" stroke-linejoin="round"/>
+      <use href="#page" transform="matrix(-1 0 0 1 256 0)" fill="none" stroke="url(#gold)" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M128 56 V196" stroke="#8a5c12" stroke-width="3" stroke-linecap="round"/>
+      <!-- שורות: מיושרות לימין, כמו טקסט עברי. -->
+      <g fill="url(#bar)" stroke="#9a6a14" stroke-width="1">
+        <rect x="44" y="64" width="68" height="10" rx="5"/>
+        <rect x="56" y="86" width="56" height="10" rx="5"/>
+        <rect x="40" y="108" width="72" height="10" rx="5"/>
+        <rect x="50" y="130" width="62" height="10" rx="5"/>
+        <rect x="68" y="152" width="44" height="10" rx="5"/>
+        <rect x="146" y="64" width="66" height="10" rx="5"/>
+        <rect x="160" y="86" width="52" height="10" rx="5"/>
+        <rect x="144" y="108" width="68" height="10" rx="5"/>
+        <rect x="152" y="130" width="60" height="10" rx="5"/>
+        <rect x="174" y="152" width="38" height="10" rx="5"/>
+      </g>
     </g>
-    <path d="M6.3 9.4 H9.7 M6.3 12 H9.7 M6.3 14.6 H8.7"/>
-    <circle cx="16.4" cy="13.9" r="3.05"/>
-    <path d="M18.6 16.1 L21 18.5" stroke-width="1.9"/>
-  </g>
-</svg></body></html>
+
+    <symbol id="full" viewBox="0 0 256 256">
+      <g filter="url(#drop)">
+        <!-- הספר קטן מעט ומוסט שמאלה ולמעלה, כדי שהידית תצא ממנו כמו אצל בר אילן. -->
+        <g transform="translate(-1.5 -3) scale(0.94)">
+          <!-- הכריכה: נראית רק בשוליים ולמטה, עם שקע בשדרה. -->
+          <path d="M30 60 H14 Q8 60 8 66 V203 Q8 210 15 209.5 C58 205 98 208 114 215 Q128 222 142 215 C158 208 198 205 241 209.5 Q248 210 248 203 V66 Q248 60 242 60 H226 Z"
+                fill="url(#cover)" stroke="#7a4e0b" stroke-width="2.5" stroke-linejoin="round"/>
+          <use href="#pages"/>
+        </g>
+        <!-- צל הזכוכית על הדף. -->
+        <g filter="url(#soft)" opacity="0.28" fill="#3a2600">
+          <circle cx="157" cy="142" r="50"/>
+          <path d="M190 174 L234 218" stroke="#3a2600" stroke-width="22" stroke-linecap="round"/>
+        </g>
+        <!-- מה שרואים דרך העדשה: אותם דפים, מוגדלים. העדשה ממורכזת בין שתי
+             שורות, כדי שלא תיראה מוט אחד גדול (כמו סימן "הקטנה"). -->
+        <g clip-path="url(#glass-clip)">
+          <rect x="104" y="88" width="92" height="92" fill="#fffdf7"/>
+          <use href="#pages" transform="translate(150 134) scale(1.4) translate(-150 -134) translate(-1.5 -3) scale(0.94)"/>
+          <circle cx="150" cy="134" r="40.5" fill="url(#glass)"/>
+        </g>
+        <path d="M119.1 125.7 A32 32 0 0 1 141.7 103.1" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.85"/>
+        <!-- הידית. -->
+        <g transform="translate(150 134) rotate(45)">
+          <rect x="62" y="-10.5" width="56" height="21" rx="10.5" fill="url(#handle)" stroke="#6a4306" stroke-width="2.5"/>
+          <rect x="47" y="-13" width="18" height="26" rx="3.5" fill="url(#handle)" stroke="#6a4306" stroke-width="2.5"/>
+        </g>
+        <!-- המסגרת של העדשה. -->
+        <circle cx="150" cy="134" r="46" fill="none" stroke="#6f4808" stroke-width="15"/>
+        <circle cx="150" cy="134" r="46" fill="none" stroke="url(#ring)" stroke-width="11"/>
+        <circle cx="150" cy="134" r="50.2" fill="none" stroke="#fff3c8" stroke-width="1" opacity="0.55"/>
+      </g>
+    </symbol>
+
+    <!-- 32 פיקסלים: ארבע שורות משמאל, אחת מימין, בלי שכבת דפים. -->
+    <symbol id="s32" viewBox="0 0 32 32">
+      <path d="M1.5 8.5 H29.5 V26.5 H17.5 L15.5 28 L13.5 26.5 H1.5 Z" fill="#d6a13a" stroke="#7d520c" stroke-linejoin="round"/>
+      <g fill="#fffdf7" stroke="#9c6a10" stroke-width="1.3" stroke-linejoin="round">
+        <path d="M15.5 6.5 C12.5 4.5 7.5 4 3.5 4.5 V24.5 C8 24 12.5 24.5 15.5 26 Z"/>
+        <path d="M15.5 6.5 C18.5 4.5 23.5 4 27.5 4.5 V24.5 C23 24 18.5 24.5 15.5 26 Z"/>
+      </g>
+      <g fill="#c38820">
+        <rect x="6" y="8" width="7" height="2"/>
+        <rect x="8" y="12" width="5" height="2"/>
+        <rect x="6" y="16" width="7" height="2"/>
+        <rect x="9" y="20" width="4" height="2"/>
+        <rect x="18" y="8" width="7" height="2"/>
+      </g>
+      <path d="M24.5 22.5 L29.5 27.5" stroke="#6f4808" stroke-width="5" stroke-linecap="round"/>
+      <path d="M24.5 22.5 L29.5 27.5" stroke="#e0ad45" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="20" cy="17" r="5" fill="#eef5f9"/>
+      <path d="M17 16.5 A3 3 0 0 1 19.5 14" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+      <circle cx="20" cy="17" r="6" fill="none" stroke="#6f4808" stroke-width="3"/>
+      <circle cx="20" cy="17" r="6" fill="none" stroke="#efc35a" stroke-width="1.6"/>
+    </symbol>
+
+    <!-- 24 פיקסלים: שלוש שורות משמאל, אחת מימין. -->
+    <symbol id="s24" viewBox="0 0 24 24">
+      <path d="M1.5 6.5 H22.5 V20.5 H13 L12 21.5 L11 20.5 H1.5 Z" fill="#d6a13a" stroke="#7d520c" stroke-linejoin="round"/>
+      <g fill="#fffdf7" stroke="#9c6a10" stroke-width="1.1" stroke-linejoin="round">
+        <path d="M12 5 C10 3.6 6.5 3.3 3 3.6 V18.6 C6.5 18.3 10 18.6 12 20 Z"/>
+        <path d="M12 5 C14 3.6 17.5 3.3 21 3.6 V18.6 C17.5 18.3 14 18.6 12 20 Z"/>
+      </g>
+      <g fill="#c38820">
+        <rect x="5" y="6" width="5" height="2"/>
+        <rect x="6" y="10" width="4" height="2"/>
+        <rect x="5" y="14" width="5" height="2"/>
+        <rect x="14" y="6" width="5" height="2"/>
+      </g>
+      <path d="M18.5 17.5 L22 21" stroke="#6f4808" stroke-width="4" stroke-linecap="round"/>
+      <path d="M18.5 17.5 L22 21" stroke="#e0ad45" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="15" cy="14" r="3.8" fill="#eef5f9"/>
+      <circle cx="15" cy="14" r="4.6" fill="none" stroke="#6f4808" stroke-width="2.4"/>
+      <circle cx="15" cy="14" r="4.6" fill="none" stroke="#efc35a" stroke-width="1.2"/>
+    </symbol>
+
+    <!-- 16 פיקסלים: מצויר פיקסל-פיקסל. העדשה (קוטר 7) כולה בתוך הדף, כדי שלא
+         תתמזג בשוליים, והידית בשני גוונים יוצאת מהספר. -->
+    <symbol id="s16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+      <rect x="0.5" y="3.5" width="14" height="11" fill="#d6a13a" stroke="#7d520c"/>
+      <path d="M1 1 H7 V2 H8 V1 H14 V14 H1 Z" fill="#a5700f"/>
+      <rect x="2" y="2" width="5" height="11" fill="#fffdf7"/>
+      <rect x="8" y="2" width="5" height="11" fill="#fffdf7"/>
+      <rect x="7" y="3" width="1" height="10" fill="#c9a35c"/>
+      <g fill="#c38820">
+        <rect x="3" y="4" width="3" height="1"/>
+        <rect x="4" y="6" width="2" height="1"/>
+        <rect x="3" y="8" width="3" height="1"/>
+        <rect x="4" y="10" width="2" height="1"/>
+        <rect x="9" y="4" width="3" height="1"/>
+      </g>
+      <g fill="#e3eff7">
+        <rect x="8" y="7" width="3" height="1"/>
+        <rect x="7" y="8" width="5" height="1"/>
+        <rect x="7" y="9" width="5" height="1"/>
+        <rect x="7" y="10" width="5" height="1"/>
+        <rect x="8" y="11" width="3" height="1"/>
+      </g>
+      <rect x="8" y="8" width="1" height="1" fill="#ffffff"/>
+      <g fill="#6f4808">
+        <rect x="8" y="6" width="1" height="1"/>
+        <rect x="9" y="6" width="1" height="1"/>
+        <rect x="10" y="6" width="1" height="1"/>
+        <rect x="7" y="7" width="1" height="1"/>
+        <rect x="11" y="7" width="1" height="1"/>
+        <rect x="6" y="8" width="1" height="1"/>
+        <rect x="12" y="8" width="1" height="1"/>
+        <rect x="6" y="9" width="1" height="1"/>
+        <rect x="12" y="9" width="1" height="1"/>
+        <rect x="6" y="10" width="1" height="1"/>
+        <rect x="12" y="10" width="1" height="1"/>
+        <rect x="7" y="11" width="1" height="1"/>
+        <rect x="11" y="11" width="1" height="1"/>
+        <rect x="8" y="12" width="1" height="1"/>
+        <rect x="9" y="12" width="1" height="1"/>
+        <rect x="10" y="12" width="1" height="1"/>
+        <rect x="12" y="12" width="1" height="1"/>
+        <rect x="13" y="13" width="1" height="1"/>
+        <rect x="14" y="14" width="1" height="1"/>
+        <rect x="15" y="15" width="1" height="1"/>
+      </g>
+      <g fill="#e6b44c">
+        <rect x="13" y="12" width="1" height="1"/>
+        <rect x="14" y="13" width="1" height="1"/>
+        <rect x="15" y="14" width="1" height="1"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+<svg style="left:0;top:0" width="256" height="256"><use href="#full" width="256" height="256"/></svg>
+<svg style="left:256px;top:0" width="128" height="128"><use href="#full" width="128" height="128"/></svg>
+<svg style="left:384px;top:0" width="64" height="64"><use href="#full" width="64" height="64"/></svg>
+<svg style="left:448px;top:0" width="48" height="48"><use href="#full" width="48" height="48"/></svg>
+<svg style="left:384px;top:64px" width="32" height="32"><use href="#s32" width="32" height="32"/></svg>
+<svg style="left:416px;top:64px" width="24" height="24"><use href="#s24" width="24" height="24"/></svg>
+<svg style="left:448px;top:64px" width="16" height="16"><use href="#s16" width="16" height="16"/></svg>
+</body></html>

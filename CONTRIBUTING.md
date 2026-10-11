@@ -77,7 +77,7 @@
 
 | מקום | תפקיד |
 |---|---|
-| `installer/OtzariaResponsa.iss` | מתקין Inno Setup: השירות, והצעה להתקין או לעדכן את התוסף |
+| `installer/OtzariaResponsa.iss` | מתקין Inno Setup: השירות, והצעה להתקין או לעדכן את התוסף. ההסרה בשלוש רמות (`/MODE=update\|regular\|full`), פירוט ב-`docs/ARCHITECTURE.md` |
 | `installer/build.ps1` | בונה הכול: השירות, קובץ התוסף (דרך הוולידטור) והמתקין. UTF-8 עם BOM |
 | `installer/icon.ico` | סמל המתקין (נבנה, לא נערך) |
 | `tools/preview/` | תצוגה מקדימה בדפדפן: `stub.js` (גשר מדומה), `smoke.mjs`, `screenshots.mjs` |
