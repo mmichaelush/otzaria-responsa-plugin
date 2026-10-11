@@ -114,6 +114,17 @@ void main() {
       const ResponsaSearchSetup(freeForm: true),
     );
     await run(
+      'easy after free',
+      'נר שבת',
+      const ResponsaSearchSetup(easy: true),
+    );
+    print('tabular shown: ${await _showTabular(pid)}');
+    await run(
+      'easy from tabular',
+      'נר שבת',
+      const ResponsaSearchSetup(easy: true),
+    );
+    await run(
       'advanced after free',
       '#שבת [1:3] #נר',
       const ResponsaSearchSetup(advanced: true, showForms: false),

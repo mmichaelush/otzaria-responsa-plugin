@@ -163,7 +163,41 @@ class HelperDiagnostics {
     } catch (error) {
       parts.add('folder: $error');
     }
+    // ב-CD32C יש DB/ בלי FILE00 (דיווח 7.10.2026): מה יש בתיקיות הנתונים.
+    for (final folder in _dataFolders) {
+      final dir = Directory(p.join(installation.installPath, folder));
+      if (!dir.existsSync()) continue;
+      parts.add('$folder/: ${_folderSummary(dir)}');
+    }
     return parts.join('; ');
+  }
+
+  static const List<String> _dataFolders = ['DB', 'HD', 'DATA'];
+  static const int _maxFolderNames = 12;
+
+  /// כמה קבצים ותיקיות, הגודל הכולל, והשמות הראשונים (קבצים עם גודל).
+  static String _folderSummary(Directory dir) {
+    try {
+      final entries = dir.listSync(followLinks: false)
+        ..sort((a, b) => a.path.compareTo(b.path));
+      var bytes = 0;
+      final names = <String>[];
+      for (final entry in entries) {
+        final name = p.basename(entry.path);
+        if (entry is File) {
+          final size = entry.lengthSync();
+          bytes += size;
+          names.add(size >= 1 << 20 ? '$name ${size >> 20}MB' : name);
+        } else {
+          names.add('$name/');
+        }
+      }
+      return '${entries.length} entries, ${bytes >> 20}MB'
+          '${names.isEmpty ? '' : ': ${names.take(_maxFolderNames).join(', ')}'}'
+          '${names.length > _maxFolderNames ? ', …' : ''}';
+    } catch (error) {
+      return '$error';
+    }
   }
 
   static String _catalogLine(ResponsaCatalogInfo info) {

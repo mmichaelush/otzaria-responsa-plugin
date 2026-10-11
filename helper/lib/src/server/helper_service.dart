@@ -53,6 +53,7 @@ class HelperService {
     'diagnostics',
     'showForms',
     'freeFormSearch',
+    'easySearch',
   ];
 
   static const int maxPageSize = 200;
@@ -370,6 +371,7 @@ class HelperService {
   Future<Map<String, Object?>> searchText(Map<String, Object?> body) async {
     final advanced = _bool(body, 'advanced') ?? false;
     final freeForm = !advanced && (_bool(body, 'freeForm') ?? false);
+    final easy = !advanced && !freeForm && (_bool(body, 'easy') ?? false);
     final notify = _bool(body, 'notify') ?? false;
     final autoStart = _bool(body, 'autoStart') ?? true;
     final String text;
@@ -402,7 +404,22 @@ class HelperService {
       }
       text = query.text;
       truncated = query.truncated;
-      setup = await _searchSetup(body, freeForm: true);
+      setup = await _searchSetup(body, kind: _SearchKind.freeForm);
+    } else if (easy) {
+      // "חיפוש רגיל" בתוסף: המילים ב"חיפוש קל", וההגדרות שם של המשתמש.
+      final query = ResponsaQuery.parse(
+        _string(body, 'q', maxLength: ResponsaQuery.maxSentenceLength * 4),
+        maxWords: ResponsaQuery.maxSentenceWords,
+        maxLength: ResponsaQuery.maxSentenceLength,
+      );
+      if (query == null) {
+        throw const ApiError.badRequest(
+          'בחיפוש שנכתב אין מילים בעברית לחיפוש בבר אילן.',
+        );
+      }
+      text = query.text;
+      truncated = query.truncated;
+      setup = await _searchSetup(body, kind: _SearchKind.easy);
     } else {
       final query = ResponsaQuery.parse(
         _string(body, 'q', maxLength: maxSelectionLength, truncate: true),
@@ -433,6 +450,8 @@ class HelperService {
         logLine(
           'search${advanced
               ? ' (advanced)'
+              : easy
+              ? ' (easy)'
               : freeForm
               ? ' (free)'
               : ''} "$text": '
@@ -463,6 +482,7 @@ class HelperService {
           'truncated': truncated,
           if (advanced) 'advanced': true,
           if (freeForm) 'freeForm': true,
+          if (easy) 'easy': true,
           'broughtToFront': outcome.broughtToFront,
         };
       }
@@ -480,7 +500,7 @@ class HelperService {
   /// שבבר אילן מבטל כל בחירה.
   Future<ResponsaSearchSetup> _searchSetup(
     Map<String, Object?> body, {
-    bool freeForm = false,
+    _SearchKind kind = _SearchKind.advanced,
   }) async {
     final options = body['options'];
     if (options != null && options is! Map) {
@@ -493,13 +513,15 @@ class HelperService {
     }
 
     final scope = await _scope(body['scope']);
+    final advanced = kind == _SearchKind.advanced;
     return ResponsaSearchSetup(
-      advanced: !freeForm,
-      freeForm: freeForm,
+      advanced: advanced,
+      freeForm: kind == _SearchKind.freeForm,
+      easy: kind == _SearchKind.easy,
       allDatabases: scope != null ? false : option('allDatabases'),
-      // ב"חיפוש בניסוח חופשי" אין את התיבות האלה.
-      abbreviations: freeForm ? null : option('abbreviations'),
-      showForms: freeForm ? null : option('showForms'),
+      // ב"חיפוש קל" וב"חיפוש בניסוח חופשי" אין את התיבות האלה.
+      abbreviations: advanced ? option('abbreviations') : null,
+      showForms: advanced ? option('showForms') : null,
       scope: scope,
     );
   }
@@ -915,3 +937,6 @@ class HelperService {
 }
 
 enum _Automation { open, search }
+
+/// סוג החלון ב-`/text/search` עם `options` ו-`scope`.
+enum _SearchKind { advanced, freeForm, easy }

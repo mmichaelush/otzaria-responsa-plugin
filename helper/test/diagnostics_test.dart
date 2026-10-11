@@ -41,6 +41,19 @@ void main() {
     expect(hints, contains('data none'));
     expect(hints, contains('folder: BIG.DAT 6MB, Data/'));
     expect(hints, isNot(contains('RESPONSA.exe')));
+    // תוכן תיקיות הנתונים, כדי לראות איפה הארכיון במהדורה אחרת.
+    File(p.join(root.path, 'Data', 'BOOKS.IDX')).writeAsStringSync('x');
+    expect(
+      HelperDiagnostics.archiveHints(
+        ResponsaInstallation(
+          version: 32,
+          installPath: root.path,
+          displayName: 'test',
+          source: 'registry',
+        ),
+      ),
+      contains('DATA/: 1 entries, 0MB: BOOKS.IDX'),
+    );
   });
 
   test('בקשות שהצליחו מסוננות, ועקבות המחסנית נשארות עם הרשומה', () {

@@ -81,6 +81,10 @@ class ResponsaSearchSetup {
   /// מעבר ל"חיפוש בניסוח חופשי": משפט במילים של המשתמש. סותר את [advanced].
   final bool freeForm;
 
+  /// מעבר ל"חיפוש קל": המילים, לפי ההגדרות שהמשתמש בחר שם בבר אילן
+  /// (אותיות שימוש, מרחק, כתיב מלא). סותר את [advanced] ואת [freeForm].
+  final bool easy;
+
   /// "חיפוש בכל המאגרים".
   final bool? allDatabases;
 
@@ -96,6 +100,7 @@ class ResponsaSearchSetup {
   const ResponsaSearchSetup({
     this.advanced = false,
     this.freeForm = false,
+    this.easy = false,
     this.allDatabases,
     this.abbreviations,
     this.showForms,
@@ -330,6 +335,7 @@ class ResponsaSearchAutomation {
   ) {
     if (setup.advanced) return _ensureAdvanced(dialog, deadline);
     if (setup.freeForm) return _ensureFreeForm(dialog, deadline);
+    if (setup.easy) return _ensureEasy(dialog, deadline);
     if (!isFreeForm(dialog.hwnd)) return dialog;
     // בר אילן זוכר את "ניסוח חופשי" מהחיפוש הקודם, אבל מילים מטקסט מסומן
     // אינן שאלה: עוברים ל"חיפוש קל", כמו בבר אילן כשהוא נפתח.
@@ -347,6 +353,42 @@ class ResponsaSearchAutomation {
           : 'ResponsaSearch: מ"חיפוש בניסוח חופשי" ל"${ResponsaWin32.windowText(switched.hwnd)}"',
     );
     return switched ?? dialog;
+  }
+
+  /// "חיפוש קל": בכותרת, או "חיפוש המילים ללא תוספות" (1163, נמדד ב-CD25).
+  static bool isEasy(int dialog) =>
+      ResponsaWin32.windowText(dialog).contains('קל') ||
+      _hasChild(dialog, _easyOnlyId);
+
+  static const int _easyOnlyId = 1163;
+
+  /// חלון החיפוש במצב "חיפוש קל", כמו [_ensureFreeForm].
+  DiscoveredDialog _ensureEasy(
+    DiscoveredDialog dialog,
+    ResponsaDeadline deadline,
+  ) {
+    if (isEasy(dialog.hwnd)) return dialog;
+    final visibleBefore = _visibleSearchKinds().toSet();
+    final tried = <String>[];
+    final switched = _switchMode(
+      dialog.hwnd,
+      (found) => isEasy(found.hwnd),
+      deadline,
+      tried,
+      first: _easyButtonId,
+    );
+    if (switched != null) {
+      if (tried.isNotEmpty) {
+        logLine('ResponsaSearch: "חיפוש קל" אחרי ${tried.join(', ')}');
+      }
+      return switched;
+    }
+    _hideOpened(visibleBefore);
+    logLine('ResponsaSearch: לא עבר ל"חיפוש קל"; ${tried.join(', ')}');
+    throw const ResponsaAutomationException(
+      ResponsaFailure.searchDialogNotFound,
+      'בר אילן לא עבר ל"חיפוש קל" בזמן',
+    );
   }
 
   /// פקדים שקיימים ב"חיפוש קל" (1163, "ללא תוספות") וב"חיפוש מתקדם" (1173,

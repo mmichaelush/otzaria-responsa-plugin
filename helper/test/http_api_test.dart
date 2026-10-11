@@ -592,6 +592,25 @@ void main() {
       expect(call0.setup.checks, {ResponsaSearchSetup.allDatabasesId: true});
     });
 
+    test('חיפוש קל: המילים, תחום, ובלי תיבות של חיפוש מתקדם', () async {
+      final result = await call(
+        'POST',
+        '/text/search',
+        body: {
+          'q': 'נֵר, שַׁבָּת!',
+          'easy': true,
+          'options': {'allDatabases': false, 'abbreviations': true},
+        },
+      );
+      expect(result.status, 200);
+      expect((result.json as Map)['easy'], isTrue);
+      final sent = backend.searchCalls.single;
+      expect(sent.query, 'נר שבת');
+      expect(sent.setup.easy, isTrue);
+      expect(sent.setup.advanced, isFalse);
+      expect(sent.setup.checks, {ResponsaSearchSetup.allDatabasesId: false});
+    });
+
     test('ניסוח חופשי בלי מילה עברית: 400', () async {
       final result = await call(
         'POST',
