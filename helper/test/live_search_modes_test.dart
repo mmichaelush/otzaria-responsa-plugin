@@ -199,4 +199,99 @@ void main() {
     print('after: ${_visible(main.pid)}');
     expect(_visible(main.pid), isEmpty);
   }, timeout: const Timeout(Duration(minutes: 3)));
+
+  // חיפוש מיד אחרי חיפוש, בכל הסוגים: אחרי חיפוש כל חלונות החיפוש מוסתרים,
+  // ולחיצה על כפתור מעבר בחלון מוסתר לא תמיד נקלטת (מתקדם אחרי מתקדם נכשל,
+  // נמדד). גם "משפט:", הטווח של החיפוש הטבלאי.
+  test('back-to-back searches', () async {
+    _closeResultWindows();
+    final controller = ResponsaController(allowAutoStart: () => true);
+    const runs = [
+      ('#שבת [1:3] #נר', ResponsaSearchSetup(advanced: true, showForms: false)),
+      ('משפט: נר שבת', ResponsaSearchSetup(advanced: true, showForms: false)),
+      ('נר שבת', ResponsaSearchSetup(easy: true)),
+      ('פסקה: #נר #שבת', ResponsaSearchSetup(advanced: true, showForms: false)),
+      ('האם מותר לנסוע באופניים בשבת', ResponsaSearchSetup(freeForm: true)),
+      ('נר חנוכה', ResponsaSearchSetup(easy: true)),
+      ('מסמך: נר חנוכה', ResponsaSearchSetup(advanced: true, showForms: false)),
+    ];
+    for (final (query, setup) in runs) {
+      final watch = Stopwatch()..start();
+      final report = await controller.searchText(query, setup: setup);
+      final pid = ResponsaWin32.topWindowsByClass(
+        'ResponsaProject',
+      ).firstWhere((w) => ResponsaWin32.isOnScreen(w.hwnd)).pid;
+      print(
+        '"$query" ${watch.elapsedMilliseconds}ms: '
+        '${report.ok ? report.outcome!.state.name : 'FAILED ${report.message}'}'
+        '${report.outcome?.count == null ? '' : ' count=${report.outcome!.count}'}'
+        ' | visible after: ${_visible(pid)}',
+      );
+      expect(report.ok, isTrue, reason: query);
+      expect(_visible(pid), isEmpty, reason: query);
+    }
+  }, timeout: const Timeout(Duration(minutes: 5)));
+
+  // הגדרות "חיפוש קל" מהתוסף, והחזרת ההגדרות של המשתמש אחרי החיפוש. המספרים
+  // נמדדו ב-CD25 בלחיצה ביד ("נר שבת"): בלי תוספות 2562, אותיות שימוש
+  // בלבד 3857, מרחק בלבד 4590.
+  test('easy-search options, then the user settings come back', () async {
+    _closeResultWindows();
+    final controller = ResponsaController(allowAutoStart: () => true);
+    const ids = [1163, 1215, 1164, 1165, 1166];
+    Map<int, bool?> states() {
+      final pid = ResponsaWin32.topWindowsByClass(
+        'ResponsaProject',
+      ).firstWhere((w) => ResponsaWin32.isOnScreen(w.hwnd)).pid;
+      final easy = _searchKinds(
+        pid,
+      ).firstWhere((h) => ResponsaWin32.windowText(h).contains('קל'));
+      return {
+        for (final id in ids)
+          id: ResponsaWin32.isChecked(
+            ResponsaWin32.children(
+              easy,
+            ).firstWhere((c) => ResponsaWin32.controlId(c) == id),
+          ),
+      };
+    }
+
+    final first = await controller.searchText(
+      'נר שבת',
+      setup: const ResponsaSearchSetup(easy: true),
+    );
+    expect(first.ok, isTrue, reason: first.message);
+    final mine = states();
+    print('user settings: $mine, count ${first.outcome!.count}');
+    const runs = [
+      (ResponsaSearchSetup(easy: true, additions: false), 2562),
+      (
+        ResponsaSearchSetup(
+          easy: true,
+          additions: true,
+          prefixes: true,
+          distance: false,
+          spelling: false,
+        ),
+        3857,
+      ),
+      (
+        ResponsaSearchSetup(
+          easy: true,
+          additions: true,
+          prefixes: false,
+          distance: true,
+          spelling: false,
+        ),
+        4590,
+      ),
+    ];
+    for (final (setup, expected) in runs) {
+      final report = await controller.searchText('נר שבת', setup: setup);
+      print('${setup.checks} -> ${report.outcome?.count} (expected $expected)');
+      expect(report.ok, isTrue, reason: report.message);
+      expect(report.outcome!.count, expected);
+      expect(states(), mine, reason: 'user settings restored');
+    }
+  }, timeout: const Timeout(Duration(minutes: 5)));
 }

@@ -169,6 +169,15 @@ class HelperDiagnostics {
       if (!dir.existsSync()) continue;
       parts.add('$folder/: ${_folderSummary(dir)}');
     }
+    // תיקיית הנתונים של המשתמש (`Responsa.env`), שבמהדורות C היא מחוץ
+    // לתיקיית ההתקנה, ותיקיית DB שבה.
+    if (installation.dataLocation case final data?) {
+      for (final dir in [Directory(data), Directory(p.join(data, 'DB'))]) {
+        if (!dir.existsSync()) continue;
+        final name = dir.path == data ? 'data' : 'data/DB';
+        parts.add('$name/: ${_folderSummary(dir)}');
+      }
+    }
     return parts.join('; ');
   }
 

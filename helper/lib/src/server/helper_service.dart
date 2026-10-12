@@ -35,7 +35,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.5.7';
+  static const String serverVersion = '0.6.0';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -54,6 +54,7 @@ class HelperService {
     'showForms',
     'freeFormSearch',
     'easySearch',
+    'easyOptions',
   ];
 
   static const int maxPageSize = 200;
@@ -100,6 +101,10 @@ class HelperService {
       'catalog': {
         'exists': info.exists,
         'bookCount': info.bookCount,
+        // 0 במהדורה בלי טבלת מחברים במחשב (CD32C): חיפוש רק לפי שם הספר.
+        'booksWithAuthor': ?int.tryParse(
+          info.fingerprint['books_with_author'] ?? '',
+        ),
         if (info.schemaVersion != null) 'schemaVersion': info.schemaVersion,
         'outdated': info.isOutdated,
         if (info.builtAt != null) 'builtAt': info.builtAt,
@@ -514,15 +519,24 @@ class HelperService {
 
     final scope = await _scope(body['scope']);
     final advanced = kind == _SearchKind.advanced;
+    final easy = kind == _SearchKind.easy;
+    // "חיפוש קל": בלי `additions` — ההגדרות שהמשתמש בחר בבר אילן. התיבות
+    // שבו פעילות רק "עם תוספות".
+    final additions = easy ? option('additions') : null;
+    bool? withAdditions(String name) => additions == true ? option(name) : null;
     return ResponsaSearchSetup(
       advanced: advanced,
       freeForm: kind == _SearchKind.freeForm,
-      easy: kind == _SearchKind.easy,
+      easy: easy,
       allDatabases: scope != null ? false : option('allDatabases'),
       // ב"חיפוש קל" וב"חיפוש בניסוח חופשי" אין את התיבות האלה.
       abbreviations: advanced ? option('abbreviations') : null,
       showForms: advanced ? option('showForms') : null,
       scope: scope,
+      additions: additions,
+      prefixes: withAdditions('prefixes'),
+      distance: withAdditions('distance'),
+      spelling: withAdditions('spelling'),
     );
   }
 

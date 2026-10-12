@@ -165,7 +165,13 @@ void main() {
       final result = await call('GET', '/diagnostics');
       expect(result.status, 200);
       final json = result.json as Map;
-      expect(json['summary'], allOf(isA<String>(), contains('service 0.5.')));
+      expect(
+        json['summary'],
+        allOf(
+          isA<String>(),
+          contains('service ${HelperService.serverVersion}'),
+        ),
+      );
       expect(
         json['summary'],
         contains('book list: ${sampleBooks.length} books'),
@@ -609,6 +615,61 @@ void main() {
       expect(sent.setup.easy, isTrue);
       expect(sent.setup.advanced, isFalse);
       expect(sent.setup.checks, {ResponsaSearchSetup.allDatabasesId: false});
+    });
+
+    test('חיפוש קל עם הגדרות: כפתור הבחירה קודם, ואחריו התיבות', () async {
+      await call(
+        'POST',
+        '/text/search',
+        body: {
+          'q': 'נר שבת',
+          'easy': true,
+          'options': {
+            'additions': true,
+            'prefixes': true,
+            'distance': false,
+            'spelling': true,
+          },
+        },
+      );
+      final checks = backend.searchCalls.single.setup.checks;
+      expect(checks.keys.toList(), [
+        ResponsaSearchSetup.withAdditionsId,
+        ResponsaSearchSetup.withoutAdditionsId,
+        ResponsaSearchSetup.prefixesId,
+        ResponsaSearchSetup.distanceId,
+        ResponsaSearchSetup.spellingId,
+      ]);
+      expect(checks.values.toList(), [true, false, true, false, true]);
+    });
+
+    test('חיפוש קל בלי תוספות: התיבות שלו אינן נשלחות', () async {
+      await call(
+        'POST',
+        '/text/search',
+        body: {
+          'q': 'נר שבת',
+          'easy': true,
+          'options': {'additions': false, 'prefixes': true},
+        },
+      );
+      expect(backend.searchCalls.single.setup.checks, {
+        ResponsaSearchSetup.withAdditionsId: false,
+        ResponsaSearchSetup.withoutAdditionsId: true,
+      });
+    });
+
+    test('הגדרות של חיפוש קל אינן חלות על חיפוש מתקדם', () async {
+      await call(
+        'POST',
+        '/text/search',
+        body: {
+          'q': 'נר',
+          'advanced': true,
+          'options': {'additions': true, 'prefixes': true},
+        },
+      );
+      expect(backend.searchCalls.single.setup.checks, isEmpty);
     });
 
     test('ניסוח חופשי בלי מילה עברית: 400', () async {

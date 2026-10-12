@@ -241,6 +241,30 @@ void main() {
         ),
         isFalse,
       );
+      // "חיפוש קל" (נמדד ב-CD25): שני כפתורי הבחירה ושלוש התיבות.
+      const easy = {
+        ResponsaSearchSetup.withoutAdditionsId: '&חיפוש המילים ללא תוספות',
+        ResponsaSearchSetup.withAdditionsId: '&חיפוש המילים עם תוספות',
+        ResponsaSearchSetup.prefixesId: ' קי&דומות דקדוקיות למילה הראשונה',
+        ResponsaSearchSetup.distanceId: ' מ&רחק של עד 2 מילים בין מילות החיפוש',
+        ResponsaSearchSetup.spellingId:
+            " מי&לים שיוקלדו בכתיב מלא (עם ו' או י') יתקבלו גם בלעדיהן",
+      };
+      for (final MapEntry(key: id, value: label) in easy.entries) {
+        expect(
+          ResponsaSearchSetup.labelMatches(id, label),
+          isTrue,
+          reason: label,
+        );
+      }
+      // "with" בלבד היה תופס גם את "without".
+      expect(
+        ResponsaSearchSetup.labelMatches(
+          ResponsaSearchSetup.withAdditionsId,
+          'Search the words without additions',
+        ),
+        isFalse,
+      );
     });
 
     test('ניסוח חופשי: חלון בלי "נמצאו N" הוא התשובה, בלי ספירה', () {

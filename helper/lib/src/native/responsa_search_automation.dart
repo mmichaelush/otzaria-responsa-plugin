@@ -97,6 +97,18 @@ class ResponsaSearchSetup {
   /// הקטגוריות והספרים לחיפוש, כנתיבי שמות תצוגה מהשורש.
   final List<List<String>>? scope;
 
+  /// "חיפוש קל": "חיפוש המילים עם תוספות" (`true`) או "ללא תוספות".
+  final bool? additions;
+
+  /// "חיפוש קל", עם תוספות: "קידומות דקדוקיות למילה הראשונה".
+  final bool? prefixes;
+
+  /// "חיפוש קל", עם תוספות: "מרחק של עד 2 מילים בין מילות החיפוש".
+  final bool? distance;
+
+  /// "חיפוש קל", עם תוספות: "מילים שיוקלדו בכתיב מלא... יתקבלו גם בלעדיהן".
+  final bool? spelling;
+
   const ResponsaSearchSetup({
     this.advanced = false,
     this.freeForm = false,
@@ -105,6 +117,10 @@ class ResponsaSearchSetup {
     this.abbreviations,
     this.showForms,
     this.scope,
+    this.additions,
+    this.prefixes,
+    this.distance,
+    this.spelling,
   });
 
   static const ResponsaSearchSetup none = ResponsaSearchSetup();
@@ -114,10 +130,34 @@ class ResponsaSearchSetup {
   static const int showFormsId = 1173;
   static const int abbreviationsId = 1025;
 
+  /// "חיפוש קל" (נמדד ב-CD25): שני כפתורי בחירה, ושלוש תיבות שפעילות רק
+  /// "עם תוספות".
+  static const int withoutAdditionsId = 1163;
+  static const int withAdditionsId = 1215;
+  static const int prefixesId = 1164;
+  static const int distanceId = 1165;
+  static const int spellingId = 1166;
+
+  /// כפתור בחירה ← בן הזוג שלו. לחיצה על כפתור בחירה רק מסמנת אותו, ולכן
+  /// מבטלים אותו בלחיצה על בן הזוג.
+  static const Map<int, int> radioPartners = {
+    withoutAdditionsId: withAdditionsId,
+    withAdditionsId: withoutAdditionsId,
+  };
+
+  /// בסדר הלחיצה: כפתור הבחירה קודם, כי התיבות פעילות רק "עם תוספות".
+  /// ההחזרה למצב הקודם הולכת בסדר ההפוך.
   Map<int, bool> get checks => {
     allDatabasesId: ?allDatabases,
     abbreviationsId: ?abbreviations,
     showFormsId: ?showForms,
+    if (additions case final on?) ...{
+      withAdditionsId: on,
+      withoutAdditionsId: !on,
+    },
+    prefixesId: ?prefixes,
+    distanceId: ?distance,
+    spellingId: ?spelling,
   };
 
   /// מילה מהכיתוב של כל תיבה. המזהים נמדדו ב-CD25, ובמהדורה אחרת אותו
@@ -126,6 +166,11 @@ class ResponsaSearchSetup {
     allDatabasesId: ['מאגרים', 'database', 'bases'],
     abbreviationsId: ['ראשי תיבות', 'abbreviation', 'abréviation'],
     showFormsId: ['צורות', 'forms', 'formes'],
+    withoutAdditionsId: ['ללא תוספות', 'without'],
+    withAdditionsId: ['עם תוספות', 'with add'],
+    prefixesId: ['קידומות', 'prefix'],
+    distanceId: ['מרחק', 'distance'],
+    spellingId: ['כתיב', 'spell', 'orthograph'],
   };
 
   /// האם [label] (הכיתוב של התיבה [id]) הוא של התיבה הזו.
@@ -244,6 +289,12 @@ class ResponsaSearchAutomation {
       dialog = _ensureKind(ensureSearchDialog(deadline), setup, deadline);
     }
     final restore = _applyChecks(dialog.hwnd, setup.checks);
+    if (restore.isNotEmpty) {
+      logLine(
+        'ResponsaSearch: הגדרות לחיפוש הזה: '
+        '${restore.keys.map((id) => '$id=${!restore[id]!}').join(', ')}',
+      );
+    }
     _probeEdition(main);
     try {
       return _run(
@@ -260,7 +311,11 @@ class ResponsaSearchAutomation {
     } finally {
       // חלון החיפוש עשוי להיות מושבת מתחת למודאל התוצאות; לחיצה על תיבת
       // סימון עדיין מגיעה אליה.
-      _applyChecks(dialog.hwnd, restore);
+      // בסדר ההפוך: התיבות של "עם תוספות" לפני כפתור הבחירה שמשבית אותן.
+      _applyChecks(
+        dialog.hwnd,
+        Map.fromEntries(restore.entries.toList().reversed),
+      );
     }
   }
 
@@ -620,6 +675,9 @@ class ResponsaSearchAutomation {
   Map<int, bool> _applyChecks(int dialog, Map<int, bool> wanted) {
     final changed = <int, bool>{};
     for (final MapEntry(key: id, value: on) in wanted.entries) {
+      // כפתור בחירה מבוטל בלחיצה על בן הזוג, שגם הוא ב-[wanted].
+      final partner = ResponsaSearchSetup.radioPartners[id];
+      if (partner != null && !on) continue;
       final box = _childById(dialog, id);
       if (box == null) continue;
       final label = ResponsaWin32.windowText(box);
@@ -629,8 +687,13 @@ class ResponsaSearchAutomation {
       }
       final current = ResponsaWin32.isChecked(box);
       if (current == null || current == on) continue;
+      if (!ResponsaWin32.isEnabled(box)) {
+        logLine('ResponsaSearch: תיבה $id ("$label") מושבתת; לא נלחצת');
+        continue;
+      }
       if (ResponsaWin32.click(box, timeoutMs: ResponsaWin32.scanTimeoutMs)) {
         changed[id] = current;
+        if (partner != null) changed[partner] = true;
       }
     }
     return changed;
@@ -667,26 +730,52 @@ class ResponsaSearchAutomation {
   DiscoveredDialog? findSearchDialog() =>
       ResponsaDiscovery.discoverDialog(_pid, _profile.searchDialogHints);
 
-  /// [findSearchDialog], אבל כשעל המסך חלון חיפוש אחר מזה שנמצא — "חיפוש
-  /// טבלאי", שאין בו שדה שאילתה — עוברים ממנו. חיפוש בחלון מוסתר השאיר את
-  /// הטבלאי על המסך, ו"ביטול" שלו כבר לא עשה כלום (דווח מבר אילן 31 ו-32,
-  /// ונמדד ב-CD25). מעבר מהחלון שעל המסך מסתיר אותו בכל 12 הצירופים
-  /// (נמדד).
+  /// חלון חיפוש עם שדה שאילתה, ותמיד מהחלון שעל המסך:
+  /// - **רק מוסתרים:** מבקשים מבר אילן להציג את הסוג הנוכחי שלו. לחיצה על
+  ///   כפתור מעבר בחלון מוסתר לא נקלטת כשהסוג המבוקש הוא כבר הנוכחי של בר
+  ///   אילן (חיפוש מתקדם אחרי מתקדם נכשל אחרי 8 שניות, נמדד);
+  /// - **על המסך "חיפוש טבלאי"** (אין בו שדה שאילתה): עוברים ממנו. חיפוש
+  ///   בחלון מוסתר השאיר את הטבלאי על המסך, ו"ביטול" שלו כבר לא עשה כלום
+  ///   (דווח מבר אילן 31 ו-32, ונמדד ב-CD25).
+  /// מעבר מהחלון שעל המסך מסתיר אותו בכל 12 הצירופים (נמדד).
   DiscoveredDialog? _pickSearchDialog(ResponsaDeadline deadline) {
     final found = findSearchDialog();
     if (found == null || ResponsaWin32.isVisible(found.hwnd)) return found;
-    final shown = _visibleSearchKinds();
-    if (shown.isEmpty) return found;
+    var shown = _visibleSearchKinds();
+    if (shown.isEmpty) {
+      shown = _showCurrentKind(deadline);
+      if (shown.isEmpty) {
+        logLine('ResponsaSearch: בר אילן לא הציג חלון חיפוש; בחלון המוסתר');
+        return found;
+      }
+      final visible = findSearchDialog();
+      if (visible != null && ResponsaWin32.isVisible(visible.hwnd)) {
+        return visible;
+      }
+    }
+    final from = shown.first;
     final tried = <String>[];
-    final switched = _switchMode(shown.first, (_) => true, deadline, tried);
+    final switched = _switchMode(from, (_) => true, deadline, tried);
     logLine(
       switched == null
-          ? 'ResponsaSearch: על המסך "${ResponsaWin32.windowText(shown.first)}", '
+          ? 'ResponsaSearch: על המסך "${ResponsaWin32.windowText(from)}", '
                 'ואין מעבר ממנו; ${tried.join(', ')}'
-          : 'ResponsaSearch: על המסך "${ResponsaWin32.windowText(shown.first)}"; '
+          : 'ResponsaSearch: על המסך "${ResponsaWin32.windowText(from)}"; '
                 'עברנו ממנו ל"${ResponsaWin32.windowText(switched.hwnd)}"',
     );
     return switched ?? found;
+  }
+
+  /// פקודת החיפוש מציגה את הסוג האחרון שנבחר בבר אילן (נמדד).
+  List<int> _showCurrentKind(ResponsaDeadline deadline) {
+    ResponsaWin32.postCommand(_automation.mainWindow, _profile.searchCommand);
+    final own = deadline.within(_switchBudget);
+    while (!own.expired) {
+      _automation.pause(ResponsaAutomation.poll, deadline);
+      final shown = _visibleSearchKinds();
+      if (shown.isNotEmpty) return shown;
+    }
+    return const [];
   }
 
   /// הפקודה נשלחת שוב ושוב, כמו בדיאלוג העיון: פקודה בודדת נבלעת כשהתוכנה
