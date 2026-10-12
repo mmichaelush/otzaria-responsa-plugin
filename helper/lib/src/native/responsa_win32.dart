@@ -126,6 +126,12 @@ class ResponsaWin32 {
   static bool isEnabled(int hwnd) =>
       IsWindowEnabled(HWND(Pointer.fromAddress(hwnd)));
 
+  /// החלון שבבעלותו [hwnd] (`GW_OWNER`), או 0.
+  static int owner(int hwnd) => GetWindow(
+    HWND(Pointer.fromAddress(hwnd)),
+    const GET_WINDOW_CMD(4), // GW_OWNER
+  ).value.address;
+
   /// `WM_NULL`: האם התור של החלון מתרוקן עכשיו, כלומר התוכנה אינה באמצע
   /// פעולה חוסמת.
   static bool responds(int hwnd, {int timeoutMs = 500}) =>

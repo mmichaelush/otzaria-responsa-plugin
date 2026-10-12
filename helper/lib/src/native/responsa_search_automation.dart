@@ -311,6 +311,12 @@ class ResponsaSearchAutomation {
     }
 
     if (outcome.window case final title?) _automation.adoptWindow(title);
+    if (outcome.state == ResponsaSearchState.found) {
+      closeLeftoverSearchWindows(
+        dialog.hwnd,
+        underSummary: outcome.summaryShown,
+      );
+    }
     if (outcome.state == ResponsaSearchState.invalid) {
       // ההודעה עוברת לתוסף; חלון פתוח היה חוסם את החיפוש הבא.
       _closeQueryErrors();
@@ -496,6 +502,14 @@ class ResponsaSearchAutomation {
         if (found != null &&
             ResponsaWin32.isVisible(found.hwnd) &&
             accept(found)) {
+          // ב-CD25 החלון הקודם מוסתר. אם לא - ליומן, ונסגר אחרי החיפוש.
+          if (current != found.hwnd && ResponsaWin32.isVisible(current)) {
+            final owner = ResponsaWin32.owner(found.hwnd);
+            logLine(
+              'ResponsaSearch: אחרי $id נשאר על המסך ${_describe(current)}; '
+              'החדש ${owner == current ? 'בבעלותו' : 'אינו בבעלותו'}',
+            );
+          }
           return found;
         }
         opened = _visibleSearchKinds()
@@ -527,6 +541,77 @@ class ResponsaSearchAutomation {
         ResponsaWin32.postClick(cancel);
       }
     }
+  }
+
+  /// חלון חיפוש שנשאר על המסך אחרי חיפוש שמצא. קרה כשהחיפוש רץ בחלון
+  /// מוסתר בזמן ש"חיפוש טבלאי" היה על המסך (דווח מבר אילן 31 ו-32, ונמדד
+  /// ב-CD25): בר אילן אינו רואה בטבלאי את החלון הנוכחי, ו"ביטול" שלו לא
+  /// עושה כלום. [_pickSearchDialog] מונע את זה; כאן רשת ביטחון: "ביטול",
+  /// ואם החלון נשאר - מעבר ממנו לסוג אחר, שמסתיר אותו, ו"ביטול" בסוג
+  /// ההוא (נמדד). חלון מושבת לא נוגעים בו: מודאל פתוח מעליו, ולחיצה עליו
+  /// אחרי הפעלה בכוח הפילה את בר אילן (נמדד). [used] נשאר כשמוצג הסיכום:
+  /// בר אילן מסתיר אותו כשהסיכום נסגר.
+  void closeLeftoverSearchWindows(int used, {bool underSummary = false}) {
+    for (final hwnd in _visibleSearchKinds()) {
+      if (underSummary && hwnd == used) continue;
+      final line =
+          'ResponsaSearch: אחרי החיפוש נשאר על המסך ${_describe(hwnd)}';
+      if (!ResponsaWin32.isEnabled(hwnd)) {
+        logLine('$line; לא נוגעים');
+        continue;
+      }
+      if (_cancel(hwnd)) {
+        logLine('$line; נסגר ב"ביטול"');
+        continue;
+      }
+      final via = _hasChild(hwnd, _advancedOnlyId)
+          ? _easyButtonId
+          : _advancedButtonId;
+      final before = _visibleSearchKinds().toSet();
+      if (_childById(hwnd, via) case final button?) {
+        ResponsaWin32.postClick(button);
+      }
+      var closed = false;
+      final own = ResponsaDeadline(_switchBudget);
+      while (!own.expired) {
+        ResponsaAutomation.sleepFor(ResponsaAutomation.poll);
+        if (ResponsaWin32.isVisible(hwnd)) continue;
+        final opened = [
+          for (final h in _visibleSearchKinds())
+            if (!before.contains(h)) h,
+        ];
+        if (opened.isEmpty) continue;
+        closed = opened.every(_cancel);
+        break;
+      }
+      logLine(
+        closed
+            ? '$line; "ביטול" לא סגר, נסגר דרך $via'
+            : '$line; לא נסגר (${_describe(hwnd)})',
+      );
+    }
+  }
+
+  /// "ביטול", ו-`true` אם החלון ירד מהמסך.
+  bool _cancel(int hwnd) {
+    if (_childById(hwnd, _cancelId) case final cancel?) {
+      ResponsaWin32.postClick(cancel);
+    }
+    final own = ResponsaDeadline(const Duration(seconds: 1));
+    while (!own.expired) {
+      ResponsaAutomation.sleepFor(ResponsaAutomation.poll);
+      if (!ResponsaWin32.isVisible(hwnd)) return true;
+    }
+    return false;
+  }
+
+  /// לשורות היומן: כותרת, ומצב החלון כשאינו רגיל.
+  static String _describe(int hwnd) {
+    final visible = ResponsaWin32.isVisible(hwnd);
+    final title = visible ? ResponsaWin32.windowText(hwnd).trim() : '';
+    return '"${title.isEmpty ? ResponsaWin32.className(hwnd) : title}"'
+        '${visible ? '' : ' מוסתר'}'
+        '${ResponsaWin32.isEnabled(hwnd) ? '' : ' מושבת'}';
   }
 
   /// מסמן או מנקה תיבות לפי [wanted], ומחזיר את אלה ששונו עם מצבן הקודם.
@@ -582,10 +667,32 @@ class ResponsaSearchAutomation {
   DiscoveredDialog? findSearchDialog() =>
       ResponsaDiscovery.discoverDialog(_pid, _profile.searchDialogHints);
 
+  /// [findSearchDialog], אבל כשעל המסך חלון חיפוש אחר מזה שנמצא — "חיפוש
+  /// טבלאי", שאין בו שדה שאילתה — עוברים ממנו. חיפוש בחלון מוסתר השאיר את
+  /// הטבלאי על המסך, ו"ביטול" שלו כבר לא עשה כלום (דווח מבר אילן 31 ו-32,
+  /// ונמדד ב-CD25). מעבר מהחלון שעל המסך מסתיר אותו בכל 12 הצירופים
+  /// (נמדד).
+  DiscoveredDialog? _pickSearchDialog(ResponsaDeadline deadline) {
+    final found = findSearchDialog();
+    if (found == null || ResponsaWin32.isVisible(found.hwnd)) return found;
+    final shown = _visibleSearchKinds();
+    if (shown.isEmpty) return found;
+    final tried = <String>[];
+    final switched = _switchMode(shown.first, (_) => true, deadline, tried);
+    logLine(
+      switched == null
+          ? 'ResponsaSearch: על המסך "${ResponsaWin32.windowText(shown.first)}", '
+                'ואין מעבר ממנו; ${tried.join(', ')}'
+          : 'ResponsaSearch: על המסך "${ResponsaWin32.windowText(shown.first)}"; '
+                'עברנו ממנו ל"${ResponsaWin32.windowText(switched.hwnd)}"',
+    );
+    return switched ?? found;
+  }
+
   /// הפקודה נשלחת שוב ושוב, כמו בדיאלוג העיון: פקודה בודדת נבלעת כשהתוכנה
   /// עסוקה.
   DiscoveredDialog ensureSearchDialog(ResponsaDeadline deadline) {
-    final existing = findSearchDialog();
+    final existing = _pickSearchDialog(deadline);
     if (existing != null) return existing;
 
     final main = _automation.mainWindow;
@@ -598,7 +705,7 @@ class ResponsaSearchAutomation {
         sinceCommand = Stopwatch()..start();
       }
       _automation.pause(const Duration(milliseconds: 600), deadline);
-      final found = findSearchDialog();
+      final found = _pickSearchDialog(deadline);
       if (found != null) return found;
       // בר אילן פותח את הסוג האחרון שנבחר בו. "חיפוש טבלאי" אינו מתאים
       // (אין בו שדה שאילתה), ופקודה חוזרת רק הייתה פותחת אותו שוב.

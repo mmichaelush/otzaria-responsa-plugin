@@ -7,7 +7,11 @@ library;
 // כלי מדידה ידני: הפלט שלו הוא **התוצר**, והוא נקרא בטרמינל.
 // ignore_for_file: avoid_print
 
+import 'package:responsa_helper/src/native/responsa_automation.dart';
 import 'package:responsa_helper/src/native/responsa_controller.dart';
+import 'package:responsa_helper/src/native/responsa_discovery.dart';
+import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
+import 'package:responsa_helper/src/native/responsa_profile.dart';
 import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/native/responsa_win32.dart';
 import 'package:test/test.dart';
@@ -49,10 +53,18 @@ Future<bool> _showTabular(int pid) async {
 
 /// חלונות תוצאות שחיפושים קודמים של הבדיקה השאירו (`נמצאו N תוצאות`, ושל
 /// ניסוח חופשי `    1-6`): בתקרת החלונות של בר אילן החיפוש הבא נכשל.
+/// סגירת חלון MDI כשסיכום "N תוצאות" פתוח הפילה את בר אילן 25 פעמיים
+/// (0xc0000005, נמדד), ולכן הסיכום נסגר קודם, כמו בשירות.
 void _closeResultWindows() {
   final results = RegExp(r'^\s*(נמצאו \d[\d,]* תוצאות\s+)?\d+-\d+\s*$');
   for (final instance in ResponsaWin32.topWindowsByClass('ResponsaProject')) {
     if (!ResponsaWin32.isOnScreen(instance.hwnd)) continue;
+    for (final summary in ResponsaDiscovery.discoverAll(
+      instance.pid,
+      ResponsaVersionProfile.searchSummaryHintsDefault,
+    )) {
+      ResponsaWin32.click(summary.handle('ok_button')!);
+    }
     final client = ResponsaWin32.mdiClient(instance.hwnd);
     if (client == null) continue;
     for (final child in ResponsaWin32.directChildren(client)) {
@@ -87,6 +99,10 @@ void main() {
         '${report.outcome?.count == null ? '' : ' count=${report.outcome!.count}'}'
         ' | visible after: ${_visible(pid)}',
       );
+      expect(report.ok, isTrue);
+      // בר אילן מסתיר את חלון החיפוש אחרי חיפוש שמצא; חלון שנשאר הוא
+      // התקלה מבר אילן 31 ו-32.
+      expect(_visible(pid), isEmpty, reason: label);
       await Future<void>.delayed(const Duration(seconds: 2));
     }
 
@@ -130,4 +146,57 @@ void main() {
       const ResponsaSearchSetup(advanced: true, showForms: false),
     );
   }, timeout: const Timeout(Duration(minutes: 10)));
+
+  // כמו שדווח מבר אילן 31 ו-32, ובנוי כאן כמו ש-0.5.6 יצר אותו: "חיפוש
+  // טבלאי" על המסך, ומעבר ל"ניסוח חופשי" מחלון מוסתר. "ביטול" של הטבלאי
+  // לא עושה אז כלום.
+  test('a stale tabular window is closed', () async {
+    _closeResultWindows();
+    final controller = ResponsaController(allowAutoStart: () => true);
+    final report = await controller.searchText(
+      'נר שבת',
+      setup: const ResponsaSearchSetup(easy: true),
+    );
+    expect(report.ok, isTrue, reason: report.message);
+    await Future<void>.delayed(const Duration(seconds: 1));
+    final main = ResponsaWin32.topWindowsByClass(
+      'ResponsaProject',
+    ).firstWhere((w) => ResponsaWin32.isOnScreen(w.hwnd));
+    final automation = ResponsaSearchAutomation(
+      ResponsaAutomation(
+        pid: main.pid,
+        profile: ResponsaVersionProfile.forVersion(
+          ResponsaInstallationDiscovery.versionFromWindowTitle(
+            ResponsaWin32.windowText(main.hwnd),
+          ),
+        ),
+      ),
+    );
+    automation.closeSearchSummaries();
+    expect(await _showTabular(main.pid), isTrue);
+    final hidden = _searchKinds(
+      main.pid,
+    ).firstWhere((h) => ResponsaWin32.windowText(h).contains('קל'));
+    ResponsaWin32.postClick(
+      ResponsaWin32.children(
+        hidden,
+      ).firstWhere((c) => ResponsaWin32.controlId(c) == 1189),
+    );
+    await Future<void>.delayed(const Duration(seconds: 2));
+    final free = _searchKinds(
+      main.pid,
+      visibleOnly: true,
+    ).firstWhere((h) => ResponsaWin32.windowText(h).contains('חופשי'));
+    ResponsaWin32.postClick(
+      ResponsaWin32.children(
+        free,
+      ).firstWhere((c) => ResponsaWin32.controlId(c) == 2),
+    );
+    await Future<void>.delayed(const Duration(seconds: 1));
+    print('stale: ${_visible(main.pid)}');
+    expect(_visible(main.pid), contains('טבלאי'));
+    automation.closeLeftoverSearchWindows(0);
+    print('after: ${_visible(main.pid)}');
+    expect(_visible(main.pid), isEmpty);
+  }, timeout: const Timeout(Duration(minutes: 3)));
 }
