@@ -703,6 +703,14 @@
   }
 
   /**
+   * האם ברשימת הספרים אין אף מחבר: במהדורה שאין במחשב טבלת מחברים (בר אילן
+   * 32C, דיווחים 10.2026). שירות לפני 0.6.0 אינו מדווח, ואז — לא ידוע.
+   */
+  function authorsMissing(status) {
+    return catalogReady(status) && status.catalog.booksWithAuthor === 0;
+  }
+
+  /**
    * האם צריך לשלוח את הרשימה לאוצריא: נקראה רשימה אחרת ממה שנשלח, או
    * שגרסת התוסף השתנתה (למשל שינוי בשורת הקטגוריה).
    */
@@ -890,6 +898,7 @@
     serviceBehind,
     serviceUpdateHint,
     catalogReady,
+    authorsMissing,
     catalogNotice,
     buildProgress,
     remainingLabel,

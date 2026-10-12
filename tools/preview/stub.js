@@ -10,7 +10,7 @@
   const scenario = params.get('scenario') || 'ready';
   const dark = params.get('mode') === 'dark';
   const fixtures = window.__RESPONSA_FIXTURES__;
-  const PLUGIN_VERSION = '0.5.7';
+  const PLUGIN_VERSION = '0.6.0';
 
   const schemes = {
     light: {"primary":"#805610","onPrimary":"#ffffff","primaryContainer":"#ffddb3","onPrimaryContainer":"#633f00","secondary":"#6f5b40","onSecondary":"#ffffff","secondaryContainer":"#fbdebc","onSecondaryContainer":"#56442a","tertiary":"#51643f","onTertiary":"#ffffff","tertiaryContainer":"#d4eabb","onTertiaryContainer":"#3a4c2a","surface":"#fff8f4","onSurface":"#201b13","onSurfaceVariant":"#4f4539","surfaceContainerLowest":"#ffffff","surfaceContainerLow":"#fff1e5","surfaceContainer":"#f9ecdf","surfaceContainerHigh":"#f3e6da","surfaceContainerHighest":"#ede0d4","error":"#ba1a1a","onError":"#ffffff","errorContainer":"#ffdad6","onErrorContainer":"#93000a","outline":"#817567","outlineVariant":"#d3c4b4","inverseSurface":"#362f27","onInverseSurface":"#fcefe2","inversePrimary":"#f4bd6f","shadow":"#000000","scrim":"#000000","surfaceTint":"#805610"},
@@ -62,7 +62,11 @@
   };
 
   function status() {
-    const base = statuses[scenario] || statuses.ready;
+    let base = statuses[scenario] || statuses.ready;
+    // `noauthors=1`: מהדורה בלי טבלת מחברים במחשב (CD32C).
+    if (params.get('noauthors') && base.catalog.exists) {
+      base = { ...base, catalog: { ...base.catalog, booksWithAuthor: 0 }, version: 32 };
+    }
     return Object.assign(
       {
         installed: true,
@@ -159,6 +163,8 @@
                     ...(params.get('nofree') ? [] : ['freeFormSearch']),
                     // `noeasy=1`: שירות שחיפוש רגיל בו הוא חיפוש מתקדם, המילים צמודות.
                     ...(params.get('noeasy') ? [] : ['easySearch']),
+                    // `noeasyopts=1`: שירות 0.5.6/0.5.7, שאינו מקבל את ההגדרות של "חיפוש קל".
+                    ...(params.get('noeasy') || params.get('noeasyopts') ? [] : ['easyOptions']),
                   ],
             };
       case '/status':
@@ -241,6 +247,27 @@
   // `adv=<name>`: חיפוש שמור, כמו אחרי עבודה בלשונית.
   const advanced = {
     simple: { mode: 'simple', simpleText: 'צער בעלי חיים', options: { abbreviations: true, showForms: false } },
+    additions: {
+      mode: 'simple',
+      simpleText: 'נר חנוכה',
+      easy: { how: 'additions', prefixes: true, distance: true, spelling: false },
+    },
+    span: {
+      terms: [
+        { words: ['מעלית'], form: 'affixes', exclude: false },
+        { words: ['שבת'], form: 'prefixes', exclude: false },
+      ],
+      gaps: [{ kind: 'adjacent', distance: 3 }],
+      span: 'paragraph',
+    },
+    phrase: {
+      terms: [
+        { words: ['צער בעלי חיים', 'צעב"ח'], form: 'exact', exclude: false },
+        { words: ['אסור', 'מותר'], form: 'prefixes', exclude: false },
+      ],
+      gaps: [{ kind: 'adjacent', distance: 3 }],
+      span: 'sentence',
+    },
     words: {
       terms: [
         { words: ['קוצץ', 'עוקר', 'משחית'], form: 'exact', exclude: false },

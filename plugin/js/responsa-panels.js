@@ -108,7 +108,7 @@
    * שנבחרה אחרי שהלשונית נבנתה מחדש. [group] ו-[item] — המחלקות של הקבוצה
    * ושל כל אפשרות; [dataOf] מוסיף data לכל אפשרות.
    */
-  function radioGroup(group, item, label, options, value, onSelect, keyPrefix, dataOf) {
+  function radioGroup(group, item, label, options, value, onSelect, keyPrefix, dataOf, choiceIcon) {
     const onKeydown = (event) => {
       const rtl = document.documentElement.dir !== 'ltr';
       const step = { ArrowLeft: rtl ? 1 : -1, ArrowRight: rtl ? -1 : 1, ArrowDown: 1, ArrowUp: -1 }[
@@ -145,8 +145,16 @@
             onclick: () => onSelect(option.value),
             dataset: { focusKey: keyPrefix + option.value, ...(dataOf ? dataOf(option) : {}) },
           },
-          option.value === value ? icon('checkmark_24_regular', 'segment-check') : null,
-          option.label,
+          choiceIcon ? icon(option.value === value ? 'checkmark_circle_24_regular' : 'circle_24_regular', 'choice-mark') : null,
+          !choiceIcon && option.value === value ? icon('checkmark_24_regular', 'segment-check') : null,
+          option.hint
+            ? el(
+                'span',
+                { class: 'choice-texts' },
+                el('span', { class: 'choice-title' }, option.label),
+                el('span', { class: 'choice-hint' }, option.hint),
+              )
+            : option.label,
         ),
       ),
     );
@@ -155,6 +163,14 @@
   /** בקר מקטעים של M3: הנבחר ברקע משני ועם סימון (כמו SegmentedControl של אוצריא). */
   function segmented(label, options, value, onSelect, keyPrefix) {
     return radioGroup({ class: 'segmented' }, { class: 'segment' }, label, options, value, onSelect, keyPrefix);
+  }
+
+  /**
+   * רשימת אפשרויות אחת מתחת לשנייה, לכל אחת כותרת והסבר (`{ value, label,
+   * hint }`): לבחירה שצריך להבין לפניה, כמו "איך לחפש את המילים".
+   */
+  function choices(label, options, value, onSelect, keyPrefix) {
+    return radioGroup({ class: 'choices' }, { class: 'choice' }, label, options, value, onSelect, keyPrefix, null, true);
   }
 
   /** הדגימה שליד כל גופן בתפריט, כמו בבורר הגופן של אוצריא. */
@@ -580,16 +596,42 @@
           )
         : null,
       Domain.serviceCan(model.health, 'advancedSearch')
-        ? topic(
-            'database_search_24_regular',
-            t('חיפוש בטקסט'),
-            [
-              t('בלשונית "חיפוש בטקסט" כותבים מילים ולוחצים "חיפוש בבר אילן". המילים יחופשו צמודות, כמו בחלון החיפוש של בר אילן.'),
-              t('"חיפוש מתקדם": מילה בכל שדה, ולכל אחת בוחרים איך לחפש אותה (עם אותיות שימוש, בכתיב מלא או חסר, כל השורש ועוד). "או מילה אחרת" מוסיף מילים חלופיות, ובין מילה למילה בוחרים מרחק.'),
-              t('ב"איפה לחפש" אפשר לבחור קטגוריות וספרים. "מה יחופש" מסביר במילים בדיוק מה יחופש.'),
-            ],
-            t('מי שמכיר את התחביר של בר אילן יכול לכתוב את השאילתה בעצמו ("כתיבה בתחביר של בר אילן").'),
-          )
+        ? [
+            topic(
+              'database_search_24_regular',
+              t('חיפוש בטקסט: איזה סוג חיפוש לבחור'),
+              [
+                t('"חיפוש רגיל" — כותבים מילים, ובר אילן מחפש אותן כמו ב"חיפוש קל" שלו. מתאים לרוב החיפושים. ב"איך לחפש את המילים" בוחרים: כמו שהגדרתם בבר אילן, בדיוק כפי שנכתבו, או עם תוספות — אותיות שימוש, עד שתי מילים ביניהן, כתיב מלא או חסר.'),
+                t('"חיפוש מתקדם" — כשצריך לדייק: מילה או ביטוי בכל שדה, צורות לכל מילה, מילים חלופיות, ואיפה המילים צריכות להופיע — צמודות, קרובות, או באותו משפט, פסקה או מסמך.'),
+                t('"ניסוח חופשי" — כשלא יודעים באילו מילים המקור משתמש: כותבים שאלה או נושא במילים שלכם, למשל "האם מותר לנסוע באופניים בשבת".'),
+              ],
+              t('בכל סוג יש "נסו:" עם דוגמאות, ולחיצה על דוגמה ממלאת אותה. "מה יחופש" מסביר במילים בדיוק מה יחופש, עוד לפני שלוחצים "חיפוש בבר אילן".'),
+            ),
+            topic(
+              'apps_list_24_regular',
+              t('חיפוש מתקדם, צעד אחר צעד'),
+              [
+                t('כותבים את המילה הראשונה בשדה "מילה 1". אפשר גם ביטוי, למשל "צער בעלי חיים".'),
+                t('ב"איך לחפש את המילה" בוחרים צורה. למשל "עם אותיות שימוש לפניה": "נר" ימצא גם "הנר" ו"ובנר".'),
+                t('"או מילה אחרת" מוסיף חלופה: "עץ", או "אילן", או "נטיעה". החלופה יכולה להיות גם ביטוי, למשל "צער בעלי חיים" או "צעב"ח".'),
+                t('"הוספת מילה" מוסיף את המילה הבאה. ביניהן בוחרים מרחק: מיד אחריה, עד כמה מילים אחריה, או לפניה או אחריה.'),
+                t('"בלי המילה הזו" מוציא מקורות שבהם היא מופיעה. למשל "ישראל" בלי "בני ישראל".'),
+                t('ב"איפה המילים צריכות להופיע" בוחרים: בסדר שכתבתם, בכל סדר וקרובות זו לזו, או באותו משפט, באותה פסקה (הלכה, סעיף, דיבור המתחיל) או באותו מסמך (פרק, סימן, תשובה).'),
+              ],
+              t('"כתיבה בתחביר של בר אילן" מציגה את השאילתה בתחביר שלו, ואפשר לערוך אותה ביד. המקרא שבתחתית הלשונית מסביר כל סימן.'),
+            ),
+            topic(
+              'folder_open_24_regular',
+              t('איפה לחפש, ואפשרויות'),
+              [
+                t('"כל הספרים" — כמו "חיפוש בכל המאגרים" בבר אילן.'),
+                t('"קטגוריות וספרים שאבחר" — בוחרים מהרשימה. הבחירה נשמרת גם בבר אילן.'),
+                t('"הבחירה שבבר אילן" — הספרים שכבר נבחרו בבר אילן, ב"המאגרים המשתתפים".'),
+                t('בחיפוש מתקדם: "כולל ראשי תיבות" — "צער בעלי חיים" ימצא גם "צעב"ח"; "לבחור צורות לפני התוצאות" — בר אילן פותח את "ניהול הצורות", ושם בוחרים אילו צורות ייכללו.'),
+              ],
+              t('התוצאות נפתחות בחלון של בר אילן, כמו חיפוש שנעשה בו. ההגדרות של בר אילן חוזרות אחרי החיפוש למה שהיו.'),
+            ),
+          ]
         : null,
       Domain.serviceCan(model.health, 'locate')
         ? topic(
@@ -985,7 +1027,7 @@
       linkRow('book_24_regular', t('מדריך למשתמש'), t('המדריך המלא, עם תמונות'), () => actions.openLink('guide'), 'link-guide'),
       linkRow('building_shop_24_regular', t('התוסף בחנות התוספים של אוצריא'), t('עדכונים ודירוג'), () => actions.openLink('store'), 'link-store'),
       linkRow('code_24_regular', t('דף התוסף ב-GitHub'), t('קוד המקור, שינויים בכל גרסה, ומדריך למפתחים'), () => actions.openLink('homepage'), 'link-home'),
-      linkRow('bug_24_regular', t('דיווח או הצעה ב-GitHub'), t('למי שיש חשבון GitHub; אפשר גם לדווח כאן למטה'), () => actions.openLink('issues'), 'link-issues'),
+      linkRow('bug_24_regular', t('דיווח או הצעה ב-GitHub'), t('למי שיש חשבון GitHub; אפשר גם בטופס שלמעלה'), () => actions.openLink('issues'), 'link-issues'),
       linkRow('arrow_download_24_regular', t('הורדת הגרסה האחרונה'), t('המתקין של השירות ושל התוסף יחד'), () => actions.openLink('setup'), 'link-download'),
     );
   }
@@ -1041,7 +1083,7 @@
           ),
         ),
         clarification(actions),
-        linksCard(model, actions),
+        // הדיווח מיד אחרי ההבהרה ולפני הקישורים (בקשת בעל הפרויקט, 10.2026).
         el(
           'section',
           { class: 'report-card' },
@@ -1069,6 +1111,7 @@
             ),
           ),
         ),
+        linksCard(model, actions),
       ),
     );
   }
@@ -1133,6 +1176,7 @@
     HelpTab,
     SEARCH_SHORTCUT,
     segmented,
+    choices,
     switchRow,
     settingsPage,
     helpPage,

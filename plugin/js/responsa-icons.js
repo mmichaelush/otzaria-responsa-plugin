@@ -59,7 +59,10 @@
 
   /**
    * אייקון של אוצריא שמתאים יותר מהאייקון שבתוסף, כשהוא קיים בגופן של
-   * האוצריא המותקנת. שם שקיים בשתי הספריות אינו צריך כאן רשומה.
+   * האוצריא המותקנת: שם, או כמה שמות לפי הסדר (הראשון שקיים). שם שקיים
+   * בשתי הספריות אינו צריך כאן רשומה. הגופן, גודל התצוגה והשפה — כמו
+   * בהגדרות של אוצריא (`text_settings_tab`, `design_settings_tab`):
+   * `_regular` באוצריא 0.9.98, `_filled` בגרסאות שאחריה.
    */
   const PREFERRED = Object.freeze({
     document_search_24_regular: 'search_in_the_library_24_regular',
@@ -68,6 +71,9 @@
     text_quote_24_regular: 'search_in_the_text_24_regular',
     library_24_regular: 'bookshelf_24_regular',
     folder_24_regular: 'books_stacked_low_24_regular',
+    text_font_24_regular: ['alef_alef_24_regular', 'alef_alef_24_filled'],
+    text_font_size_24_regular: ['alef_near_alef_24_regular', 'alef_near_alef_24_filled'],
+    translate_24_regular: ['alef_latin_a_24_regular', 'alef_latin_a_24_filled'],
   });
 
   const SVG = 'http://www.w3.org/2000/svg';
@@ -79,8 +85,9 @@
 
   function hostCodepoint(name) {
     if (!hostGlyphs) return null;
-    const preferred = PREFERRED[name];
-    if (preferred && hostGlyphs[preferred]) return hostGlyphs[preferred];
+    for (const preferred of [].concat(PREFERRED[name] || [])) {
+      if (hostGlyphs[preferred]) return hostGlyphs[preferred];
+    }
     return hostGlyphs[name] || null;
   }
 

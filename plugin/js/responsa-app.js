@@ -922,11 +922,17 @@
       this.view.focusInSheet('adv-word-0-0');
     }
 
-    /** "ניקוי": המילים מתאפסות; סוג החיפוש, התחום והאפשרויות נשארים. */
+    /** "ניקוי": המילים מתאפסות; סוג החיפוש, התחום, האפשרויות וההגדרות של חיפוש קל נשארים. */
     advancedClear() {
       const query = this.model.advanced.query;
       this.model.advanced.problem = null;
-      this._editAdvanced({ ...Advanced.emptyQuery(), mode: query.mode, scope: query.scope, options: query.options });
+      this._editAdvanced({
+        ...Advanced.emptyQuery(),
+        mode: query.mode,
+        scope: query.scope,
+        options: query.options,
+        easy: query.easy,
+      });
       this.view.focusPage(this.model);
     }
 
@@ -950,14 +956,18 @@
         this.view.announce(problem.message);
         return;
       }
-      const easy = Domain.serviceCan(this.model.health, 'easySearch');
-      const body = Advanced.toRequest(query, { easy });
+      const body = Advanced.toRequest(query, {
+        easy: Domain.serviceCan(this.model.health, 'easySearch'),
+        easyOptions: Domain.serviceCan(this.model.health, 'easyOptions'),
+      });
       state.running = true;
       state.status = null;
       this._renderPage();
       this.log.info('חיפוש בטקסט (' + (body.easy ? 'easy' : query.mode) + '): ' + body.q, {
         scope: query.scope.mode,
         items: query.scope.items.length,
+        ...(body.easy && body.options.additions !== undefined ? { easy: query.easy } : {}),
+        ...(query.mode === Advanced.Mode.builder && query.span !== Advanced.Span.chain ? { span: query.span } : {}),
       });
       try {
         const result = await this.service.advancedSearch(body);

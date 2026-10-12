@@ -1,8 +1,12 @@
-// לשונית "חיפוש בטקסט": חיפוש רגיל בשדה אחד, חיפוש מתקדם עם כל האפשרויות
-// של "חיפוש מתקדם" בבר אילן בצורה גרפית — מילים וחלופות, צורות, מרחקים,
-// תחום ואפשרויות — וניסוח חופשי, שאלה או משפט. בכל האופנים מוסבר במילים מה
-// יחופש. כמו responsa-panels.js: מודל ופעולות נכנסים, אלמנט יוצא, וטקסט רק
-// דרך textContent.
+// לשונית "חיפוש בטקסט", עם כל האפשרויות של חלונות החיפוש של בר אילן:
+// - חיפוש רגיל ("חיפוש קל"): שדה אחד, ואיך לחפש את המילים — כמו בבר אילן,
+//   בדיוק כפי שנכתבו, או עם תוספות;
+// - חיפוש מתקדם ("חיפוש מתקדם" ו"חיפוש טבלאי"): מילה או ביטוי בכל שדה,
+//   חלופות, צורות, מרחקים, ואיפה המילים צריכות להופיע (משפט, פסקה, מסמך);
+// - ניסוח חופשי: שאלה או משפט.
+// לכל אופן הסבר קצר ודוגמאות שנטענות בלחיצה, ובכולם מוסבר במילים מה יחופש.
+// כמו responsa-panels.js: מודל ופעולות נכנסים, אלמנט יוצא, וטקסט רק דרך
+// textContent.
 (function (root) {
   'use strict';
 
@@ -11,8 +15,10 @@
   const I18n = root.ResponsaI18n;
   const { icon } = root.ResponsaIcons;
   const { el, button, iconButton, onEnter } = root.ResponsaUi;
-  const { segmented, switchRow } = root.ResponsaPanels;
+  const { segmented, choices, switchRow } = root.ResponsaPanels;
   const t = (text, vars) => I18n.t(text, vars);
+  /** מסמן מחרוזת לתרגום בלי לתרגם אותה עכשיו: התרגום בזמן הציור. */
+  const N = (text) => text;
 
   /** כותרת של שלב: מספר, שם והסבר קצר. */
   function heading(title, subtitle, step) {
@@ -111,12 +117,13 @@
       class: 'term-input',
       type: 'text',
       dir: 'rtl',
-      placeholder: alternative ? t('מילה חלופית') : t('מילה'),
+      placeholder: alternative ? t('מילה או ביטוי חלופי') : t('מילה או ביטוי'),
       'aria-label': alternative
         ? t('מילה {n}, חלופה {k}', { n: term, k: alternative + 1 })
         : t('מילה {n}', { n: term }),
       autocomplete: 'off',
       spellcheck: 'false',
+      maxlength: String(Advanced.MAX_WORD_LENGTH),
       dataset: { focusKey: 'adv-word-' + index + '-' + alternative },
     });
     input.value = value;
@@ -210,14 +217,45 @@
     );
   }
 
+  /**
+   * איפה המילים צריכות להופיע זו ביחס לזו, כמו "מרחקים" בחיפוש הטבלאי של בר
+   * אילן. בסדר שבשדות — המרחקים שביניהם; בכל אחד מהטווחים — בכל סדר.
+   */
+  function spanSection(state, actions) {
+    const query = state.query;
+    const Span = Advanced.Span;
+    const options = [
+      { value: Span.chain, label: t('בסדר שכתבתי'), hint: t('ובין מילה למילה — המרחק שבחרתם (צמודות, או עד כמה מילים)') },
+      { value: Span.words, label: t('בכל סדר, קרובות זו לזו'), hint: t('כל המילים, בטווח של מספר מילים שבוחרים') },
+      { value: Span.sentence, label: t('באותו משפט'), hint: t('בכל סדר ובכל מרחק, אבל באותו משפט') },
+      { value: Span.paragraph, label: t('באותה פסקה'), hint: t('הלכה, סעיף או דיבור המתחיל') },
+      { value: Span.document, label: t('באותו מסמך'), hint: t('פרק, סימן או תשובה') },
+    ];
+    return el(
+      'div',
+      { class: 'advanced-span' },
+      el('p', { class: 'advanced-subheading' }, t('איפה המילים צריכות להופיע:')),
+      choices(t('איפה המילים צריכות להופיע'), options, query.span, (span) => actions.advancedSet({ span }), 'adv-span-'),
+      query.span === Span.words
+        ? el(
+            'div',
+            { class: 'settings-row advanced-within' },
+            numberField(t('כל המילים בטווח של עד'), query.within, (within) => actions.advancedSet({ within }), 'adv-within', t('מילים')),
+          )
+        : null,
+    );
+  }
+
   function builder(state, actions) {
     const query = state.query;
+    const chain = query.span === Advanced.Span.chain;
     const items = [];
     query.terms.forEach((term, index) => {
-      if (index > 0 && !query.anyOrder) items.push(gapRow(actions, query.gaps[index - 1], index - 1));
+      if (index > 0 && chain) items.push(gapRow(actions, query.gaps[index - 1], index - 1));
       items.push(termCard(state, actions, term, index));
     });
     return [
+      examples(Advanced.EXAMPLES, actions, 4),
       el('ol', { class: 'term-list' }, items),
       el(
         'div',
@@ -232,26 +270,39 @@
           key: 'adv-to-manual',
         }),
       ),
-      el(
-        'div',
-        { class: 'settings-card advanced-card' },
-        switchRow({
-          iconName: 'apps_list_24_regular',
-          title: t('המילים בכל סדר, ולא בהכרח צמודות'),
-          subtitle: t('כל המילים יופיעו, עד מרחק מסוים זו מזו'),
-          checked: query.anyOrder,
-          onToggle: (anyOrder) => actions.advancedSet({ anyOrder }),
-          key: 'adv-any-order',
-        }),
-        query.anyOrder
-          ? el(
-              'div',
-              { class: 'settings-row' },
-              numberField(t('בטווח של עד'), query.within, (within) => actions.advancedSet({ within }), 'adv-within', t('מילים')),
-            )
-          : null,
-      ),
+      query.terms.length > 1 ? spanSection(state, actions) : null,
     ];
+  }
+
+  /**
+   * "נסו:" ואחריו דוגמאות שנטענות בלחיצה. מעבר ל-[shown] — מאחורי "עוד
+   * דוגמאות", כדי שבחלון צר הן לא ידחקו את השדות למטה.
+   */
+  function examples(list, actions, shown) {
+    const chip = (example) =>
+      el(
+        'li',
+        {},
+        button('outlined', t(example.label), () => actions.advancedExample(example.id), {
+          key: 'adv-example-' + example.id,
+        }),
+      );
+    const visible = list.slice(0, shown || list.length);
+    const more = list.slice(visible.length);
+    return el(
+      'div',
+      { class: 'example-chips' },
+      el('span', { class: 'example-chips-label' }, t('נסו:')),
+      el('ul', { class: 'example-chips-list' }, visible.map(chip)),
+      more.length
+        ? el(
+            'details',
+            { class: 'example-more' },
+            el('summary', { class: 'example-more-toggle' }, t('עוד {count} דוגמאות', { count: more.length })),
+            el('ul', { class: 'example-chips-list' }, more.map(chip)),
+          )
+        : null,
+    );
   }
 
   function manualEditor(state, actions) {
@@ -277,6 +328,55 @@
     ];
   }
 
+  /**
+   * איך "חיפוש קל" של בר אילן יחפש את המילים: כמו שהמשתמש הגדיר בבר אילן,
+   * "ללא תוספות", או "עם תוספות" — ואילו. ההגדרות שבבר אילן חוזרות למצבן
+   * אחרי החיפוש.
+   */
+  function easySection(state, actions) {
+    const easy = state.query.easy;
+    const Easy = Advanced.Easy;
+    const set = (patch) => actions.advancedSet({ easy: { ...easy, ...patch } });
+    const options = [
+      { value: Easy.mine, label: t('כמו שהגדרתי בבר אילן'), hint: t('לפי מה שסימנתם בחלון "חיפוש קל" של בר אילן') },
+      { value: Easy.exact, label: t('בדיוק כפי שנכתבו'), hint: t('המילים צמודות, בלי אותיות נוספות') },
+      { value: Easy.additions, label: t('עם תוספות'), hint: t('בוחרים מה עוד יימצא') },
+    ];
+    return el(
+      'div',
+      { class: 'advanced-easy' },
+      el('p', { class: 'advanced-subheading' }, t('איך לחפש את המילים:')),
+      choices(t('איך לחפש את המילים'), options, easy.how, (how) => set({ how }), 'adv-easy-'),
+      easy.how === Easy.additions
+        ? el(
+            'div',
+            { class: 'settings-card advanced-card easy-additions' },
+            checkbox(
+              t('אותיות שימוש לפני המילה הראשונה'),
+              easy.prefixes,
+              (prefixes) => set({ prefixes }),
+              'adv-easy-prefixes',
+              t('ו, ה, ב, כ, ל, מ, ש: "נר חנוכה" ימצא גם "בנר חנוכה"'),
+            ),
+            checkbox(
+              t('עד שתי מילים בין המילים'),
+              easy.distance,
+              (distance) => set({ distance }),
+              'adv-easy-distance',
+              t('"נר חנוכה" ימצא גם "נר ראשון של חנוכה"'),
+            ),
+            checkbox(
+              t('כתיב מלא או חסר'),
+              easy.spelling,
+              (spelling) => set({ spelling }),
+              'adv-easy-spelling',
+              t('"חנוכה" ימצא גם "חנכה"'),
+            ),
+          )
+        : null,
+    );
+  }
+
   /** חיפוש רגיל: שדה אחד, כמו בחלון החיפוש של בר אילן. */
   function simpleEditor(state, actions, easy) {
     const input = el('input', {
@@ -295,13 +395,15 @@
     onEnter(input, () => actions.runAdvanced());
     return [
       el('label', { class: 'search-bar' }, icon('search_24_regular'), input),
-      el(
-        'p',
-        { class: 'advanced-hint' },
-        easy
-          ? t('כמו "חיפוש קל" בבר אילן, עם ההגדרות שבחרתם בו. לבחירה מדויקת של צורות, מרחקים ומילים חלופיות — "חיפוש מתקדם".')
-          : t('המילים יחופשו צמודות, בסדר שנכתבו. לחיפוש מילים רחוקות, צורות אחרות של מילה או מילים חלופיות — "חיפוש מתקדם".'),
-      ),
+      easy
+        ? null
+        : el(
+            'p',
+            { class: 'advanced-hint' },
+            t('המילים יחופשו צמודות, בסדר שנכתבו. לחיפוש מילים רחוקות, צורות אחרות של מילה או מילים חלופיות — "חיפוש מתקדם".'),
+          ),
+      examples(Advanced.SIMPLE_EXAMPLES, actions),
+      easy && easy.options ? easySection(state, actions) : null,
     ];
   }
 
@@ -320,10 +422,28 @@
     input.value = state.query.freeText;
     input.addEventListener('input', () => actions.advancedSet({ freeText: input.value }, { light: true }));
     onEnter(input, () => actions.runAdvanced());
-    return [
-      input,
-      el('p', { class: 'advanced-hint' }, t('כותבים שאלה או משפט במילים שלכם, ובר אילן מחפש מקורות שעוסקים בזה.')),
-    ];
+    return [input, examples(Advanced.FREE_EXAMPLES, actions)];
+  }
+
+  /** מה כל סוג חיפוש עושה, ומתי הוא מתאים. */
+  const MODE_INTROS = Object.freeze({
+    simple: [
+      'search_24_regular',
+      N('הכי פשוט: כותבים מילים, ובר אילן מחפש אותן כמו ב"חיפוש קל" שלו. מתאים לרוב החיפושים — ביטוי, שם, או כמה מילים שמופיעות יחד.'),
+    ],
+    builder: [
+      'apps_list_24_regular',
+      N('כשצריך לדייק: לכל מילה בוחרים צורות (עם אותיות שימוש, כתיב מלא או חסר, כל השורש), מוסיפים מילים חלופיות, וקובעים איפה המילים צריכות להופיע — צמודות, קרובות, או באותו משפט, פסקה או מסמך.'),
+    ],
+    free: [
+      'text_quote_24_regular',
+      N('כשלא יודעים באילו מילים המקור משתמש: כותבים שאלה או נושא במילים שלכם, ובר אילן מחפש מקורות שעוסקים בזה. המקורות הרלוונטיים בדרך כלל בראש הרשימה.'),
+    ],
+  });
+
+  function modeIntro(mode) {
+    const [iconName, text] = MODE_INTROS[mode === Advanced.Mode.manual ? 'builder' : mode];
+    return el('p', { class: 'mode-intro' }, icon(iconName, 'mode-intro-icon'), el('span', {}, t(text)));
   }
 
   function wordsSection(state, actions, easy) {
@@ -334,7 +454,9 @@
       { class: 'advanced-section' },
       heading(
         t('מה לחפש'),
-        query.mode === Mode.builder ? t('מילה בכל שדה. לכל מילה בוחרים איך לחפש אותה, וביניהן — כמה הן רחוקות.') : null,
+        query.mode === Mode.builder
+          ? t('מילה או ביטוי בכל שדה. לכל מילה בוחרים איך לחפש אותה, ואפשר להוסיף לה מילים חלופיות ("או").')
+          : null,
         query.mode === Mode.simple || query.mode === Mode.free ? null : 1,
       ),
       query.mode === Mode.simple
@@ -557,6 +679,7 @@
     const lines = text
       ? Advanced.describe(query, scopeLabel(query, Domain.catalogReady(model.status)), {
           easy: Domain.serviceCan(model.health, 'easySearch'),
+          easyOptions: Domain.serviceCan(model.health, 'easyOptions'),
         })
       : [];
     return el(
@@ -624,19 +747,10 @@
             el('dd', {}, t(row.meaning)),
           ]),
         ),
-        el('p', { class: 'advanced-subheading' }, t('דוגמאות מהעזרה של בר אילן. לחיצה טוענת אותן לבונה:')),
         el(
-          'ul',
-          { class: 'example-list' },
-          Advanced.EXAMPLES.map((example) =>
-            el(
-              'li',
-              {},
-              button('text', t(example.label), () => actions.advancedExample(example.id), {
-                key: 'adv-example-' + example.id,
-              }),
-            ),
-          ),
+          'p',
+          { class: 'advanced-subheading' },
+          t('בבר אילן עצמו נשארו: חיפוש לפי ניקוד (בחיפוש הטבלאי, "ניקוד..."), ועריכת משפחות, חיפושים שמורים ושאילתות קודמות. משפחה וחיפוש שמור שהגדרתם שם אפשר לחפש מכאן ("איך לחפש את המילה").'),
         ),
       ),
     );
@@ -681,8 +795,12 @@
     const catalogReady = Domain.catalogReady(model.status);
     const mode = state.query.mode;
     const advanced = mode === Mode.builder || mode === Mode.manual;
-    // חיפוש רגיל ב"חיפוש קל": ההגדרות שם הן של המשתמש, ואין בו ראשי תיבות.
-    const easy = mode === Mode.simple && Domain.serviceCan(model.health, 'easySearch');
+    // חיפוש רגיל ב"חיפוש קל": אין בו ראשי תיבות. `options` — השירות מקבל את
+    // ההגדרות שלו מכאן (0.6.0); בלעדיו — מה שהמשתמש בחר בבר אילן.
+    const easy =
+      mode === Mode.simple && Domain.serviceCan(model.health, 'easySearch')
+        ? { options: Domain.serviceCan(model.health, 'easyOptions') }
+        : null;
     // הסגמנט נשאר גלוי גם מול שירות ישן; רק בחירה בו מסבירה שצריך לעדכן.
     const note = Advanced.serviceNote(state.query, (name) => Domain.serviceCan(model.health, name));
     const body = supported
@@ -698,6 +816,7 @@
             (value, how) => actions.advancedMode(value, how),
             'adv-kind-',
           ),
+          modeIntro(mode),
           note
             ? el(
                 'div',

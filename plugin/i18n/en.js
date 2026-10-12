@@ -422,7 +422,7 @@
     'דף התוסף ב-GitHub': 'The plugin page on GitHub',
     'קוד המקור, שינויים בכל גרסה, ומדריך למפתחים': 'Source code, changes in each version, and a developer guide',
     'דיווח או הצעה ב-GitHub': 'Report a problem or suggest an idea on GitHub',
-    'למי שיש חשבון GitHub; אפשר גם לדווח כאן למטה': 'For those with a GitHub account; you can also report right below',
+    'למי שיש חשבון GitHub; אפשר גם בטופס שלמעלה': 'For those with a GitHub account; you can also use the form above',
     'המתקין של השירות ושל התוסף יחד': 'The installer for both the service and the plugin',
     'מסך הפתיחה': 'Welcome screen',
     'הדיווח נשלח למפתח דרך אוצריא, יחד עם פרטי המערכת, יומן הפעולות האחרונות (כולל חיפושים וספרים שנפתחו) ויומן השירות (מהדורות בר אילן שנמצאו ומיקומן). שם המשתמש מושמט מכל נתיב. לפני השליחה אוצריא מבקשת אישור.':
@@ -454,7 +454,6 @@
     'בר אילן פתוח ועובד כרגע לבד. אל תלחצו בו ואל תסגרו אותו. אפשר להמשיך לעבוד באוצריא, וגם לסגור את הלשונית הזו: הקריאה תמשיך.': 'Bar-Ilan is open and working on its own. Do not click in it or close it. You can keep working in Otzaria, and even close this tab: the reading continues.',
     // ---- חיפוש מתקדם
     'מילה חלופית': 'Alternative word',
-    'מילה': 'Word',
     'מילה {n}, חלופה {k}': 'Word {n}, alternative {k}',
     'מילה {n}': 'Word {n}',
     'או': 'or',
@@ -472,9 +471,6 @@
     'עד': 'Up to',
     'מילים': 'words',
     'הוספת מילה': 'Add a word',
-    'המילים בכל סדר, ולא בהכרח צמודות': 'The words in any order, not necessarily together',
-    'כל המילים יופיעו, עד מרחק מסוים זו מזו': 'All the words appear, within a set distance of each other',
-    'בטווח של עד': 'Within up to',
     'למשל: נר [1:4] שבת': 'For example: נר [1:4] שבת',
     'השאילתה בתחביר של בר אילן': 'The query in Bar-Ilan syntax',
     'הסימנים מוסברים למטה, ב"סימני החיפוש של בר אילן".': 'The signs are explained below, under "Bar-Ilan search signs".',
@@ -499,7 +495,6 @@
     'השאילתה תופיע כאן': 'The query appears here',
     'העתקת השאילתה': 'Copy the query',
     'סימני החיפוש של בר אילן ודוגמאות': 'Bar-Ilan search signs and examples',
-    'דוגמאות מהעזרה של בר אילן. לחיצה טוענת אותן לבונה:': 'Examples from the Bar-Ilan help. Click one to load it into the builder:',
     'ניקוי': 'Clear',
     'פתיחת בר אילן': 'Open Bar-Ilan',
     'מחפש…': 'Searching…',
@@ -531,7 +526,6 @@
     'התו "{char}" אינו חלק מהתחביר של בר אילן.': 'The character "{char}" is not part of the Bar-Ilan syntax.',
     'כתבו לפחות מילה אחת לחיפוש.': 'Write at least one word to search for.',
     'צריך לפחות מילה אחת שאינה מסומנת "בלי המילה הזו".': 'At least one word must not be marked "Without this word".',
-    'בכל שדה כותבים מילה אחת. לביטוי של כמה מילים מוסיפים מילה לכל אחת מהן.': 'Write one word in each field. For a phrase of several words, add a word for each of them.',
     '"{word}" אינה מילה בעברית. מותר להוסיף בה רק את סימני החיפוש ? ~ * @.': '"{word}" is not a Hebrew word. Only the search signs ? ~ * @ may be added to it.',
     'משפחה וחיפוש שמור הם שם אחד, בלי מילים חלופיות.': 'A family or saved search is one name, without alternative words.',
     'בחרו לפחות קטגוריה או ספר אחד, או חפשו בכל הספרים.': 'Choose at least one category or book, or search all books.',
@@ -571,7 +565,6 @@
     'מילים לחיפוש, למשל: נר שבת': 'Words to search, e.g. נר שבת',
     'מילים לחיפוש בבר אילן': 'Words to search in Bar-Ilan',
     'המילים יחופשו צמודות, בסדר שנכתבו. לחיפוש מילים רחוקות, צורות אחרות של מילה או מילים חלופיות — "חיפוש מתקדם".': 'The words are searched next to each other, in the order written. To search for words further apart, other forms of a word or alternative words, use "Advanced search".',
-    'מילה בכל שדה. לכל מילה בוחרים איך לחפש אותה, וביניהן — כמה הן רחוקות.': 'One word in each field. For each word choose how to search for it, and between words, how far apart they are.',
     'בספרים שכבר נבחרו בבר אילן.': 'In the books already selected in Bar-Ilan.',
     'רק ב: {names}, ועוד {count}.': 'Only in: {names}, and {count} more.',
     'רק ב: {names}.': 'Only in: {names}.',
@@ -586,8 +579,6 @@
     'ניסוח חופשי': 'Free wording',
     'למשל: האם מותר לנסוע באופניים בשבת': 'e.g. האם מותר לנסוע באופניים בשבת',
     'שאלה או משפט לחיפוש בבר אילן': 'A question or sentence to search in Bar-Ilan',
-    'כותבים שאלה או משפט במילים שלכם, ובר אילן מחפש מקורות שעוסקים בזה.':
-      'Write a question or sentence in your own words, and Bar-Ilan looks for sources that deal with it.',
     'כותבים שאלה או משפט, וכאן יוסבר מה יחופש.': 'Write a question or sentence, and this will explain what will be searched.',
     'בר אילן יחפש מקורות לפי הניסוח: "{text}"': 'Bar-Ilan will look for sources by the wording: "{text}"',
     'כתבו שאלה או משפט בעברית.': 'Write a question or sentence in Hebrew.',
@@ -648,10 +639,6 @@
     'לוחצים על "פתיחה בבר אילן" ליד הספר. בר אילן נפתח (או עולה לחזית) עם הספר, תוך שניות ספורות.': 'Click "Open in Bar-Ilan" next to the book. Bar-Ilan opens (or comes to the front) with the book within a few seconds.',
     '"פרטי הספר" מציג את המחבר, מקום ושנת ההדפסה, המהדורה ומיקום הספר בבר אילן.': '"Book details" shows the author, place and year of printing, the edition and where the book is in Bar-Ilan.',
     '"פתיחה במקום מסוים" עובר ל"איתור מקום" עם שם הספר, ונשאר רק לכתוב את המקום.': '"Open at a location" switches to "Find a location" with the book name, so you only need to write the location.',
-    'בלשונית "חיפוש בטקסט" כותבים מילים ולוחצים "חיפוש בבר אילן". המילים יחופשו צמודות, כמו בחלון החיפוש של בר אילן.': 'In the "Text search" tab, write words and click "Search in Bar-Ilan". The words are searched next to each other, as in Bar-Ilan\'s search window.',
-    '"חיפוש מתקדם": מילה בכל שדה, ולכל אחת בוחרים איך לחפש אותה (עם אותיות שימוש, בכתיב מלא או חסר, כל השורש ועוד). "או מילה אחרת" מוסיף מילים חלופיות, ובין מילה למילה בוחרים מרחק.': '"Advanced search": one word in each field, and for each choose how to search for it (with prefix letters, in full or defective spelling, the whole root and more). "Or another word" adds alternative words, and between words you choose a distance.',
-    'ב"איפה לחפש" אפשר לבחור קטגוריות וספרים. "מה יחופש" מסביר במילים בדיוק מה יחופש.': 'Under "Where to search" you can choose categories and books. "What will be searched" explains in plain words exactly what will be searched.',
-    'מי שמכיר את התחביר של בר אילן יכול לכתוב את השאילתה בעצמו ("כתיבה בתחביר של בר אילן").': 'If you know the Bar-Ilan syntax, you can write the query yourself ("Write in Bar-Ilan syntax").',
     'בלשונית "איתור מקום" כותבים שם ספר ומקום בו, למשל "בראשית ב ג" או "ברכות דף ב עמוד א".': 'In the "Find a location" tab, write a book name and a location in it, e.g. "בראשית ב ג" or "ברכות דף ב עמוד א".',
     'לוחצים "פתיחה בבר אילן", והספר נפתח ישר במקום הזה.': 'Click "Open in Bar-Ilan", and the book opens right at that location.',
     'כשבר אילן מוצא כמה מקורות, למשל החומש ומפרשיו, בוחרים את המקור מהרשימה.': 'When Bar-Ilan finds several sources, such as the Chumash and its commentaries, choose the source from the list.',
@@ -703,9 +690,122 @@
     // ---- 0.5.6: חיפוש רגיל ב"חיפוש קל" של בר אילן
     'בר אילן יחפש את "{words}" ב"חיפוש קל", לפי ההגדרות שבחרתם שם (למשל אותיות שימוש ומרחק בין המילים).':
       'Bar-Ilan will search for "{words}" with its Easy Search (חיפוש קל), using the settings you chose there (for example prefixes and the distance between words).',
-    'כמו "חיפוש קל" בבר אילן, עם ההגדרות שבחרתם בו. לבחירה מדויקת של צורות, מרחקים ומילים חלופיות — "חיפוש מתקדם".':
-      'Like Easy Search (חיפוש קל) in Bar-Ilan, with the settings you chose there. For exact control of word forms, distances and alternative words, use "Advanced search".',
     'בר אילן לא זיהה את "{ref}" כמקום, ולכן נפתח המקום שבו קוראים.':
       'Bar-Ilan did not recognize "{ref}" as a location, so the place you are reading was opened instead.',
+
+    // ---- חיפוש בטקסט 0.6.0: סוגי חיפוש, חיפוש קל, טווחים, ביטויים ודוגמאות
+    'מילה או ביטוי חלופי': 'Alternative word or phrase',
+    'מילה או ביטוי': 'Word or phrase',
+    'בסדר שכתבתי': 'In the order I wrote',
+    'ובין מילה למילה — המרחק שבחרתם (צמודות, או עד כמה מילים)':
+      'With the distance you chose between each word and the next (adjacent, or up to a few words)',
+    'בכל סדר, קרובות זו לזו': 'In any order, close to each other',
+    'כל המילים, בטווח של מספר מילים שבוחרים': 'All the words, within a number of words you choose',
+    'באותו משפט': 'In the same sentence',
+    'בכל סדר ובכל מרחק, אבל באותו משפט': 'In any order and at any distance, but in the same sentence',
+    'באותה פסקה': 'In the same paragraph',
+    'הלכה, סעיף או דיבור המתחיל': 'A halacha, a se\'if or a dibur hamatchil',
+    'באותו מסמך': 'In the same document',
+    'פרק, סימן או תשובה': 'A chapter, a siman or a responsum',
+    'איפה המילים צריכות להופיע:': 'Where the words must appear:',
+    'איפה המילים צריכות להופיע': 'Where the words must appear',
+    'כל המילים בטווח של עד': 'All the words within',
+    'נסו:': 'Try:',
+    'עוד {count} דוגמאות': '{count} more examples',
+    'כמו שהגדרתי בבר אילן': 'As I set it in Bar-Ilan',
+    'לפי מה שסימנתם בחלון "חיפוש קל" של בר אילן': 'Following what you checked in Bar-Ilan\'s "Easy search" window',
+    'בדיוק כפי שנכתבו': 'Exactly as written',
+    'המילים צמודות, בלי אותיות נוספות': 'The words adjacent, with no added letters',
+    'עם תוספות': 'With additions',
+    'בוחרים מה עוד יימצא': 'Choose what else will be found',
+    'איך לחפש את המילים:': 'How to search for the words:',
+    'איך לחפש את המילים': 'How to search for the words',
+    'אותיות שימוש לפני המילה הראשונה': 'Prefix letters before the first word',
+    'ו, ה, ב, כ, ל, מ, ש: "נר חנוכה" ימצא גם "בנר חנוכה"': 'ו, ה, ב, כ, ל, מ, ש: "נר חנוכה" also finds "בנר חנוכה"',
+    'עד שתי מילים בין המילים': 'Up to two words between the words',
+    '"נר חנוכה" ימצא גם "נר ראשון של חנוכה"': '"נר חנוכה" also finds "נר ראשון של חנוכה"',
+    '"חנוכה" ימצא גם "חנכה"': '"חנוכה" also finds "חנכה"',
+    'מילה או ביטוי בכל שדה. לכל מילה בוחרים איך לחפש אותה, ואפשר להוסיף לה מילים חלופיות ("או").':
+      'A word or phrase in each field. For each word choose how to search for it, and you can add alternative words ("or").',
+    'בבר אילן עצמו נשארו: חיפוש לפי ניקוד (בחיפוש הטבלאי, "ניקוד..."), ועריכת משפחות, חיפושים שמורים ושאילתות קודמות. משפחה וחיפוש שמור שהגדרתם שם אפשר לחפש מכאן ("איך לחפש את המילה").':
+      'These remain in Bar-Ilan itself: searching by vowel points (in the tabular search, "ניקוד..."), and editing families, saved searches and previous queries. A family or saved search you defined there can be searched from here ("How to search for the word").',
+    'ביטוי של כמה מילים מחופש כמו שנכתב. לחיפוש בצורות אחרות — מילה בכל שדה.':
+      'A phrase of several words is searched as written. To search in other forms, put one word in each field.',
+    'מקורות שבהם כל המילים מופיעות באותו משפט, בכל סדר:': 'Sources where all the words appear in the same sentence, in any order:',
+    'מקורות שבהם כל המילים מופיעות באותה פסקה (הלכה, סעיף או דיבור המתחיל), בכל סדר:':
+      'Sources where all the words appear in the same paragraph (a halacha, a se\'if or a dibur hamatchil), in any order:',
+    'מקורות שבהם כל המילים מופיעות באותו מסמך (פרק, סימן או תשובה), בכל סדר:':
+      'Sources where all the words appear in the same document (a chapter, a siman or a responsum), in any order:',
+    'מקורות שבהם המילים "{words}" מופיעות צמודות, בסדר הזה, בדיוק כפי שנכתבו.':
+      'Sources where the words "{words}" appear adjacent, in this order, exactly as written.',
+    'מקורות שבהם מופיעה המילה "{words}" בדיוק כפי שנכתבה.': 'Sources where the word "{words}" appears exactly as written.',
+    'מקורות שבהם מופיעות המילים "{words}", בסדר הזה, וגם:': 'Sources where the words "{words}" appear in this order, and also:',
+    'מקורות שבהם מופיעה המילה "{words}", וגם:': 'Sources where the word "{words}" appears, and also:',
+    'עם אותיות שימוש לפני המילה הראשונה (ו, ה, ב, כ, ל, מ, ש): "ו{word}", "ב{word}"':
+      'with prefix letters before the first word (ו, ה, ב, כ, ל, מ, ש): "ו{word}", "ב{word}"',
+    'עם עד שתי מילים אחרות בין המילים': 'with up to two other words between the words',
+    'בכתיב מלא או חסר: מילה עם ו\' או י\' תימצא גם בלעדיהן': 'in full or defective spelling: a word with ו or י is also found without them',
+    'נר חנוכה': 'Chanukah candle',
+    'קריאת שמע': 'Kriat Shema',
+    'מעשר כספים': 'Tithing money',
+    'עדות אשה': 'A woman\'s testimony',
+    'האם יש חיוב לתרום כליה לחולה מסוכן': 'Is there an obligation to donate a kidney to a dangerously ill patient',
+    'פתיחת בית כנסת בבנין מגורים': 'Opening a synagogue in a residential building',
+    'מצות ביקור חולים באמצעות הטלפון': 'Visiting the sick by telephone',
+    'קניית ספרים ממעשר כספים': 'Buying books with tithe money',
+    'האם חייבים כל השכנים להשתתף בהוצאות המעלית': 'Must all the neighbours share the cost of the elevator',
+    'שליח ציבור וטעות, באותו משפט': 'Prayer leader and error, in the same sentence',
+    'מעלית ושבת, באותה פסקה': 'Elevator and Shabbat, in the same paragraph',
+    'צער בעלי חיים, או בקיצור צעב"ח': 'Tza\'ar ba\'alei chayim, or its abbreviation צעב"ח',
+    'כל המילים באותו משפט, בכל סדר': 'All the words in the same sentence, in any order',
+    'כל המילים באותה פסקה: הלכה, סעיף או דיבור המתחיל': 'All the words in the same paragraph: a halacha, a se\'if or a dibur hamatchil',
+    'כל המילים באותו מסמך: פרק, סימן או תשובה': 'All the words in the same document: a chapter, a siman or a responsum',
+    'ביטוי של כמה מילים, גם כחלופה': 'A phrase of several words, also as an alternative',
+    'חיפוש בטקסט: איזה סוג חיפוש לבחור': 'Text search: which kind of search to choose',
+    '"חיפוש רגיל" — כותבים מילים, ובר אילן מחפש אותן כמו ב"חיפוש קל" שלו. מתאים לרוב החיפושים. ב"איך לחפש את המילים" בוחרים: כמו שהגדרתם בבר אילן, בדיוק כפי שנכתבו, או עם תוספות — אותיות שימוש, עד שתי מילים ביניהן, כתיב מלא או חסר.':
+      '"Regular search": write words, and Bar-Ilan searches for them as in its "Easy search". Suits most searches. Under "How to search for the words" choose: as you set it in Bar-Ilan, exactly as written, or with additions: prefix letters, up to two words between them, full or defective spelling.',
+    '"חיפוש מתקדם" — כשצריך לדייק: מילה או ביטוי בכל שדה, צורות לכל מילה, מילים חלופיות, ואיפה המילים צריכות להופיע — צמודות, קרובות, או באותו משפט, פסקה או מסמך.':
+      '"Advanced search": when you need precision. A word or phrase in each field, forms for each word, alternative words, and where the words must appear: adjacent, close, or in the same sentence, paragraph or document.',
+    '"ניסוח חופשי" — כשלא יודעים באילו מילים המקור משתמש: כותבים שאלה או נושא במילים שלכם, למשל "האם מותר לנסוע באופניים בשבת".':
+      '"Free wording": when you don\'t know which words the source uses. Write a question or topic in your own words, for example "האם מותר לנסוע באופניים בשבת".',
+    'בכל סוג יש "נסו:" עם דוגמאות, ולחיצה על דוגמה ממלאת אותה. "מה יחופש" מסביר במילים בדיוק מה יחופש, עוד לפני שלוחצים "חיפוש בבר אילן".':
+      'Each kind has "Try:" with examples, and clicking an example fills it in. "What will be searched" explains in words exactly what will be searched, before you click "Search in Bar-Ilan".',
+    'חיפוש מתקדם, צעד אחר צעד': 'Advanced search, step by step',
+    'כותבים את המילה הראשונה בשדה "מילה 1". אפשר גם ביטוי, למשל "צער בעלי חיים".':
+      'Write the first word in the "Word 1" field. A phrase works too, for example "צער בעלי חיים".',
+    'ב"איך לחפש את המילה" בוחרים צורה. למשל "עם אותיות שימוש לפניה": "נר" ימצא גם "הנר" ו"ובנר".':
+      'Under "How to search for the word" choose a form. For example "With prefix letters before it": "נר" also finds "הנר" and "ובנר".',
+    '"או מילה אחרת" מוסיף חלופה: "עץ", או "אילן", או "נטיעה". החלופה יכולה להיות גם ביטוי, למשל "צער בעלי חיים" או "צעב"ח".':
+      '"Or another word" adds an alternative: "עץ", or "אילן", or "נטיעה". The alternative can also be a phrase, for example "צער בעלי חיים" or "צעב"ח".',
+    '"הוספת מילה" מוסיף את המילה הבאה. ביניהן בוחרים מרחק: מיד אחריה, עד כמה מילים אחריה, או לפניה או אחריה.':
+      '"Add a word" adds the next word. Between them choose a distance: right after it, up to a few words after it, or before or after it.',
+    '"בלי המילה הזו" מוציא מקורות שבהם היא מופיעה. למשל "ישראל" בלי "בני ישראל".':
+      '"Without this word" leaves out sources where it appears. For example "ישראל" without "בני ישראל".',
+    'ב"איפה המילים צריכות להופיע" בוחרים: בסדר שכתבתם, בכל סדר וקרובות זו לזו, או באותו משפט, באותה פסקה (הלכה, סעיף, דיבור המתחיל) או באותו מסמך (פרק, סימן, תשובה).':
+      'Under "Where the words must appear" choose: in the order you wrote, in any order and close to each other, or in the same sentence, the same paragraph (a halacha, se\'if or dibur hamatchil) or the same document (a chapter, siman or responsum).',
+    '"כתיבה בתחביר של בר אילן" מציגה את השאילתה בתחביר שלו, ואפשר לערוך אותה ביד. המקרא שבתחתית הלשונית מסביר כל סימן.':
+      '"Write in Bar-Ilan syntax" shows the query in its syntax, and you can edit it by hand. The legend at the bottom of the tab explains each sign.',
+    'איפה לחפש, ואפשרויות': 'Where to search, and options',
+    '"כל הספרים" — כמו "חיפוש בכל המאגרים" בבר אילן.': '"All books": like "Search all databases" in Bar-Ilan.',
+    '"קטגוריות וספרים שאבחר" — בוחרים מהרשימה. הבחירה נשמרת גם בבר אילן.':
+      '"Categories and books I choose": choose from the list. The selection is also kept in Bar-Ilan.',
+    '"הבחירה שבבר אילן" — הספרים שכבר נבחרו בבר אילן, ב"המאגרים המשתתפים".':
+      '"The selection in Bar-Ilan": the books already selected in Bar-Ilan, under "Participating databases".',
+    'בחיפוש מתקדם: "כולל ראשי תיבות" — "צער בעלי חיים" ימצא גם "צעב"ח"; "לבחור צורות לפני התוצאות" — בר אילן פותח את "ניהול הצורות", ושם בוחרים אילו צורות ייכללו.':
+      'In advanced search: "Include abbreviations": "צער בעלי חיים" also finds "צעב"ח"; "Choose forms before the results": Bar-Ilan opens "Forms management", where you choose which forms to include.',
+    'התוצאות נפתחות בחלון של בר אילן, כמו חיפוש שנעשה בו. ההגדרות של בר אילן חוזרות אחרי החיפוש למה שהיו.':
+      'The results open in Bar-Ilan\'s window, like a search made there. Bar-Ilan\'s settings return to what they were after the search.',
+    'בבר אילן שבמחשב (מהדורה {edition}) לא נמצאה רשימת המחברים, ולכן החיפוש לפי שם המחבר אינו זמין.':
+      'The list of authors was not found in the Bar-Ilan on this computer (edition {edition}), so searching by author name is not available.',
+    'בבר אילן שבמחשב לא נמצאה רשימת המחברים, ולכן החיפוש לפי שם המחבר אינו זמין.':
+      'The list of authors was not found in the Bar-Ilan on this computer, so searching by author name is not available.',
+    'אפשר לחפש לפי שם הספר. למשל: אבני נזר, חתם סופר, רא"ש יבמות.':
+      'You can search by book title. For example: אבני נזר, חתם סופר, רא"ש יבמות.',
+    'הכי פשוט: כותבים מילים, ובר אילן מחפש אותן כמו ב"חיפוש קל" שלו. מתאים לרוב החיפושים — ביטוי, שם, או כמה מילים שמופיעות יחד.':
+      'The simplest: write words, and Bar-Ilan searches for them as in its "Easy search". Suits most searches: a phrase, a name, or a few words that appear together.',
+    'כשצריך לדייק: לכל מילה בוחרים צורות (עם אותיות שימוש, כתיב מלא או חסר, כל השורש), מוסיפים מילים חלופיות, וקובעים איפה המילים צריכות להופיע — צמודות, קרובות, או באותו משפט, פסקה או מסמך.':
+      'When you need precision: for each word choose forms (with prefix letters, full or defective spelling, the whole root), add alternative words, and set where the words must appear: adjacent, close, or in the same sentence, paragraph or document.',
+    'כשלא יודעים באילו מילים המקור משתמש: כותבים שאלה או נושא במילים שלכם, ובר אילן מחפש מקורות שעוסקים בזה. המקורות הרלוונטיים בדרך כלל בראש הרשימה.':
+      'When you don\'t know which words the source uses: write a question or topic in your own words, and Bar-Ilan looks for sources that deal with it. The relevant sources are usually at the top of the list.',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

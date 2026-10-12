@@ -1,15 +1,22 @@
 // החיפוש בטקסט: מודל, בניית השאילתה בתחביר של בר אילן, הסבר במילים, בדיקה
 // ודוגמאות. לוגיקה טהורה בלבד; הלשונית נבנית ב-responsa-advanced-ui.js.
 //
-// ארבעה אופנים: חיפוש רגיל (שדה אחד, המילים צמודות), בונה (מילה בכל שדה,
-// ולכל מילה איך לחפש אותה ומה המרחק לבאה), תחביר של בר אילן שנכתב ביד,
-// וניסוח חופשי (שאלה או משפט, ל"חיפוש בניסוח חופשי" של בר אילן).
+// ארבעה אופנים, כמו חלונות החיפוש של בר אילן:
+// - **חיפוש רגיל** — "חיפוש קל": שדה אחד, וההגדרות שלו (בלי תוספות, או עם
+//   אותיות שימוש, מרחק וכתיב מלא) — כפי שבחר המשתמש בבר אילן, או מכאן;
+// - **בונה** — "חיפוש מתקדם" ו"חיפוש טבלאי": מילה או ביטוי בכל שדה, חלופות,
+//   איך לחפש כל מילה, ואיפה המילים צריכות להופיע זו ביחס לזו;
+// - **תחביר של בר אילן** שנכתב ביד;
+// - **ניסוח חופשי** — "חיפוש בניסוח חופשי": שאלה או משפט.
 //
 // התחביר נמדד מול "חיפוש מתקדם" של בר אילן (גרסה 25), והסימנים נבנו על ידי
 // הכפתורים של בר אילן עצמו: `#נר` אותיות שימוש, `נר#` סיומות דקדוקיות, `!`
 // כתיב מלא/חסר, `+` עם/בלי גרשיים, `$` ערך, `%` שורש, `^` תרגום לארמית,
-// `-` שלילה, `<שם>` משפחה, `{שם}` חיפוש שמור, `(א/ב)` חלופות, `[1:4]` עד
-// ארבע מילים אחריה, `[-2:2]` לפניה או אחריה, ו-`10:` בראש השאילתה לפיזור.
+// `-` שלילה, `<שם>` משפחה, `{שם}` חיפוש שמור, `(א/ב)` חלופות, `{{א ב}}`
+// ביטוי (גם כחלופה), `[1:4]` עד ארבע מילים אחריה, `[-2:2]` לפניה או אחריה.
+// בראש השאילתה: `10:` — כל המילים בכל סדר בטווח עשר מילים; `משפט:`,
+// `פסקה:`, `מסמך:` — כולן באותו משפט, פסקה או מסמך. את אלה בונה "חיפוש
+// טבלאי" של בר אילן (נקרא מ"שאילתות קודמות" שלו).
 (function (root) {
   'use strict';
 
@@ -46,12 +53,37 @@
   /** המרחק בין מילה לזו שאחריה. */
   const GAPS = Object.freeze(['adjacent', 'after', 'around']);
 
+  /**
+   * איפה המילים צריכות להופיע זו ביחס לזו, כמו "מרחקים" בחיפוש הטבלאי של
+   * בר אילן: `chain` — בסדר ובמרחקים שבין השדות; `words` — בכל סדר, בטווח
+   * מילים; `sentence` / `paragraph` / `document` — כולן באותו משפט, פסקה
+   * (הלכה, סעיף, דיבור המתחיל) או מסמך (פרק, סימן).
+   */
+  const Span = Object.freeze({
+    chain: 'chain',
+    words: 'words',
+    sentence: 'sentence',
+    paragraph: 'paragraph',
+    document: 'document',
+  });
+
+  /** הקידומת של כל טווח, כפי שהחיפוש הטבלאי של בר אילן בונה אותה (נמדד). */
+  const SPAN_PREFIX = Object.freeze({ sentence: 'משפט:', paragraph: 'פסקה:', document: 'מסמך:' });
+
+  /**
+   * "חיפוש קל" של בר אילן: `mine` — ההגדרות שהמשתמש בחר בבר אילן; `exact`
+   * — "ללא תוספות"; `additions` — "עם תוספות", ואילו מהן.
+   */
+  const Easy = Object.freeze({ mine: 'mine', exact: 'exact', additions: 'additions' });
+
   const Scope = Object.freeze({ all: 'all', current: 'current', pick: 'pick' });
 
   const Mode = Object.freeze({ simple: 'simple', builder: 'builder', manual: 'manual', free: 'free' });
 
   const MAX_TERMS = 8;
   const MAX_ALTERNATIVES = 6;
+  /** מילה או ביטוי בשדה. השדה עצמו אינו מקבל יותר (`maxlength`). */
+  const MAX_WORD_LENGTH = 120;
   const MAX_DISTANCE = 30;
   /** כמו בשירות (`HelperService.maxScopeItems`). */
   const MAX_SCOPE_ITEMS = 40;
@@ -74,13 +106,19 @@
     return { kind: 'adjacent', distance: 3 };
   }
 
+  /** ברירת המחדל של "עם תוספות" היא ברירת המחדל של בר אילן. */
+  function newEasy() {
+    return { how: Easy.mine, prefixes: true, distance: true, spelling: false };
+  }
+
   function emptyQuery() {
     return {
       mode: Mode.simple,
       simpleText: '',
+      easy: newEasy(),
       terms: [newTerm()],
       gaps: [],
-      anyOrder: false,
+      span: Span.chain,
       within: 10,
       manualText: '',
       freeText: '',
@@ -109,7 +147,7 @@
         const source = term && typeof term === 'object' ? term : {};
         const words = (Array.isArray(source.words) ? source.words : [])
           .slice(0, MAX_ALTERNATIVES)
-          .map((word) => text(word, 60));
+          .map((word) => text(word, MAX_WORD_LENGTH));
         return {
           words: words.length ? words : [''],
           form: FORM_BY_ID[source.form] ? source.form : 'exact',
@@ -125,8 +163,20 @@
         distance: clampInt(gap.distance, 1, MAX_DISTANCE, 3),
       };
     });
-    result.anyOrder = value.anyOrder === true;
+    // שמור לפני 0.6.0: `anyOrder: true` ← בכל סדר, בטווח מילים.
+    result.span = Object.values(Span).includes(value.span)
+      ? value.span
+      : value.anyOrder === true
+        ? Span.words
+        : Span.chain;
     result.within = clampInt(value.within, 1, MAX_DISTANCE, 10);
+    const easy = value.easy && typeof value.easy === 'object' ? value.easy : {};
+    result.easy = {
+      how: Object.values(Easy).includes(easy.how) ? easy.how : Easy.mine,
+      prefixes: easy.prefixes !== false,
+      distance: easy.distance !== false,
+      spelling: easy.spelling === true,
+    };
     result.manualText = text(value.manualText, MAX_QUERY_LENGTH);
     result.simpleText = text(value.simpleText, MAX_QUERY_LENGTH);
     result.freeText = text(value.freeText, MAX_QUERY_LENGTH);
@@ -168,9 +218,24 @@
     return term.words.map((word) => word.trim()).filter(Boolean);
   }
 
+  /** ביטוי של כמה מילים בשדה אחד. */
+  function isPhrase(word) {
+    return /\s/.test(word.trim());
+  }
+
+  /**
+   * מילה או ביטוי כפי שיישלחו: ביטוי בתוך `{{ }}`, כמו "ביטוי" בחיפוש
+   * הטבלאי של בר אילן. `({{צער בעלי חיים}}/צעב"ח)` נמדד: 3,974 = 2,686 +
+   * 1,288; ביטוי בלי `{{ }}` בתוך חלופות נדחה.
+   */
+  function wordText(word) {
+    const value = word.trim().replace(/\s+/g, ' ');
+    return isPhrase(value) ? '{{' + value + '}}' : value;
+  }
+
   /** מילה אחת כפי שתישלח: שלילה, ואז הסימנים לפני המילה, החלופות ואחריה. */
   function termText(term) {
-    const words = wordsOf(term);
+    const words = wordsOf(term).map(wordText);
     if (!words.length) return '';
     const form = FORM_BY_ID[term.form] || FORM_BY_ID.exact;
     const core = words.length > 1 ? '(' + words.join('/') + ')' : words[0];
@@ -370,7 +435,9 @@
    * - מרווח במצב מתקדם (כל המילים) ← "עד N+1 מילים אחריה": באוצריא
    *   המרווח הוא המילים *שבין* המילים; מרווח ידני לכל זוג בנפרד;
    * - "כל אחת מהמילים" ← מילה אחת עם חלופות (עד MAX_ALTERNATIVES);
-   * - "באותה פסקה" / "תחת אותה כותרת" ← בכל סדר, בטווח הרחב ביותר (קירוב);
+   * - "באותה פסקה" ← כולן באותה פסקה של בר אילן (`פסקה:`); "תחת אותה
+   *   כותרת" ← כולן באותו מסמך (`מסמך:`, פרק או סימן) — קירוב, כי כותרת
+   *   של אוצריא אינה בהכרח מסמך של בר אילן;
    * - כל השאר ← צמודות: בונה כשיש צורה או חלופה, אחרת חיפוש רגיל. קירוב
    *   גם כשנשלחו סינון קטגוריות, שלילה או תווים כלליים, שאין להם מקבילה.
    */
@@ -420,7 +487,7 @@
     const base = normalize(query);
     const options = acronyms ? { ...base.options, abbreviations: true } : base.options;
     const shaped = terms.some((term) => term.form !== 'exact' || term.words.length > 1);
-    const builder = (fields) => fit({ ...base, options, mode: Mode.builder, anyOrder: false, ...fields }, missing);
+    const builder = (fields) => fit({ ...base, options, mode: Mode.builder, span: Span.chain, ...fields }, missing);
     const result = (built, approximate) => {
       const names = unique(missing).slice(0, 8);
       return { query: built, approximate: Boolean(approximate || names.length), missing: names };
@@ -436,9 +503,10 @@
       return result(builder({ terms: [merged], gaps: [] }), lost || forms.length > 1);
     }
     if (found.length > 1 && match === 'all' && scope !== 'wordDistance') {
+      const paragraph = scope === 'sameParagraph';
       return result(
-        builder({ terms, gaps: found.slice(1).map(() => newGap()), anyOrder: true, within: MAX_DISTANCE }),
-        true,
+        builder({ terms, gaps: found.slice(1).map(() => newGap()), span: paragraph ? Span.paragraph : Span.document }),
+        lost || !paragraph,
       );
     }
     const distances =
@@ -480,18 +548,19 @@
     if (query.mode === Mode.simple) return simpleWords(query.simpleText).join(' ');
     if (query.mode === Mode.manual) return query.manualText.replace(/\s+/g, ' ').trim();
     if (query.mode === Mode.free) return freeText(query.freeText);
+    const span = query.span !== Span.chain;
     const parts = [];
     query.terms.forEach((term, i) => {
       const value = termText(term);
       if (!value) return;
-      if (parts.length) parts.push(query.anyOrder ? ' ' : gapText(query.gaps[i - 1]));
+      if (parts.length) parts.push(span ? ' ' : gapText(query.gaps[i - 1]));
       parts.push(value);
     });
     const body = parts.join('');
     if (!body) return '';
-    return query.anyOrder && query.terms.filter((term) => wordsOf(term).length).length > 1
-      ? query.within + ': ' + body
-      : body;
+    // טווח צריך לפחות שתי מילים; מילה אחת נשלחת בלי קידומת.
+    if (!span || query.terms.filter((term) => wordsOf(term).length).length < 2) return body;
+    return (query.span === Span.words ? query.within + ':' : SPAN_PREFIX[query.span]) + ' ' + body;
   }
 
   /**
@@ -540,21 +609,24 @@
         const words = wordsOf(term);
         const form = FORM_BY_ID[term.form] || FORM_BY_ID.exact;
         for (const word of words) {
-          if (/\s/.test(word)) {
-            return {
-              message: t('בכל שדה כותבים מילה אחת. לביטוי של כמה מילים מוסיפים מילה לכל אחת מהן.'),
-              term: i,
-            };
-          }
-          if (!WORD.test(word) || !LETTER.test(word)) {
-            return {
-              message: t('"{word}" אינה מילה בעברית. מותר להוסיף בה רק את סימני החיפוש ? ~ * @.', { word }),
-              term: i,
-            };
+          for (const part of word.split(/\s+/)) {
+            if (!WORD.test(part) || !LETTER.test(part)) {
+              return {
+                message: t('"{word}" אינה מילה בעברית. מותר להוסיף בה רק את סימני החיפוש ? ~ * @.', { word: part }),
+                term: i,
+              };
+            }
           }
         }
         if (form.single && words.length > 1) {
           return { message: t('משפחה וחיפוש שמור הם שם אחד, בלי מילים חלופיות.'), term: i };
+        }
+        // בר אילן מחפש ביטוי כמו שהוא; סימן לפניו או אחריו לא נמדד.
+        if (words.some(isPhrase) && (term.form !== 'exact' || form.single)) {
+          return {
+            message: t('ביטוי של כמה מילים מחופש כמו שנכתב. לחיפוש בצורות אחרות — מילה בכל שדה.'),
+            term: i,
+          };
         }
       }
       if (buildQuery(query).length > MAX_QUERY_LENGTH) {
@@ -579,11 +651,13 @@
   /**
    * גוף הבקשה ל-`POST /text/search` (docs/PROTOCOL.md). ניסוח חופשי נשלח
    * עם `freeForm` ובלי `advanced`, ובלי ראשי תיבות וצורות: אין להם מקום בו.
+   * [how] — מה השירות מכיר: `easy` ("חיפוש קל", 0.5.6) ו-`easyOptions`
+   * (ההגדרות שלו מכאן, 0.6.0).
    */
   function toRequest(query, how) {
     const free = query.mode === Mode.free;
-    // חיפוש רגיל ב"חיפוש קל" של בר אילן, לפי ההגדרות של המשתמש שם (שירות
-    // עם `easySearch`). בלעדיו — חיפוש מתקדם, המילים צמודות.
+    // חיפוש רגיל ב"חיפוש קל" של בר אילן. בלי `easySearch` — חיפוש מתקדם,
+    // המילים צמודות.
     const easy = query.mode === Mode.simple && Boolean(how && how.easy);
     const options =
       free || easy
@@ -593,6 +667,15 @@
             // בחיפוש רגיל אין "ניהול הצורות": המילים נשלחות כפי שנכתבו.
             showForms: query.mode !== Mode.simple && query.options.showForms,
           };
+    // ההגדרות של "חיפוש קל": בלי `additions` — מה שהמשתמש בחר בבר אילן.
+    if (easy && how.easyOptions && query.easy.how !== Easy.mine) {
+      options.additions = query.easy.how === Easy.additions;
+      if (options.additions) {
+        options.prefixes = query.easy.prefixes;
+        options.distance = query.easy.distance;
+        options.spelling = query.easy.spelling;
+      }
+    }
     const body = easy
       ? { q: simpleWords(query.simpleText).join(' '), easy: true, options }
       : { q: buildQuery(query), ...(free ? { freeForm: true } : { advanced: true }), options };
@@ -629,6 +712,50 @@
     saved: N('(חיפוש שמור)'),
   });
 
+  /** פתיחת ההסבר כשהמילים בטווח, לפי [Span]. */
+  const SPAN_SENTENCES = Object.freeze({
+    words: N('מקורות שבהם מופיעות כל המילים, בכל סדר, עד {count} מילים זו מזו:'),
+    sentence: N('מקורות שבהם כל המילים מופיעות באותו משפט, בכל סדר:'),
+    paragraph: N('מקורות שבהם כל המילים מופיעות באותה פסקה (הלכה, סעיף או דיבור המתחיל), בכל סדר:'),
+    document: N('מקורות שבהם כל המילים מופיעות באותו מסמך (פרק, סימן או תשובה), בכל סדר:'),
+  });
+
+  /** ההסבר של "חיפוש קל", לפי ההגדרות שלו. */
+  function easyLines(words, easy) {
+    const text = words.join(' ');
+    if (easy.how === Easy.mine) {
+      return [
+        t('בר אילן יחפש את "{words}" ב"חיפוש קל", לפי ההגדרות שבחרתם שם (למשל אותיות שימוש ומרחק בין המילים).', {
+          words: text,
+        }),
+      ];
+    }
+    // מרחק בין מילים אינו חל על מילה אחת.
+    const extras =
+      easy.how === Easy.additions
+        ? [
+            easy.prefixes
+              ? t('עם אותיות שימוש לפני המילה הראשונה (ו, ה, ב, כ, ל, מ, ש): "ו{word}", "ב{word}"', { word: words[0] })
+              : null,
+            easy.distance && words.length > 1 ? t('עם עד שתי מילים אחרות בין המילים') : null,
+            easy.spelling ? t('בכתיב מלא או חסר: מילה עם ו\' או י\' תימצא גם בלעדיהן') : null,
+          ].filter(Boolean)
+        : [];
+    if (!extras.length) {
+      return [
+        words.length > 1
+          ? t('מקורות שבהם המילים "{words}" מופיעות צמודות, בסדר הזה, בדיוק כפי שנכתבו.', { words: text })
+          : t('מקורות שבהם מופיעה המילה "{words}" בדיוק כפי שנכתבה.', { words: text }),
+      ];
+    }
+    return [
+      words.length > 1
+        ? t('מקורות שבהם מופיעות המילים "{words}", בסדר הזה, וגם:', { words: text })
+        : t('מקורות שבהם מופיעה המילה "{words}", וגם:', { words: text }),
+      ...extras.map((line) => '• ' + line),
+    ];
+  }
+
   /** `"נר" או "אור"`, ואחריהם איך לחפש. */
   function termPhrase(term) {
     const words = wordsOf(term).map((word) => '"' + word + '"');
@@ -653,13 +780,7 @@
     const lines = [];
     if (query.mode === Mode.simple && how && how.easy) {
       const words = simpleWords(query.simpleText);
-      if (words.length) {
-        lines.push(
-          t('בר אילן יחפש את "{words}" ב"חיפוש קל", לפי ההגדרות שבחרתם שם (למשל אותיות שימוש ומרחק בין המילים).', {
-            words: words.join(' '),
-          }),
-        );
-      }
+      if (words.length) lines.push(...easyLines(words, how.easyOptions ? query.easy : newEasy()));
       if (scopeLabel) lines.push(scopeLabel);
       return lines;
     }
@@ -681,11 +802,10 @@
         .filter((entry) => wordsOf(entry.term).length);
       const wanted = filled.filter((entry) => !entry.term.exclude);
       const excluded = filled.filter((entry) => entry.term.exclude);
+      const spanned = query.span !== Span.chain && wanted.length > 1;
       if (wanted.length) {
-        if (query.anyOrder && wanted.length > 1) {
-          lines.push(
-            t('מקורות שבהם מופיעות כל המילים, בכל סדר, עד {count} מילים זו מזו:', { count: query.within }),
-          );
+        if (spanned) {
+          lines.push(t(SPAN_SENTENCES[query.span], { count: query.within }));
           wanted.forEach((entry) => lines.push('• ' + termPhrase(entry.term)));
         } else {
           // השרשרת היא בסדר השדות: מילה מוחרגת בין שתי מילים היא חוליה בה,
@@ -705,7 +825,7 @@
         }
       }
       const inChain = (entry) =>
-        !query.anyOrder && wanted.length && entry.index > wanted[0].index && entry.index < wanted[wanted.length - 1].index;
+        !spanned && wanted.length && entry.index > wanted[0].index && entry.index < wanted[wanted.length - 1].index;
       excluded
         .filter((entry) => !inChain(entry))
         .forEach((entry) => {
@@ -777,7 +897,7 @@
   function setWord(query, index, alternative, value) {
     const term = query.terms[index];
     if (!term) return query;
-    const words = term.words.map((word, i) => (i === alternative ? String(value).slice(0, 60) : word));
+    const words = term.words.map((word, i) => (i === alternative ? String(value).slice(0, MAX_WORD_LENGTH) : word));
     return updateTerm(query, index, { words });
   }
 
@@ -837,7 +957,27 @@
     return { words: Array.isArray(words) ? words : [words], form: form || 'exact', exclude: Boolean(exclude) };
   }
 
-  /** מהעזרה של בר אילן. כל דוגמה מחליפה רק את המילים, לא את התחום. */
+  /**
+   * דוגמאות לכל אופן: לחיצה טוענת אותן. רובן מהעזרה ומחלונות החיפוש של בר
+   * אילן. כל דוגמה מחליפה רק את מה שמחפשים, לא את התחום ואת האפשרויות.
+   */
+  const SIMPLE_EXAMPLES = Object.freeze([
+    { id: 'simple-chanukah', label: N('נר חנוכה'), text: 'נר חנוכה' },
+    { id: 'simple-shema', label: N('קריאת שמע'), text: 'קריאת שמע' },
+    { id: 'simple-maaser', label: N('מעשר כספים'), text: 'מעשר כספים' },
+    { id: 'simple-agunah', label: N('עדות אשה'), text: 'עדות אשה' },
+  ]);
+
+  /** מחלון "חיפוש בניסוח חופשי" של בר אילן. */
+  const FREE_EXAMPLES = Object.freeze([
+    { id: 'free-kidney', label: N('האם יש חיוב לתרום כליה לחולה מסוכן'), text: 'האם יש חיוב לתרום כליה לחולה מסוכן' },
+    { id: 'free-shul', label: N('פתיחת בית כנסת בבנין מגורים'), text: 'פתיחת בית כנסת בבנין מגורים' },
+    { id: 'free-phone', label: N('מצות ביקור חולים באמצעות הטלפון'), text: 'מצות ביקור חולים באמצעות הטלפון' },
+    { id: 'free-maaser', label: N('קניית ספרים ממעשר כספים'), text: 'קניית ספרים ממעשר כספים' },
+    { id: 'free-elevator', label: N('האם חייבים כל השכנים להשתתף בהוצאות המעלית'), text: 'האם חייבים כל השכנים להשתתף בהוצאות המעלית' },
+  ]);
+
+  /** לבונה, מהעזרה של בר אילן ומהחיפוש הטבלאי שלו. */
   const EXAMPLES = Object.freeze([
     {
       id: 'distance',
@@ -852,7 +992,22 @@
     {
       id: 'scattered',
       label: N('עגונה, גוי ועדות, בכל סדר ובטווח של עשר מילים'),
-      query: { terms: [term('עגונה'), term('גוי'), term('עדות')], anyOrder: true, within: 10 },
+      query: { terms: [term('עגונה'), term('גוי'), term('עדות')], span: Span.words, within: 10 },
+    },
+    {
+      id: 'sentence',
+      label: N('שליח ציבור וטעות, באותו משפט'),
+      query: { terms: [term('שליח', 'prefixes'), term('ציבור'), term('טעה', 'root')], span: Span.sentence },
+    },
+    {
+      id: 'paragraph',
+      label: N('מעלית ושבת, באותה פסקה'),
+      query: { terms: [term('מעלית', 'affixes'), term('שבת', 'prefixes')], span: Span.paragraph },
+    },
+    {
+      id: 'phrase',
+      label: N('צער בעלי חיים, או בקיצור צעב"ח'),
+      query: { terms: [term(['צער בעלי חיים', 'צעב"ח'])] },
     },
     {
       id: 'alternatives',
@@ -880,10 +1035,21 @@
   ]);
 
   function applyExample(query, id) {
+    const simple = SIMPLE_EXAMPLES.find((entry) => entry.id === id);
+    if (simple) return { ...query, mode: Mode.simple, simpleText: simple.text };
+    const free = FREE_EXAMPLES.find((entry) => entry.id === id);
+    if (free) return { ...query, mode: Mode.free, freeText: free.text };
     const example = EXAMPLES.find((entry) => entry.id === id);
     if (!example) return query;
     const next = normalize({ ...emptyQuery(), ...example.query, mode: Mode.builder });
-    return { ...next, simpleText: query.simpleText, scope: query.scope, options: query.options };
+    return {
+      ...next,
+      simpleText: query.simpleText,
+      freeText: query.freeText,
+      easy: query.easy,
+      scope: query.scope,
+      options: query.options,
+    };
   }
 
   /** מקרא הסימנים, לעזרה שבדיאלוג ולמי שכותב את השאילתה בעצמו. */
@@ -892,7 +1058,11 @@
     { sign: 'נר [1:4] שבת', meaning: N('"שבת" עד ארבע מילים אחרי "נר"') },
     { sign: 'חכמים [-1:1] תקנו', meaning: N('לפניה או אחריה') },
     { sign: '10: א ב ג', meaning: N('כל המילים, בכל סדר, עד עשר מילים זו מזו') },
+    { sign: 'משפט: א ב', meaning: N('כל המילים באותו משפט, בכל סדר') },
+    { sign: 'פסקה: א ב', meaning: N('כל המילים באותה פסקה: הלכה, סעיף או דיבור המתחיל') },
+    { sign: 'מסמך: א ב', meaning: N('כל המילים באותו מסמך: פרק, סימן או תשובה') },
     { sign: '(עץ/אילן)', meaning: N('אחת מהמילים') },
+    { sign: '({{צער בעלי חיים}}/צעב"ח)', meaning: N('ביטוי של כמה מילים, גם כחלופה') },
     { sign: '#נר  נר#', meaning: N('אותיות שימוש לפני המילה, סיומות דקדוקיות אחריה') },
     { sign: '*נר  נר*', meaning: N('כל אותיות לפני המילה או אחריה') },
     { sign: '!אהרון', meaning: N('כתיב מלא או חסר') },
@@ -908,12 +1078,17 @@
     FORMS,
     FORM_BY_ID,
     GAPS,
+    Span,
+    Easy,
     Scope,
     Mode,
     EXAMPLES,
+    SIMPLE_EXAMPLES,
+    FREE_EXAMPLES,
     SYNTAX,
     MAX_TERMS,
     MAX_ALTERNATIVES,
+    MAX_WORD_LENGTH,
     MAX_DISTANCE,
     MAX_SCOPE_ITEMS,
     MAX_QUERY_LENGTH,
@@ -927,6 +1102,7 @@
     fromOtzariaSearch,
     displayQuery,
     termText,
+    isPhrase,
     validate,
     withAvailableScope,
     toRequest,

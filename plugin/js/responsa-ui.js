@@ -529,8 +529,21 @@
     );
   }
 
+  /** למה החיפוש לפי מחבר אינו מוצא דבר במהדורה הזו (`Domain.authorsMissing`). */
+  function authorsNote(model) {
+    const edition = model.status && model.status.version;
+    return el(
+      'p',
+      { class: 'empty-note' },
+      edition
+        ? t('בבר אילן שבמחשב (מהדורה {edition}) לא נמצאה רשימת המחברים, ולכן החיפוש לפי שם המחבר אינו זמין.', { edition })
+        : t('בבר אילן שבמחשב לא נמצאה רשימת המחברים, ולכן החיפוש לפי שם המחבר אינו זמין.'),
+    );
+  }
+
   function resultsBlock(model, actions) {
     if (!model.query.trim() && canBrowse(model)) return browseView(model, actions);
+    const noAuthors = Domain.authorsMissing(model.status);
     if (!model.query.trim()) {
       return el(
         'div',
@@ -539,8 +552,11 @@
         el(
           'p',
           {},
-          t('אפשר לחפש לפי שם הספר, שם המחבר, או שניהם יחד. למשל: אבני נזר, מהרש"א, רא"ש יבמות.'),
+          noAuthors
+            ? t('אפשר לחפש לפי שם הספר. למשל: אבני נזר, חתם סופר, רא"ש יבמות.')
+            : t('אפשר לחפש לפי שם הספר, שם המחבר, או שניהם יחד. למשל: אבני נזר, מהרש"א, רא"ש יבמות.'),
         ),
+        noAuthors ? authorsNote(model) : null,
       );
     }
     if (model.searchError) {
@@ -553,6 +569,7 @@
         { class: 'empty' },
         icon('search_info_24_regular'),
         el('p', {}, t('לא נמצאו ספרים. אפשר לנסות מילה אחרת, או רק חלק מהשם.')),
+        noAuthors ? authorsNote(model) : null,
         canBrowse(model) && model.browse.path
           ? button('tonal', t('חיפוש בכל הספרים'), actions.searchEverywhere, { key: 'search-everywhere' })
           : null,

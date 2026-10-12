@@ -69,7 +69,7 @@ test('כל אייקון שהקוד מבקש קיים בקובץ האייקוני
   );
   // השם במניפסט הוא של אוצריא, לא של הדף; וכך גם יעדי PREFERRED, שמגיעים
   // רק מהגופן של האוצריא המותקנת ויש להם תמיד אייקון חלופי בקובץ.
-  const hostOnly = new Set(Object.values(require('../js/responsa-icons.js').PREFERRED));
+  const hostOnly = new Set(Object.values(require('../js/responsa-icons.js').PREFERRED).flat());
   const missing = [...requested].filter((name) => !available.has(name) && !hostOnly.has(name));
   assert.deepEqual(missing, []);
 });

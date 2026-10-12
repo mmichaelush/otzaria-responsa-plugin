@@ -30,10 +30,48 @@ test('מילים צמודות, מרחק אחריה ומרחק לשני הכיו�
 });
 
 test('פיזור בכל סדר: המספר בראש השאילתה', () => {
-  const q = query({ terms: [term('עגונה'), term('גוי'), term('עדות')], anyOrder: true, within: 10 });
+  const q = query({ terms: [term('עגונה'), term('גוי'), term('עדות')], span: 'words', within: 10 });
   assert.equal(buildQuery(q), '10: עגונה גוי עדות');
   // מילה אחת אינה צריכה טווח.
-  assert.equal(buildQuery(query({ terms: [term('עגונה')], anyOrder: true })), 'עגונה');
+  assert.equal(buildQuery(query({ terms: [term('עגונה')], span: 'words' })), 'עגונה');
+  // מודל שנשמר לפני 0.6.0: `anyOrder` ← בכל סדר.
+  assert.equal(normalize({ terms: [term('נר')], anyOrder: true }).span, 'words');
+  assert.equal(normalize({ terms: [term('נר')] }).span, 'chain');
+});
+
+// "מרחקים" של החיפוש הטבלאי: הקידומות נקראו מ"שאילתות קודמות" של בר אילן
+// 25 אחרי חיפוש טבלאי, ונבדקו בחיפוש מתקדם (12.10.2026): "משפט: נר שבת"
+// מצא 28,371, כמו בטבלאי.
+test('כולן באותו משפט, פסקה או מסמך: הקידומת של החיפוש הטבלאי', () => {
+  const words = [term('שליח', 'prefixes'), term('ציבור'), term('טעה', 'root')];
+  // המרחקים שבין השדות אינם חלק מטווח.
+  const gaps = [{ kind: 'after', distance: 4 }, { kind: 'around', distance: 2 }];
+  assert.equal(buildQuery(query({ terms: words, gaps, span: 'sentence' })), 'משפט: #שליח ציבור %טעה');
+  assert.equal(buildQuery(query({ terms: words, gaps, span: 'paragraph' })), 'פסקה: #שליח ציבור %טעה');
+  assert.equal(buildQuery(query({ terms: words, gaps, span: 'document' })), 'מסמך: #שליח ציבור %טעה');
+  assert.equal(buildQuery(query({ terms: [term('נר')], span: 'sentence' })), 'נר');
+  assert.equal(normalize({ span: 'nope' }).span, 'chain');
+  const lines = Advanced.describe(query({ terms: [term('נר'), term('שבת')], span: 'paragraph' }), null);
+  assert.match(lines[0], /באותה פסקה/);
+  assert.deepEqual(lines.slice(1), ['• "נר"', '• "שבת"']);
+});
+
+// "ביטוי" של החיפוש הטבלאי: `({{צער בעלי חיים}}/צעב"ח)` מצא 3,974 = 2,686
+// + 1,288 (בר אילן 25, 12.10.2026); ביטוי בלי `{{ }}` בתוך חלופות נדחה.
+test('ביטוי של כמה מילים: בתוך {{ }}, גם כחלופה', () => {
+  assert.equal(buildQuery(query({ terms: [term(['צער  בעלי חיים', 'צעב"ח'])] })), '({{צער בעלי חיים}}/צעב"ח)');
+  assert.equal(buildQuery(query({ terms: [term('צער בעלי חיים')] })), '{{צער בעלי חיים}}');
+  assert.equal(validate(query({ terms: [term(['צער בעלי חיים', 'צעב"ח'])] })), null);
+  // סימן לפני ביטוי או אחריו לא נמדד: מילה בכל שדה.
+  const shaped = validate(query({ terms: [term('נר'), term(['צער בעלי חיים', 'צעב"ח'], 'prefixes')] }));
+  assert.equal(shaped.term, 1);
+  assert.match(shaped.message, /ביטוי/);
+  assert.equal(Advanced.isPhrase(' נר '), false);
+  // ביטוי ארוך נשמר במלואו עד המגבלה של השדה.
+  const long = 'עירוב '.repeat(15).trim();
+  assert.ok(long.length > 60 && long.length <= Advanced.MAX_WORD_LENGTH);
+  assert.equal(Advanced.setWord(query({ terms: [term('')] }), 0, 0, long).terms[0].words[0], long);
+  assert.equal(Advanced.isPhrase('נר שבת'), true);
 });
 
 test('חלופות, ומאפיין מחוץ לסוגריים', () => {
@@ -82,10 +120,11 @@ test('מילה ריקה מדולגת עם המרחק שלפניה', () => {
 test('בדיקה: מה חסר או שגוי, ובאיזו מילה', () => {
   assert.match(validate(query({ terms: [term('')] })).message, /לפחות מילה אחת/);
   assert.match(validate(query({ terms: [term('בני', 'exact', true)] })).message, /שאינה מסומנת/);
-  const phrase = validate(query({ terms: [term('נר'), term('צער בעלי')] }));
-  assert.equal(phrase.term, 1);
-  assert.match(phrase.message, /מילה אחת/);
   assert.equal(validate(query({ terms: [term('shabbat')] })).term, 0);
+  // כל מילה בביטוי נבדקת.
+  const phrase = validate(query({ terms: [term('נר'), term('צער abc')] }));
+  assert.equal(phrase.term, 1);
+  assert.match(phrase.message, /"abc"/);
   assert.match(validate(query({ terms: [term(['שבט', 'לוי'], 'family')] })).message, /שם אחד/);
   assert.equal(validate(query({ terms: [term('*ט(ע/י/@)ל*')] })), null);
   assert.match(
@@ -172,12 +211,26 @@ test('מודל שנשמר פגום חוזר לברירות המחדל', () => {
   assert.equal(q.options.abbreviations, false);
 });
 
-test('כל דוגמה נבנית לשאילתה תקינה', () => {
-  for (const example of Advanced.EXAMPLES) {
+test('כל דוגמה נבנית לשאילתה תקינה, באופן שלה', () => {
+  const all = [
+    ...Advanced.EXAMPLES.map((example) => [example, 'builder']),
+    ...Advanced.SIMPLE_EXAMPLES.map((example) => [example, 'simple']),
+    ...Advanced.FREE_EXAMPLES.map((example) => [example, 'free']),
+  ];
+  assert.equal(new Set(all.map(([example]) => example.id)).size, all.length, 'מזהים שונים');
+  for (const [example, mode] of all) {
     const q = Advanced.applyExample(emptyQuery(), example.id);
+    assert.equal(q.mode, mode, example.id);
     assert.equal(validate(q), null, example.id);
     assert.ok(buildQuery(q).length > 0, example.id);
   }
+  // דוגמה מחליפה רק את מה שמחפשים: התחום, האפשרויות וההגדרות של חיפוש קל נשארים.
+  const kept = { ...emptyQuery(), easy: { how: 'exact', prefixes: true, distance: true, spelling: false }, options: { abbreviations: true, showForms: false } };
+  const loaded = Advanced.applyExample(kept, 'paragraph');
+  assert.deepEqual(loaded.easy, kept.easy);
+  assert.deepEqual(loaded.options, kept.options);
+  assert.equal(buildQuery(loaded), 'פסקה: #מעלית# #שבת');
+  assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'phrase')), '({{צער בעלי חיים}}/צעב"ח)');
   assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'spelling')), '#!אהרון הכהן');
   assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'exclude')), '-בני ישראל');
 });
@@ -231,7 +284,7 @@ test('הסבר במילים: מה יחופש, איפה ובאילו אפשרוי
     'כולל ראשי תיבות: "צער בעלי חיים" ימצא גם "צעב"ח".',
     'לפני התוצאות בר אילן יציג את הצורות שנמצאו, לבחירה.',
   ]);
-  const scattered = query({ terms: [term('עגונה'), term('גוי')], anyOrder: true, within: 10 });
+  const scattered = query({ terms: [term('עגונה'), term('גוי')], span: 'words', within: 10 });
   assert.deepEqual(Advanced.describe(scattered), [
     'מקורות שבהם מופיעות כל המילים, בכל סדר, עד 10 מילים זו מזו:',
     '• "עגונה"',
@@ -301,10 +354,14 @@ test('fromOtzariaSearch: מה שאין בבר אילן מסומן כקירוב; 
   const any = Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', distance: 0, wordMatchMode: 'anyWord' });
   assert.equal(buildQuery(any.query), '(נר/שבת)');
   assert.equal(any.approximate, false);
-  // "באותה פסקה" ← בכל סדר בטווח הרחב ביותר: קירוב.
+  // "באותה פסקה" ← כולן באותה פסקה של בר אילן; "תחת אותה כותרת" ← באותו
+  // מסמך, בקירוב.
   const paragraph = Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', proximityScope: 'sameParagraph' });
-  assert.equal(buildQuery(paragraph.query), Advanced.MAX_DISTANCE + ': נר שבת');
-  assert.equal(paragraph.approximate, true);
+  assert.equal(buildQuery(paragraph.query), 'פסקה: נר שבת');
+  assert.equal(paragraph.approximate, false);
+  const section = Advanced.fromOtzariaSearch(base, { query: 'נר שבת', mode: 'advanced', proximityScope: 'sameSection' });
+  assert.equal(buildQuery(section.query), 'מסמך: נר שבת');
+  assert.equal(section.approximate, true);
   // סינון קטגוריות ותווים כלליים של אוצריא אינם עוברים.
   for (const extra of [{ facets: ['/תנך'] }, { query: 'נר*' }]) {
     assert.equal(Advanced.fromOtzariaSearch(base, { query: 'נר', mode: 'exact', ...extra }).approximate, true);
@@ -612,4 +669,45 @@ test('חיפוש רגיל ב"חיפוש קל": הבקשה וההסבר', () => {
   const lines = Advanced.describe(query, 'בכל הספרים.', { easy: true });
   assert.match(lines[0], /חיפוש קל/);
   assert.equal(lines[1], 'בכל הספרים.');
+});
+
+// "חיפוש קל" של בר אילן, וההגדרות שלו מהתוסף (שירות 0.6.0, `easyOptions`).
+// נמדד ב-CD25 ("נר שבת", בכל המאגרים): בלי תוספות 2,568; אותיות שימוש בלבד
+// 3,864; מרחק בלבד 4,598; אותיות שימוש ומרחק 7,201.
+test('חיפוש רגיל ב"חיפוש קל": ההגדרות נשלחות רק כשנבחרו ורק לשירות שמכיר אותן', () => {
+  const simple = (easy) => query({ mode: 'simple', simpleText: 'נר שבת', easy });
+  const how = { easy: true, easyOptions: true };
+  assert.deepEqual(toRequest(simple(), how), { q: 'נר שבת', easy: true, options: { allDatabases: true } });
+  assert.deepEqual(toRequest(simple({ how: 'exact' }), how).options, { additions: false, allDatabases: true });
+  assert.deepEqual(toRequest(simple({ how: 'additions', prefixes: true, distance: false, spelling: true }), how).options, {
+    additions: true,
+    prefixes: true,
+    distance: false,
+    spelling: true,
+    allDatabases: true,
+  });
+  // שירות 0.5.6/0.5.7: ההגדרות שבבר אילן, כמו קודם.
+  assert.deepEqual(toRequest(simple({ how: 'exact' }), { easy: true }).options, { allDatabases: true });
+  // ברירת המחדל של "עם תוספות" היא של בר אילן.
+  assert.deepEqual(normalize({}).easy, { how: 'mine', prefixes: true, distance: true, spelling: false });
+  assert.equal(normalize({ easy: { how: 'nope' } }).easy.how, 'mine');
+});
+
+test('חיפוש רגיל ב"חיפוש קל": ההסבר לפי ההגדרות', () => {
+  const lines = (easy, text) =>
+    Advanced.describe(query({ mode: 'simple', simpleText: text || 'נר שבת', easy }), null, { easy: true, easyOptions: true });
+  assert.match(lines({ how: 'mine' })[0], /לפי ההגדרות שבחרתם שם/);
+  assert.deepEqual(lines({ how: 'exact' }), ['מקורות שבהם המילים "נר שבת" מופיעות צמודות, בסדר הזה, בדיוק כפי שנכתבו.']);
+  const additions = lines({ how: 'additions', prefixes: true, distance: true, spelling: true });
+  assert.equal(additions.length, 4);
+  assert.match(additions[1], /"בנר"/);
+  // מילה אחת: אין מרחק בין מילים, ולכן גם אין "וגם:" בלי המשך.
+  assert.deepEqual(lines({ how: 'additions', prefixes: false, distance: true, spelling: false }, 'נר'), [
+    'מקורות שבהם מופיעה המילה "נר" בדיוק כפי שנכתבה.',
+  ]);
+  // בלי אף תוספת — בדיוק כפי שנכתבו.
+  assert.match(lines({ how: 'additions', prefixes: false, distance: false, spelling: false })[0], /בדיוק/);
+  // שירות שאינו מקבל הגדרות: ההסבר של ההגדרות שבבר אילן, גם אם נבחר אחרת.
+  const old = Advanced.describe(query({ mode: 'simple', simpleText: 'נר', easy: { how: 'exact' } }), null, { easy: true });
+  assert.match(old[0], /לפי ההגדרות שבחרתם שם/);
 });
