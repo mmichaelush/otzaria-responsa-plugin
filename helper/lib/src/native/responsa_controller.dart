@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:meta/meta.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/native/responsa_automation.dart';
@@ -138,17 +139,76 @@ class ResponsaController {
   /// `releaseMdiWindows` לא מכיר את חלונותינו וסוגר את של המשתמש.
   final List<String> _openedWindows = [];
 
-  /// חלון ראשי אחרי הפעלה קרה עולה בדרך כלל תוך ~5 שניות.
-  static const Duration launchTimeout = Duration(seconds: 40);
+  /// חלון ראשי אחרי הפעלה קרה עולה בדרך כלל תוך ~5 שניות; ב-CD32C במחשב
+  /// איטי — 22 שניות, ופעם אחת יותר מ-40 (דיווחים 12–13.10.2026).
+  static const Duration launchTimeout = Duration(seconds: 80);
 
-  /// יחד עם [launchTimeout] ועם מרווח לפעולות שחורגות מעט מהמועד, פחות
-  /// מ-120 השניות שאחריהן אוצריא מוותרת: פתיחה שנמשכת מעבר לזה מקפיצה חלון
-  /// כשאיש כבר לא מחכה, ואחרי שהמשתמש קרא "השירות אינו פועל". פתיחה רגילה
-  /// אורכת כשלוש שניות.
+  /// כל הבקשה, כולל הפעלת בר אילן: פחות מ-120 השניות שאחריהן אוצריא
+  /// מוותרת. פעולה שנמשכת מעבר לזה מקפיצה חלון כשאיש כבר לא מחכה, ואחרי
+  /// שהמשתמש קרא "השירות אינו פועל". הפעלה איטית מקצרת את מה שנשאר
+  /// לפעולה עצמה ([_budget]).
+  static const Duration requestBudget = Duration(seconds: 110);
+
+  /// פתיחה רגילה אורכת כשלוש שניות.
   static const Duration openBudget = Duration(seconds: 60);
 
-  /// כמו [openBudget]. חיפוש כבד אורך עד כ-15 שניות.
+  /// כמו [openBudget]. חיפוש כבד אורך עד כ-15 שניות (ב-CD32C עד 25).
   static const Duration searchBudget = Duration(seconds: 60);
+
+  /// מה שנשאר לפעולה אחרי ההפעלה: [budget], ולא יותר מהיתרה מ-
+  /// [requestBudget].
+  static Duration _budget(Stopwatch request, Duration budget) =>
+      budgetAfter(request.elapsed, budget);
+
+  @visibleForTesting
+  static Duration budgetAfter(Duration elapsed, Duration budget) {
+    final left = requestBudget - elapsed;
+    return left < budget ? left : budget;
+  }
+
+  /// ההתקנות מהרישום ומסריקת הכוננים, ל-[status]. התוסף שואל כל כמה
+  /// שניות, והסריקה ארכה 12.5 שניות במחשב עם כוננים איטיים (`/status` הגיע
+  /// ל-37 שניות, והתוסף ויתר אחרי 15): נשמרת, ומתרעננת ברקע.
+  List<ResponsaInstallation>? _installed;
+  DateTime? _installedAt;
+  Future<List<ResponsaInstallation>>? _refreshing;
+
+  static const Duration installedMaxAge = Duration(minutes: 5);
+
+  /// כשלא נמצאה אף התקנה: משתמש שמתקין עכשיו רואה אותה מהר.
+  static const Duration _noneMaxAge = Duration(seconds: 30);
+
+  Future<List<ResponsaInstallation>> _installations() async {
+    final cached = _installed;
+    final at = _installedAt;
+    if (cached != null && at != null) {
+      final age = DateTime.now().difference(at);
+      if (age < (cached.isEmpty ? _noneMaxAge : installedMaxAge)) {
+        return cached;
+      }
+    }
+    final refresh = _refreshing ??= _discoverInstalled();
+    if (cached == null) return refresh;
+    // ישנה מחזירים מיד; הרענון רץ ברקע ומשמש בשאלה הבאה.
+    unawaited(refresh);
+    return cached;
+  }
+
+  Future<List<ResponsaInstallation>> _discoverInstalled() async {
+    try {
+      final found = await Isolate.run(
+        ResponsaInstallationDiscovery.discoverInstalled,
+      );
+      _installed = found;
+      _installedAt = DateTime.now();
+      return found;
+    } catch (error) {
+      logLine('ResponsaController: discovery failed: $error');
+      return _installed ?? const [];
+    } finally {
+      _refreshing = null;
+    }
+  }
 
   /// כמה מקומות לכל היותר מוחזרים לבחירה באיתור מקום.
   static const int maxLocateChoices = 1000;
@@ -156,11 +216,14 @@ class ResponsaController {
   /// מצב ההתקנה והמופע. מהיר; אינו נוגע בתוכנה.
   Future<ResponsaStatus> status() async {
     if (!Platform.isWindows) return ResponsaStatus.notInstalled;
-    return Isolate.run(_readStatus);
+    final installed = await _installations();
+    return Isolate.run(() => _readStatus(installed));
   }
 
-  static ResponsaStatus _readStatus() {
-    final installations = ResponsaInstallationDiscovery.discover();
+  static ResponsaStatus _readStatus(List<ResponsaInstallation> installed) {
+    final installations = ResponsaInstallationDiscovery.discover(
+      installed: installed,
+    );
     final usable = installations.where((i) => i.exists).toList();
     final live = ResponsaInstance.all();
     // "רץ" = יש מופע שאפשר לעבוד מולו; מופע חונה מחוץ למסך אינו נחשב.
@@ -210,6 +273,7 @@ class ResponsaController {
       );
     }
     _busy = true;
+    final request = Stopwatch()..start();
     try {
       if (await _launchFailure(installPath, allowLaunch: allowLaunch)
           case final message?) {
@@ -226,6 +290,7 @@ class ResponsaController {
           expectedTitle: expectedTitle,
           installPath: installPath,
           openedWindows: List.of(_openedWindows),
+          budget: _budget(request, openBudget),
         ),
       );
       _keepOpenedWindows(report.openedWindows);
@@ -261,6 +326,7 @@ class ResponsaController {
       );
     }
     _busy = true;
+    final started = Stopwatch()..start();
     try {
       if (await _launchFailure(installPath, allowLaunch: allowLaunch)
           case final message?) {
@@ -276,6 +342,7 @@ class ResponsaController {
         installPath: installPath,
         openedWindows: List.of(_openedWindows),
         listOnly: listOnly,
+        budget: _budget(started, openBudget),
       );
       final ResponsaOpenReport report;
       try {
@@ -318,6 +385,7 @@ class ResponsaController {
       );
     }
     _busy = true;
+    final started = Stopwatch()..start();
     try {
       if (await _launchFailure(installPath, allowLaunch: allowLaunch)
           case final message?) {
@@ -333,6 +401,7 @@ class ResponsaController {
         installPath: installPath,
         openedWindows: List.of(_openedWindows),
         setup: setup,
+        budget: _budget(started, searchBudget),
       );
       final ResponsaSearchReport report;
       try {
@@ -476,7 +545,7 @@ class ResponsaController {
     try {
       final outcome = automation.openBook(
         request.references,
-        ResponsaDeadline(openBudget),
+        ResponsaDeadline(request.budget),
         expectedTitle: request.expectedTitle,
       );
       return ResponsaOpenReport(
@@ -514,7 +583,7 @@ class ResponsaController {
         message: message,
       );
     }
-    final deadline = ResponsaDeadline(openBudget);
+    final deadline = ResponsaDeadline(request.budget);
     try {
       // ניתוח אחד, והפתיחה משתמשת בו. מקום שבר אילן אינו מזהה אינו מקפיץ
       // הודעה: כל ניסיון ממתין עד הסוף. שניים מספיקים לטעינה קרה, ושגיאת
@@ -602,7 +671,7 @@ class ResponsaController {
     try {
       final outcome = ResponsaSearchAutomation(automation).search(
         request.query,
-        ResponsaDeadline(searchBudget),
+        ResponsaDeadline(request.budget),
         setup: request.setup,
       );
       return ResponsaSearchReport(
@@ -629,11 +698,15 @@ class _OpenRequest {
   /// החלונות שאוצריא פתחה בפתיחות קודמות.
   final List<String> openedWindows;
 
+  /// מה שנשאר לפעולה אחרי הפעלת בר אילן.
+  final Duration budget;
+
   const _OpenRequest({
     required this.references,
     this.expectedTitle,
     this.installPath,
     this.openedWindows = const [],
+    this.budget = ResponsaController.openBudget,
   });
 }
 
@@ -643,6 +716,7 @@ class _LocateRequest {
   final String? installPath;
   final List<String> openedWindows;
   final bool listOnly;
+  final Duration budget;
 
   const _LocateRequest({
     required this.reference,
@@ -650,6 +724,7 @@ class _LocateRequest {
     this.installPath,
     this.openedWindows = const [],
     this.listOnly = false,
+    this.budget = ResponsaController.openBudget,
   });
 }
 
@@ -658,11 +733,13 @@ class _SearchRequest {
   final String? installPath;
   final List<String> openedWindows;
   final ResponsaSearchSetup setup;
+  final Duration budget;
 
   const _SearchRequest({
     required this.query,
     this.installPath,
     this.openedWindows = const [],
     this.setup = ResponsaSearchSetup.none,
+    this.budget = ResponsaController.searchBudget,
   });
 }

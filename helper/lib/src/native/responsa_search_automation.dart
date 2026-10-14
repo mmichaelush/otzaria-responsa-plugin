@@ -208,8 +208,14 @@ class ResponsaSearchAutomation {
   int get _pid => _automation.pid;
   ResponsaVersionProfile get _profile => _automation.profile;
 
-  /// חיפוש כבד נמשך 10–15 שניות (נמדד).
-  static const Duration outcomeBudget = Duration(seconds: 45);
+  /// חיפוש כבד נמשך 10–15 שניות ב-CD25, ועד 25 ב-CD32C במחשב איטי (נמדד).
+  /// התקציב הכולל של הבקשה חוסם ממילא.
+  static const Duration outcomeBudget = Duration(seconds: 60);
+
+  /// הפעם הראשונה אחרי הפעלת בר אילן: הוא יוצר את ארבעת חלונות החיפוש
+  /// ("Loading. Please wait..."). ב-CD32C במחשב איטי זה ארך יותר מ-10
+  /// שניות (13.10.2026); [ResponsaAutomation.dialogBudget] הוא 12.
+  static const Duration searchDialogBudget = Duration(seconds: 30);
 
   /// הדיאלוג צריך רגע אחרי קבלת הטקסט, בפרט כשנוצר זה עתה.
   static const Duration _settle = Duration(milliseconds: 500);
@@ -785,7 +791,7 @@ class ResponsaSearchAutomation {
     if (existing != null) return existing;
 
     final main = _automation.mainWindow;
-    final own = deadline.within(ResponsaAutomation.dialogBudget);
+    final own = deadline.within(searchDialogBudget);
     Stopwatch? sinceCommand;
     while (!own.expired && !deadline.expired) {
       if (sinceCommand == null ||

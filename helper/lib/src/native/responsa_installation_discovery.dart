@@ -46,19 +46,47 @@ class ResponsaInstallationDiscovery {
     return match == null ? null : int.tryParse(match.group(1)!);
   }
 
-  static List<ResponsaInstallation> discover() {
+  /// כל ההתקנות: [installed] (או הרישום וסריקת הכוננים, כשחסר) ועוד
+  /// התקנות של מופעים רצים.
+  static List<ResponsaInstallation> discover({
+    List<ResponsaInstallation>? installed,
+  }) {
+    final known = installed ?? discoverInstalled();
+    final byPath = {
+      for (final installation in known)
+        installation.installPath.toLowerCase(): installation,
+    };
+    var added = false;
+    for (final found in _guarded('processes', _fromRunningProcesses)) {
+      final key = found.installPath.toLowerCase();
+      if (byPath.containsKey(key)) continue;
+      byPath[key] = found;
+      added = true;
+    }
+    return added ? _rank(byPath.values) : known;
+  }
+
+  /// הרישום וסריקת הכוננים, מדורגים, בלי המופעים הרצים. איטי במחשב עם
+  /// כוננים איטיים (12.5 שניות ב-CD32C עם M:, O: ו-S:, 13.10.2026), ולכן
+  /// `ResponsaController.status` שומר את התוצאה.
+  static List<ResponsaInstallation> discoverInstalled() {
     final byPath = <String, ResponsaInstallation>{};
     for (final found in [
       ..._guarded('registry', _fromRegistry),
       ..._guarded('filesystem', _fromFileSystem),
-      ..._guarded('processes', _fromRunningProcesses),
     ]) {
       byPath.putIfAbsent(found.installPath.toLowerCase(), () => found);
     }
+    return _rank(byPath.values);
+  }
+
+  static List<ResponsaInstallation> _rank(
+    Iterable<ResponsaInstallation> installations,
+  ) {
     // נקראים פעם אחת לפני המיון: כונן נשלף יכול להיעלם באמצע, ויחס
     // לא-טרנזיטיבי מחזיר סדר שרירותי.
     final ranked = [
-      for (final installation in byPath.values)
+      for (final installation in installations)
         (
           installation: installation,
           exists: installation.exists,
@@ -308,7 +336,17 @@ class ResponsaInstallationDiscovery {
 
   /// סדר: [preferredPath] (ממנה נבנה הקטלוג), התקנה עם מופע שמיש, עם מופע
   /// כלשהו, ואז הראשונה בדירוג. `null` רק כשאין התקנה שימושית.
+  ///
+  /// [preferredPath] שיש בו `RESPONSA.exe` נבחר בלי סריקת הכוננים: כל
+  /// פתיחה וחיפוש בוחרים כך פעמיים, ובמחשב עם כוננים איטיים הסריקה הוסיפה
+  /// לכל אחד מהם כ-25 שניות (CD32C, 13.10.2026).
   static ResponsaSelection? selectInstallation({String? preferredPath}) {
+    if (atPath(preferredPath) case final installation?) {
+      return (
+        installation: installation,
+        instances: instancesOf(installation.installPath),
+      );
+    }
     final installations = discover().where((i) => i.exists).toList();
     if (installations.isEmpty) return null;
 
@@ -352,6 +390,25 @@ class ResponsaInstallationDiscovery {
       if (candidate.instances.isNotEmpty) return candidate;
     }
     return (installation: installations.first, instances: const []);
+  }
+
+  /// ההתקנה שב-[installPath], בלי סריקה. `null` כשאין שם `RESPONSA.exe`
+  /// (התקנה שנמחקה, כונן נשלף שאינו מחובר).
+  static ResponsaInstallation? atPath(String? installPath) {
+    final trimmed = installPath?.trim().replaceAll(RegExp(r'[\\/]+$'), '');
+    if (trimmed == null || trimmed.isEmpty) return null;
+    final installation = ResponsaInstallation(
+      version: versionFromText(path.basename(trimmed)),
+      installPath: trimmed,
+      displayName: path.basename(trimmed),
+      source: 'catalog',
+    );
+    try {
+      return installation.exists ? installation : null;
+    } catch (_) {
+      // כונן שאינו מוכן זורק ולא מחזיר false.
+      return null;
+    }
   }
 
   /// מופע שכבר רץ. מגלה גם התקנה שאינה רשומה ואינה תחת `Program Files`,

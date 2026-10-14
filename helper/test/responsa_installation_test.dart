@@ -251,4 +251,60 @@ void main() {
       expect(found.first.version, 34);
     });
   });
+
+  // כל פתיחה וחיפוש בוחרים התקנה פעמיים; במחשב עם כוננים איטיים סריקת
+  // הכוננים הוסיפה לכל אחד מהם כ-25 שניות (CD32C, 13.10.2026).
+  group('ההתקנה שממנה נקראה הרשימה, בלי סריקה', () {
+    late Directory dir;
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('ResponsaCD32C_');
+      File(p.join(dir.path, 'RESPONSA.exe')).writeAsBytesSync(const [0]);
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('atPath: קיימת, גם עם לוכסן בסוף', () {
+      final found = ResponsaInstallationDiscovery.atPath(
+        '${dir.path}${p.separator}',
+      );
+      expect(found, isNotNull);
+      expect(found!.installPath, dir.path);
+      expect(found.source, 'catalog');
+      expect(found.version, 32);
+    });
+
+    test('atPath: אין RESPONSA.exe, נתיב ריק, כונן שאינו קיים', () {
+      File(p.join(dir.path, 'RESPONSA.exe')).deleteSync();
+      expect(ResponsaInstallationDiscovery.atPath(dir.path), isNull);
+      expect(ResponsaInstallationDiscovery.atPath(''), isNull);
+      expect(ResponsaInstallationDiscovery.atPath(null), isNull);
+      expect(ResponsaInstallationDiscovery.atPath(r'Q:\nowhere'), isNull);
+    });
+
+    test('selectInstallation בוחרת אותה מיד', () {
+      final watch = Stopwatch()..start();
+      final selection = ResponsaInstallationDiscovery.selectInstallation(
+        preferredPath: dir.path,
+      );
+      expect(selection?.installation.installPath, dir.path);
+      expect(selection!.instances, isEmpty);
+      // בלי סריקת כוננים: מילישניות ולא שניות.
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+    });
+
+    test('discover עם התקנות ידועות אינו סורק שוב', () {
+      final known = [
+        ResponsaInstallation(
+          version: 32,
+          installPath: dir.path,
+          displayName: 'ResponsaCD32C',
+          source: 'registry',
+        ),
+      ];
+      final watch = Stopwatch()..start();
+      final found = ResponsaInstallationDiscovery.discover(installed: known);
+      // רק המופעים הרצים נוספים (אם יש כאלה במחשב שמריץ את הבדיקה).
+      expect(found.map((i) => i.installPath), contains(dir.path));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+    });
+  });
 }
