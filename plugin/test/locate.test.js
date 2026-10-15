@@ -175,3 +175,22 @@ test('talmudPage: דף בנקודה, בנקודתיים או ע"א/ע"ב, בצו
   // בלי סימן עמוד: כמו קודם.
   assert.equal(Locate.fromSelection('שבועות יד'), 'שבועות יד');
 });
+
+test('קודם באוצריא: רק תוצאה ראשונה שהיא בוודאות הספר שנכתב', () => {
+  const hit = (title, extra) => ({ id: 7, bookId: title, type: 'text', title, reference: title + ' ...', index: 3, ...extra });
+  assert.equal(Locate.otzariaHit('בראשית יח ו', [hit('בראשית')]).title, 'בראשית');
+  // "מסכת" ו"תלמוד בבלי" אינם חלק מהשם להשוואה.
+  assert.equal(Locate.otzariaHit('שבת יט', [hit('תלמוד בבלי מסכת שבת')]).id, 7);
+  assert.equal(Locate.otzariaHit('משנה ברורה סימן א', [hit('משנה ברורה')]).id, 7);
+  // גרשיים ואותיות סופיות.
+  assert.equal(Locate.otzariaHit('שו״ת חתם סופר א', [hit('שות חתם סופר')]).id, 7);
+  // מילה בשם שלא נכתבה: אולי ספר אחר.
+  assert.equal(Locate.otzariaHit('רא"ש יבמות א', [hit('רא"ש על יבמות')]), null);
+  assert.equal(Locate.otzariaHit('שבט הלוי חלק ה', [hit('שבט הלוי חלק ה ושבט הלוי ו')]), null);
+  // רק הראשונה.
+  assert.equal(Locate.otzariaHit('בראשית יח ו', [hit('רש"י על בראשית'), hit('בראשית')]), null);
+  // ספר אישי או PDF מהמחשב: אין מזהה.
+  assert.equal(Locate.otzariaHit('בראשית יח ו', [hit('בראשית', { id: null })]), null);
+  assert.equal(Locate.otzariaHit('בראשית יח ו', []), null);
+  assert.equal(Locate.otzariaHit('בראשית יח ו', null), null);
+});

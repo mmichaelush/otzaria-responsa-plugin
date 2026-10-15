@@ -31,6 +31,11 @@
      * סוגר אותו.
      */
     showSummary: 'responsa_show_summary',
+    /**
+     * "איתור מקום": מקום שקיים באוצריא נפתח באוצריא, ובר אילן רק כשהוא
+     * חסר שם (issue #4).
+     */
+    otzariaFirst: 'responsa_otzaria_first',
     /** מה נשלח לאחרונה לחיפוש הספרייה: `{ builtAt, count }`. */
     librarySync: 'responsa_library_sync',
     /** המשתמש סגר את ההערה על ההרשאה "הוספת רכיבים לתוכנה". */
@@ -98,6 +103,7 @@
     autoStart: true,
     showForms: false,
     showSummary: false,
+    otzariaFirst: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
@@ -122,6 +128,7 @@
       autoStart: typeof value.autoStart === 'boolean' ? value.autoStart : DEFAULTS.autoStart,
       showForms: value.showForms === true,
       showSummary: value.showSummary === true,
+      otzariaFirst: value.otzariaFirst === true,
       startupNotice: value.startupNotice === true,
       welcomeSeen: value.welcomeSeen === true,
       browsePath:
@@ -163,6 +170,7 @@
         'autoStart',
         'showForms',
         'showSummary',
+        'otzariaFirst',
         'startupNotice',
         'welcomeSeen',
         'browsePath',

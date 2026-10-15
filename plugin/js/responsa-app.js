@@ -1112,7 +1112,70 @@
         this.view.announce(problem);
         return;
       }
-      await this._track('locateTask', this._locateRef(Locate.normalize(state.text)));
+      const ref = Locate.normalize(state.text);
+      await this._track(
+        'locateTask',
+        (async () => {
+          if (await this._locateInOtzaria(ref)) return;
+          await this._locateRef(ref);
+        })(),
+      );
+    }
+
+    /**
+     * "קודם באוצריא" (הגדרה, כבויה כברירת מחדל): "איתור מקורות" של אוצריא
+     * (`library.resolveRef`), ואם התוצאה הראשונה היא בוודאות הספר שנכתב
+     * (`Locate.otzariaHit`) — פותחים שם. `false` = לא נפתח, ובר אילן ממשיך.
+     * כל כשל (הרשאה, ספר שלא נפתח) מחזיר לבר אילן, בלי הודעת שגיאה.
+     */
+    async _locateInOtzaria(ref) {
+      if (!this.model.settings.otzariaFirst || !Domain.canOpenInOtzaria(this.model.permissions)) {
+        return false;
+      }
+      const state = this.model.locate;
+      Object.assign(state, { text: ref, ref, running: true, status: null, choices: null, preferred: null });
+      this._renderPage();
+      let hit = null;
+      let opened = false;
+      try {
+        hit = Locate.otzariaHit(ref, await this.runtime.call('library.resolveRef', { ref, limit: 5 }));
+        if (hit) {
+          opened =
+            (await this.runtime.call('reader.openBook', {
+              id: hit.id,
+              bookId: hit.bookId,
+              type: hit.type,
+              index: typeof hit.index === 'number' ? hit.index : 0,
+            })) === true;
+        }
+      } catch (error) {
+        this.log.debug('איתור מקום באוצריא נכשל', error);
+      }
+      state.running = false;
+      if (!opened) {
+        this.log.info('איתור מקום: ' + ref + (hit ? ' — אוצריא לא פתחה, בבר אילן' : ' — לא באוצריא, בבר אילן'));
+        return false;
+      }
+      const place = hit.reference || hit.title;
+      this.log.info('איתור מקום: ' + ref + ' — נפתח באוצריא: ' + place);
+      state.status = { kind: 'success', text: t('נפתח באוצריא: {place}', { place }), barIlanRef: ref };
+      state.history = Locate.remember(state.history, ref);
+      this.settings.set('locateHistory', state.history).then(
+        (values) => {
+          this.model.settings = values;
+        },
+        (error) => this.log.debug('שמירת המקומות האחרונים נכשלה', error),
+      );
+      this._renderPage();
+      this.view.announce(state.status.text);
+      return true;
+    }
+
+    /** "בבר אילן בכל זאת", אחרי שהמקום נפתח באוצריא. */
+    locateInBarIlan() {
+      const state = this.model.locate;
+      if (state.running || !state.status || !state.status.barIlanRef) return Promise.resolve();
+      return this._track('locateTask', this._locateRef(state.status.barIlanRef));
     }
 
     /**
@@ -1581,6 +1644,7 @@
         locateExample: (value) => this.locateExample(value),
         locateRecent: (value) => this.locateRecent(value),
         locateIn: (book) => this.locateIn(book),
+        locateInBarIlan: () => this.locateInBarIlan(),
         runLocate: (text) => this.runLocate(text),
         openLocateChoice: (index) => this.openLocateChoice(index),
         open: (book) => this.open(book),

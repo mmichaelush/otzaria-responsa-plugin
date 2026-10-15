@@ -443,6 +443,26 @@
     });
   }
 
+  /**
+   * "קודם באוצריא" באיתור מקום. בלי ההרשאות (אוצריא שואלת עליהן בעדכון)
+   * המתג מושבת, עם הסבר.
+   */
+  function otzariaFirstRow(model, actions) {
+    const granted = Domain.canOpenInOtzaria(model.permissions);
+    return switchRow({
+      iconName: 'library_24_regular',
+      title: t('איתור מקום: קודם באוצריא'),
+      subtitle: t('בלשונית "איתור מקום", מקום שקיים באוצריא נפתח באוצריא, ובר אילן נפתח רק כשהמקום חסר שם. אחרי פתיחה באוצריא אפשר ללחוץ "בבר אילן בכל זאת".'),
+      note: granted || !Array.isArray(model.permissions)
+        ? null
+        : t('כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "רשימת ספרים" ו"פתיחת ספרים וניהול כרטיסיות".'),
+      checked: model.settings.otzariaFirst,
+      disabled: Array.isArray(model.permissions) && !granted,
+      key: 'setting-otzaria-first',
+      onToggle: (value) => actions.setSetting('otzariaFirst', value),
+    });
+  }
+
   function catalogRows(model, actions) {
     const status = model.status || {};
     const catalog = status.catalog || {};
@@ -557,7 +577,7 @@
           contextMenuRow(model, actions),
           searchDialogRow(model, actions),
         ),
-        section(t('בר אילן'), null, autoStartRow(model, actions), showFormsRow(model, actions), showSummaryRow(model, actions)),
+        section(t('בר אילן'), null, autoStartRow(model, actions), showFormsRow(model, actions), showSummaryRow(model, actions), otzariaFirstRow(model, actions)),
         section(t('תצוגה ושפה'), null, displayRows(model, actions)),
         section(t('רשימת הספרים'), null, catalogRows(model, actions)),
         shortcuts.length ? section(t('קיצורי דרך'), null, shortcuts) : null,
@@ -936,6 +956,7 @@
       [t('הפעלת בר אילן כשהוא סגור'), onOff(model.settings.autoStart)],
       [t('חלון ניהול הצורות בחיפוש מטקסט מסומן'), onOff(model.settings.showForms)],
       [t('סיכום התוצאות לפי מאגרים'), onOff(model.settings.showSummary)],
+      [t('איתור מקום: קודם באוצריא'), onOff(model.settings.otzariaFirst && Domain.canOpenInOtzaria(model.permissions))],
       [t('הוספת רכיבים לתוכנה'), yesNo(startup)],
       [t('פורט השירות'), model.servicePort ? String(model.servicePort) : '—', 'ltr'],
     ].filter(Boolean);

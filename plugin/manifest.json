@@ -21,6 +21,8 @@
     "search.dialog",
     "library.books.provide",
     "library.content.read",
+    "library.books.read",
+    "reader.open",
     "navigation.write",
     "ui.create_shortcut",
     "events.subscribe:plugin.permissions_changed",

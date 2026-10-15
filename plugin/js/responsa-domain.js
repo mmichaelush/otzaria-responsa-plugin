@@ -659,6 +659,17 @@
 
   // ------------------------------------------------------ חיפוש הספרייה
 
+  /**
+   * "קודם באוצריא" באיתור מקום: לשאול את "איתור מקורות" של אוצריא
+   * (`library.resolveRef`) ולפתוח בה (`reader.openBook`).
+   */
+  const OTZARIA_FIRST_PERMISSIONS = Object.freeze(['library.books.read', 'reader.open']);
+
+  /** הרשאות שאינן ידועות (לפני boot) נחשבות חסרות: אין טעם לנסות. */
+  function canOpenInOtzaria(permissions) {
+    return OTZARIA_FIRST_PERMISSIONS.every((permission) => has(permissions, permission));
+  }
+
   function hostSupportsLibrary(permissions) {
     return has(permissions, LIBRARY_PERMISSION);
   }
@@ -911,6 +922,8 @@
     shortTitle,
     searchOutcomeMessage,
     searchSucceeded,
+    canOpenInOtzaria,
+    OTZARIA_FIRST_PERMISSIONS,
     hostSupportsLibrary,
     lacksStartupPermission,
     startupPermissionHint,

@@ -323,6 +323,25 @@
     return [...first, ...rest];
   }
 
+  /**
+   * "קודם באוצריא": התוצאה הראשונה של "איתור מקורות" באוצריא
+   * (`library.resolveRef`, אותו דירוג שהמסך שלה מציג), רק כשהיא בוודאות
+   * הספר שנכתב — כל מילות שמו (בלי מילים כלליות כמו "מסכת") נמצאות במה
+   * שנכתב. "רא"ש יבמות" מול "רא"ש על יבמות" אינו ודאי, ונפתח בבר אילן. רק
+   * הראשונה: תוצאה נמוכה ממנה היא ניחוש של אוצריא. ספר אישי או PDF מהמחשב
+   * (`id` חסר) — לא, כי אין לו מזהה יחיד לפתיחה. `null` = בר אילן.
+   */
+  function otzariaHit(ref, hits) {
+    if (!Array.isArray(hits) || !hits.length) return null;
+    const hit = hits[0];
+    if (!hit || typeof hit !== 'object' || typeof hit.id !== 'number') return null;
+    if (typeof hit.title !== 'string') return null;
+    const typed = new Set(words(ref));
+    const title = words(hit.title).filter((word) => !NEUTRAL.has(word));
+    if (!title.length) return null;
+    return title.every((word) => typed.has(word)) ? hit : null;
+  }
+
   const api = {
     MAX_LENGTH,
     MAX_HISTORY,
@@ -338,6 +357,7 @@
     talmudPage,
     rankChoices,
     displayOrder,
+    otzariaHit,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaLocate = api;

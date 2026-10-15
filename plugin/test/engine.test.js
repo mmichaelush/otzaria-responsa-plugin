@@ -224,6 +224,7 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     autoStart: true,
     showForms: false,
     showSummary: false,
+    otzariaFirst: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',

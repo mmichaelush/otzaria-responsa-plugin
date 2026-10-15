@@ -863,7 +863,7 @@ test('העתקת הפרטים: יומן מקופל, סיכום השירות וי
   assert.match(text, /גרסת התוסף: 0\.5\.1/);
   assert.match(text, /--- יומן פעולות ---\n[^]*הפעלה: תוסף 0\.5\.1/);
   assert.match(text, /↻ 3 השורות שלמעלה חזרו עוד \d+ פעמים/);
-  assert.ok(text.split('\n').length < 40, 'המחזור מקופל: ' + text.split('\n').length);
+  assert.ok(text.split('\n').length < 45, 'המחזור מקופל: ' + text.split('\n').length);
   assert.match(text, /--- שירות בר אילן ---\nService 0\.5\.1\nInstallations: C:\\Users\\…\\ResponsaCD25/);
   assert.match(text, /--- יומן השירות ---\nsvc first\nsvc E:\\ skipped \(not ready\)$/);
   assert.doesNotMatch(text, /Moshe/);
@@ -1051,7 +1051,7 @@ const advancedHealth = reply(200, {
 async function bootAdvanced(routes, stored) {
   const context = setup(Object.assign({ '/health': advancedHealth, '/status': reply(200, ready) }, routes));
   // ברירת המחדל של הגשר המדומה היא `true` לכל מפתח; הסיכום כבוי, כמו אצל משתמש חדש.
-  const values = Object.assign({ responsa_show_summary: null }, stored);
+  const values = Object.assign({ responsa_show_summary: null, responsa_otzaria_first: null }, stored);
   context.bridge.methods['storage.get'] = ({ key }) => (key in values ? values[key] : true);
   await context.app.boot(windows);
   return context;
@@ -1329,6 +1329,65 @@ test('איתור מקום: תוצאה אחת נפתחת, והמקום נשמר �
   assert.match(app.model.locate.status.text, /תורה בראשית פרק ב/);
   await until(() => Array.isArray(stored.responsa_locate_history));
   assert.deepEqual(stored.responsa_locate_history, ['בראשית ב ג']);
+  app.suspend();
+});
+
+test('קודם באוצריא: מקום שקיים באוצריא נפתח בה, ו"בבר אילן בכל זאת" פותח בבר אילן', async () => {
+  const opened = { ok: true, opened: true, ref: 'בראשית יח ו', window: 'בראשית פרק יח פסוק ו', broughtToFront: true };
+  const { app, bridge } = await bootAdvanced({ '/reference/open': reply(200, opened) }, { responsa_otzaria_first: true });
+  app._setPermissions(['network.localhost', 'library.books.read', 'reader.open']);
+  bridge.methods['library.resolveRef'] = () => [
+    { id: 12, bookId: 'בראשית', type: 'text', title: 'בראשית', reference: 'בראשית פרק יח, ו', index: 420 },
+  ];
+  app.actions.selectTab('locate');
+  await app.actions.runLocate('בראשית יח ו');
+  const call = bridge.calls.find((c) => c.method === 'reader.openBook');
+  assert.deepEqual(call.payload, { id: 12, bookId: 'בראשית', type: 'text', index: 420 });
+  assert.equal(requests(bridge, '/reference/open').length, 0);
+  assert.equal(app.model.locate.status.kind, 'success');
+  assert.match(app.model.locate.status.text, /נפתח באוצריא: בראשית פרק יח, ו/);
+  await app.actions.locateInBarIlan();
+  assert.deepEqual(requests(bridge, '/reference/open')[0].body, { ref: 'בראשית יח ו' });
+  assert.match(app.model.locate.status.text, /בראשית פרק יח פסוק ו/);
+  app.suspend();
+});
+
+test('קודם באוצריא: לא בוודאות באוצריא, או בלי ההרשאות, או כבוי — בבר אילן', async () => {
+  const opened = { ok: true, opened: true, ref: 'רא"ש יבמות א', window: 'רא"ש יבמות פרק א', broughtToFront: true };
+  const cases = [
+    // אוצריא מצאה ספר אחר.
+    { settings: { responsa_otzaria_first: true }, permissions: ['library.books.read', 'reader.open'], asked: true },
+    // בלי ההרשאות: לא שואלים.
+    { settings: { responsa_otzaria_first: true }, permissions: ['network.localhost'], asked: false },
+    // כבוי (ברירת המחדל).
+    { settings: {}, permissions: ['library.books.read', 'reader.open'], asked: false },
+  ];
+  for (const { settings, permissions, asked } of cases) {
+    const { app, bridge } = await bootAdvanced({ '/reference/open': reply(200, opened) }, settings);
+    app._setPermissions(permissions);
+    bridge.methods['library.resolveRef'] = () => [
+      { id: 3, bookId: 'רא"ש על יבמות', type: 'text', title: 'רא"ש על יבמות', reference: 'רא"ש על יבמות א', index: 1 },
+    ];
+    app.actions.selectTab('locate');
+    await app.actions.runLocate('רא"ש יבמות א');
+    assert.equal(bridge.calls.some((c) => c.method === 'library.resolveRef'), asked);
+    assert.equal(bridge.calls.some((c) => c.method === 'reader.openBook'), false);
+    assert.deepEqual(requests(bridge, '/reference/open')[0].body, { ref: 'רא"ש יבמות א' });
+    app.suspend();
+  }
+});
+
+test('קודם באוצריא: אוצריא לא פתחה (false) — בבר אילן', async () => {
+  const opened = { ok: true, opened: true, ref: 'שבת יט', window: 'שבת דף יט', broughtToFront: true };
+  const { app, bridge } = await bootAdvanced({ '/reference/open': reply(200, opened) }, { responsa_otzaria_first: true });
+  app._setPermissions(['library.books.read', 'reader.open']);
+  bridge.methods['library.resolveRef'] = () => [{ id: 5, bookId: 'שבת', type: 'text', title: 'שבת', reference: 'שבת דף יט', index: 9 }];
+  bridge.methods['reader.openBook'] = false;
+  app.actions.selectTab('locate');
+  await app.actions.runLocate('שבת יט');
+  assert.equal(requests(bridge, '/reference/open').length, 1);
+  assert.equal(app.model.locate.status.kind, 'success');
+  assert.doesNotMatch(app.model.locate.status.text, /באוצריא/);
   app.suspend();
 });
 

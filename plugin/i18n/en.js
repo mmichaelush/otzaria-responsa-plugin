@@ -814,5 +814,14 @@
       'After a search, Bar-Ilan opens a small window with the number of results, and "Expand" breaks them down by database. When this is off, that window closes right away and only the results window stays.',
     'שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן הסיכום תמיד נפתח. כדאי להוריד את הגרסה החדשה.':
       'The Bar-Ilan service on this computer is old and does not know this setting, so the summary always opens. Downloading the new version is recommended.',
+
+    // ---- 0.6.3: קודם באוצריא באיתור מקום
+    'נפתח באוצריא: {place}': 'Opened in Otzaria: {place}',
+    'בבר אילן בכל זאת': 'Open in Bar-Ilan anyway',
+    'איתור מקום: קודם באוצריא': 'Locate: Otzaria first',
+    'בלשונית "איתור מקום", מקום שקיים באוצריא נפתח באוצריא, ובר אילן נפתח רק כשהמקום חסר שם. אחרי פתיחה באוצריא אפשר ללחוץ "בבר אילן בכל זאת".':
+      'In the "Locate" tab, a place that exists in Otzaria opens in Otzaria, and Bar-Ilan opens only when the place is missing there. After it opens in Otzaria you can press "Open in Bar-Ilan anyway".',
+    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "רשימת ספרים" ו"פתיחת ספרים וניהול כרטיסיות".':
+      'To use this, turn on the permissions "רשימת ספרים" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

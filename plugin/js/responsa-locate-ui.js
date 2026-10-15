@@ -128,7 +128,7 @@
     );
   }
 
-  function statusLine(state) {
+  function statusLine(state, actions) {
     const status = state.status;
     return el(
       'p',
@@ -139,6 +139,14 @@
         hidden: !status,
       },
       status ? status.text : '',
+      // נפתח באוצריא ("קודם באוצריא"): אפשר בכל זאת בבר אילן.
+      status && status.barIlanRef
+        ? button('text', t('בבר אילן בכל זאת'), actions.locateInBarIlan, {
+            icon: 'open_24_regular',
+            key: 'locate-in-bar-ilan',
+            disabled: state.running,
+          })
+        : null,
     );
   }
 
@@ -148,7 +156,7 @@
     const body = supported
       ? [
           field(state, actions),
-          statusLine(state),
+          statusLine(state, actions),
           choicesView(state, actions),
           chips(t('אחרונים:'), state.history, actions.locateRecent, 'locate-recent-', state.running),
           chips(t('דוגמאות:'), Locate.EXAMPLES, actions.locateExample, 'locate-example-', state.running),
