@@ -20,4 +20,9 @@ void main() {
     expect(ResponsaDiscovery.titleMatches('Information', info), isTrue);
     expect(ResponsaDiscovery.titleMatches('מידע נוסף', info), isFalse);
   });
+
+  test('הודעת שגיאה של בר אילן ("Failed to launch help.", 29C)', () {
+    expect(ResponsaDiscovery.titleMatches('RESPONSA', info), isTrue);
+    expect(ResponsaDiscovery.titleMatches('RESPONSA PROJECT', info), isFalse);
+  });
 }

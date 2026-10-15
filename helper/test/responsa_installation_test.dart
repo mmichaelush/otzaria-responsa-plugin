@@ -181,6 +181,27 @@ void main() {
       expect(installation.volumeLabel, 'RESPONSAV25');
     });
 
+    test('ההתקן הנשלף (Sh_cdrom): FILE00 בשורש שלו, ליד INSTALL', () {
+      // CD25 אצל משתמש 29C: `Sh_cdrom=E:\Documents\תוכנות\בארי-25\`, ובו
+      // FILE00 (2GB), KE\, AP\ ו-INSTALL\ — בלי db\.
+      final data = Directory(p.join(root.path, 'data'))
+        ..createSync(recursive: true);
+      final device = Directory(p.join(root.path, 'בארי-25'))
+        ..createSync(recursive: true);
+      Directory(p.join(device.path, 'INSTALL')).createSync();
+      File(p.join(device.path, 'FILE00')).writeAsStringSync('');
+      File(
+        p.join(root.path, 'Responsa.env'),
+      ).writeAsStringSync('DataLocation=${data.path}');
+      File(p.join(data.path, 'Responsa.ini')).writeAsStringSync(
+        ['[Environment]', 'Sh_cdrom=${device.path}\\'].join('\r\n'),
+      );
+      expect(
+        installationAt(root.path).archivePath,
+        p.join('${device.path}\\', 'FILE00'),
+      );
+    });
+
     test('מפתח מחוץ ל-[Environment] אינו נקרא', () {
       final data = Directory(p.join(root.path, 'data'))
         ..createSync(recursive: true);

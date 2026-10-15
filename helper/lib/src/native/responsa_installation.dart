@@ -42,8 +42,12 @@ class ResponsaInstallation {
         path.join(value, 'db', 'FILE00'),
       path.join(installPath, 'DB', 'FILE00'),
       if (dataLocation case final data?) path.join(data, 'DB', 'FILE00'),
-      if (settings['sh_cdrom'] case final value?)
+      if (settings['sh_cdrom'] case final value?) ...[
         path.join(value, 'db', 'FILE00'),
+        // ההתקן עצמו (דיסק-און-קי, או עותק שלו): `FILE00` בשורש, ליד
+        // `INSTALL\` (docs/56 §23; ב-CD25 של משתמש 29C, 15.10.2026).
+        path.join(value, 'FILE00'),
+      ],
       for (final drive in ResponsaInstallationDiscovery.drives())
         path.join(drive, 'db', 'FILE00'),
     ]) {

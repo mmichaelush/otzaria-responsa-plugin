@@ -155,7 +155,9 @@ class ResponsaVersionProfile {
   static const DialogHints infoModalHintsDefault = DialogHints(
     role: 'info_modal',
     windowClass: '#32770',
-    titleEquals: {'מידע', 'Information'},
+    // `RESPONSA`: הודעת שגיאה של בר אילן (`Failed to launch help.` ב-29C, מתפריט
+    // העזרה). שנשארה פתוחה, כל החיפושים אחריה נתקעו 60 שניות (15.10.2026).
+    titleEquals: {'מידע', 'Information', 'RESPONSA'},
     controls: [
       ControlHints(
         role: 'ok_button',

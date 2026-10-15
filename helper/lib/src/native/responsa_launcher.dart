@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
 import 'package:responsa_helper/src/native/responsa_instance.dart';
+import 'package:responsa_helper/src/native/responsa_shortcuts.dart';
 
 /// תוצאת ניסיון להעלות את בר אילן.
 class ResponsaLaunchResult {
@@ -109,12 +110,16 @@ class ResponsaLauncher {
     Duration timeout,
   ) async {
     try {
-      await Process.start(
-        executable,
-        const [],
-        workingDirectory: installPath,
-        mode: ProcessStartMode.detached,
-      );
+      // כמו הקיצור של המשתמש: מוגדל או רגיל. נכשל — כמו קודם.
+      final show = ResponsaShortcuts.showCommandFor(installPath);
+      if (!ResponsaShortcuts.start(executable, installPath, show)) {
+        await Process.start(
+          executable,
+          const [],
+          workingDirectory: installPath,
+          mode: ProcessStartMode.detached,
+        );
+      }
     } catch (error) {
       logLine('ResponsaLauncher: launch failed: $error');
       return ResponsaLaunchResult(
