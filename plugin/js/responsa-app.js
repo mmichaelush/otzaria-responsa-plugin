@@ -205,6 +205,7 @@
       this.model.settings = await this.settings.load();
       applyAppearance(this.model.settings);
       this.service.autoStart = this.model.settings.autoStart;
+      this.service.showSummary = this.model.settings.showSummary;
       this.model.browse = { ...this.model.browse, path: this.model.settings.browsePath };
       this.model.advanced.query = Advanced.normalize(this.model.settings.advancedQuery || Advanced.emptyQuery());
       this.model.locate.history = this.model.settings.locateHistory.slice();
@@ -1365,6 +1366,7 @@
       try {
         this.model.settings = await this.settings.set(name, value);
         this.service.autoStart = this.model.settings.autoStart;
+        this.service.showSummary = this.model.settings.showSummary;
         if (name === 'font' || name === 'scale') applyAppearance(this.model.settings);
         this.log.info('הגדרה: ' + name + ' = ' + JSON.stringify(value));
         // כבוי: הרשימה נמחקת מאוצריא; דלוק: נשלחת שוב.

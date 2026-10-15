@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:responsa_helper/src/native/responsa_automation.dart';
+import 'package:responsa_helper/src/text/responsa_hebrew.dart';
 
 /// כל הרפיה באימות היא ספר שגוי שמדווח כהצלחה, וכל החמרה היא ספר תקין
 /// שהמשתמש אינו מקבל; המקרים כאן לקוחים מפתיחות אמיתיות.
@@ -231,6 +232,157 @@ void main() {
         ], 'גינת ורדים כלל א'),
         isNull,
       );
+    });
+  });
+
+  group('שם הספר עצמו, אחרי שם שמעליו (`משנה ברורה וביאור הלכה`)', () {
+    // נמדד חי ב-CD25 (15.10.2026): "ביאור הלכה" מחזיר עשר תוצאות, ורק אחת
+    // מתחילה בשם; החלון שנפתח הוא "ביאור הלכה סימן א".
+    const results = [
+      'דרך אמונה - ביאור ההלכה הלכות כלאים פרק א',
+      'שקל הקודש - ביאור ההלכה הלכות שקלים פרק א',
+      'ביאור הלכה סימן א',
+    ];
+    const title = 'משנה ברורה וביאור הלכה ביאור הלכה';
+
+    test('החלון בשם הספר בלבד עובר', () {
+      expect(ResponsaAutomation.uniqueNamedResult(results, 'ביאור הלכה'), 2);
+      expect(
+        ResponsaAutomation.verifyOpened(
+          window: 'ביאור הלכה סימן א',
+          selectedResult: 'ביאור הלכה סימן א',
+          usedRef: 'ביאור הלכה',
+          expectedTitle: title,
+          selectedIsUniqueNamed: true,
+        ),
+        isEmpty,
+      );
+      expect(
+        ResponsaAutomation.hasPlausibleResult(results, 'ביאור הלכה', title),
+        isTrue,
+      );
+    });
+
+    test('בלי תוצאה יחידה בשם הזה — נפסל', () {
+      expect(
+        ResponsaAutomation.uniqueNamedResult([
+          ...results,
+          'ביאור הלכה (שונה) סימן א',
+        ], 'ביאור הלכה'),
+        isNull,
+      );
+      expect(
+        verify(
+          window: 'ביאור הלכה סימן א',
+          selectedResult: 'ביאור הלכה סימן א',
+          usedRef: 'ביאור הלכה',
+          expectedTitle: title,
+        ),
+        contains('expectedTitle'),
+      );
+    });
+
+    test('שם הספר שמעל אינו שם הספר עצמו', () {
+      // `שבט הלוי` פותח את שבט הלוי, לא את חלק יא.
+      expect(
+        ResponsaAutomation.isOwnName('שבט הלוי חלק יא', 'שבט הלוי'),
+        isFalse,
+      );
+      expect(
+        ResponsaAutomation.isOwnName(
+          'משנה ברורה וביאור הלכה משנה ברורה',
+          'משנה ברורה',
+        ),
+        isFalse,
+      );
+    });
+
+    test('שם של מילה אחת אינו מספיק', () {
+      expect(
+        ResponsaAutomation.isOwnName('גינת ורדים הקדמה', 'הקדמה'),
+        isFalse,
+      );
+    });
+
+    test('חלון שאינו מתחיל בשם — נפסל', () {
+      expect(
+        ResponsaAutomation.verifyOpened(
+          window: 'דרך אמונה - ביאור ההלכה הלכות כלאים פרק א',
+          selectedResult: 'דרך אמונה - ביאור ההלכה הלכות כלאים פרק א',
+          usedRef: 'ביאור הלכה',
+          expectedTitle: title,
+          selectedIsUniqueNamed: true,
+        ),
+        contains('expectedTitle'),
+      );
+    });
+
+    test('"ביאור הלכות" אינו מתחיל בשם "ביאור הלכה"', () {
+      expect(
+        ResponsaAutomation.startsWithName('ביאור הלכה', 'ביאור הלכות שבת'),
+        isFalse,
+      );
+    });
+  });
+
+  group('חלק אחר (`שבט הלוי חלק יא`)', () {
+    // נמדד חי ב-CD25 (15.10.2026): "שבט הלוי חלק יא" מחזיר 20 תוצאות, ובכל
+    // אחת כל המילים; לפני התיקון נבחר ונפתח "חלק א סימן יא", והאימות עבר.
+    const results = [
+      'שו"ת שבט הלוי תוכן העניינים חלק יא - אורח חיים',
+      'שו"ת שבט הלוי תוכן העניינים חלק יא - קונטרס הקדשים',
+      'שו"ת שבט הלוי חלק א סימן יא',
+      'שו"ת שבט הלוי חלק ו - קונטרס הקדשים סימן יא',
+      'שו"ת שבט הלוי חלק י סימן יא',
+      'שו"ת שבט הלוי חלק יא הקדמה',
+      'שו"ת שבט הלוי חלק יא סימן יא',
+      'שו"ת שבט הלוי חלק יא - קונטרס הקדשים סימן א',
+    ];
+
+    test('נבחרת תחילת החלק', () {
+      expect(
+        results[ResponsaAutomation.bestResult(
+          results,
+          'שבט הלוי חלק יא',
+          'שבט הלוי חלק יא',
+        )],
+        'שו"ת שבט הלוי חלק יא הקדמה',
+      );
+    });
+
+    test('חלון של חלק אחר נפסל', () {
+      expect(
+        verify(
+          window: 'שו"ת שבט הלוי חלק א סימן יא',
+          selectedResult: 'שו"ת שבט הלוי חלק א סימן יא',
+          usedRef: 'שבט הלוי חלק יא',
+          expectedTitle: 'שבט הלוי חלק יא',
+        ),
+        contains('part'),
+      );
+    });
+
+    test('הספר שבתוך החלק אינו סתירה', () {
+      expect(
+        verify(
+          window: 'שו"ת שבט הלוי חלק יא - קונטרס הקדשים סימן א',
+          selectedResult: 'שו"ת שבט הלוי חלק יא - קונטרס הקדשים סימן א',
+          usedRef: 'שבט הלוי חלק יא - קונטרס הקדשים',
+          expectedTitle: 'שבט הלוי חלק יא - קונטרס הקדשים',
+        ),
+        isEmpty,
+      );
+    });
+
+    test('רק מספר באותיות נבדק', () {
+      expect(
+        ResponsaHebrew.partsConflict('אבני נזר חלק אורח חיים', 'חלק יורה דעה'),
+        isFalse,
+      );
+      expect(ResponsaHebrew.partsConflict('X חלק ראשון', 'X חלק ב'), isFalse);
+      expect(ResponsaHebrew.partsConflict('X חלק ט"ו', 'X חלק טו'), isFalse);
+      expect(ResponsaHebrew.partsConflict('X כרך ב', 'X כרך ג'), isTrue);
+      expect(ResponsaHebrew.partsConflict('X חלק ב', 'X סימן ב'), isFalse);
     });
   });
 

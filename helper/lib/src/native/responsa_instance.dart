@@ -41,7 +41,14 @@ class ResponsaInstance {
 
   /// `null` = אין מופע שמיש (יש להעלות חדש). נבחר הפנוי ביותר, כי מופע שצבר
   /// כ-22 חלונות מפסיק לפתוח חדשים בשקט.
-  static ResponsaInstance? pick(Iterable<ResponsaInstance> instances) {
+  ///
+  /// [log] כבוי בהמתנה לבר אילן שהופעל: כל בדיקה רצה באיזולט חדש, שבו
+  /// [_loggedParked] מתאפס, והשורה נרשמה בכל בדיקה (12 פעמים ב-7 שניות).
+  /// בזמן העלייה החלון הראשי עוד מחוץ למסך, וזה אינו ממצא.
+  static ResponsaInstance? pick(
+    Iterable<ResponsaInstance> instances, {
+    bool log = true,
+  }) {
     final all = instances.toList();
     final states = [
       for (final instance in all)
@@ -51,7 +58,7 @@ class ResponsaInstance {
         ),
     ];
     final parked = states.where((s) => !s.usable).length;
-    if (parked != _loggedParked) {
+    if (log && parked != _loggedParked) {
       _loggedParked = parked;
       if (parked > 0) {
         logLine(

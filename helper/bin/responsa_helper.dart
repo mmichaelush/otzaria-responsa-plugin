@@ -6,6 +6,7 @@ import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/helper_service.dart';
 import 'package:responsa_helper/src/server/http_api.dart';
+import 'package:responsa_helper/src/server/otzaria_plugin_remover.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 
 /// קודי יציאה. המתקין ובדיקות ההפעלה נשענים עליהם.
@@ -33,6 +34,9 @@ responsa_helper — שירות מקומי שמחבר את אוצריא לפרו�
   --port=<n>        פורט קבוע, בלי חיפוש בטווח. לפיתוח בלבד.
   --data-dir=<dir>  תיקיית נתונים (ברירת מחדל %LOCALAPPDATA%\\OtzariaResponsa).
   --version         מדפיס גרסה ויוצא.
+  --remove-otzaria-plugin=<id> [--otzaria=<otzaria.exe>]
+                    מסיר את התוסף מאוצריא סגורה, ויוצא בקוד מ-PluginRemoval.
+                    המתקין קורא לזה ב"הסרה מלאה".
   --help            העזרה הזו.
 
 היומן: %LOCALAPPDATA%\\OtzariaResponsa\\helper.log, או OTZARIA_RESPONSA_LOG.''';
@@ -53,6 +57,9 @@ Future<void> _run(List<String> arguments) async {
   if (options.containsKey('version')) {
     _say(HelperService.serverVersion);
     return;
+  }
+  if (options['remove-otzaria-plugin'] case final pluginId?) {
+    exit(_removePlugin(pluginId, options).exitCode);
   }
 
   final List<int> ports;
@@ -153,6 +160,25 @@ void _say(String text) {
   if (hasStdout) stdout.writeln(text);
 }
 
+/// בלי פורט ובלי השירות: רץ גם כשהשירות פועל.
+PluginRemoval _removePlugin(String pluginId, Map<String, String?> options) {
+  if (pluginId.isEmpty) return PluginRemoval.failed;
+  final paths = HelperPaths.resolve(override: options['data-dir']);
+  final exes = [
+    if (options['otzaria'] case final exe? when exe.isNotEmpty) exe,
+    ...OtzariaClients(paths.otzariaClients).read(),
+  ];
+  final result = OtzariaPluginRemover(
+    pluginId: pluginId,
+    roots: OtzariaPluginRemover.dataRoots(
+      otzariaExes: exes,
+      appData: Platform.environment['APPDATA'],
+    ),
+  ).run();
+  logLine('remove-otzaria-plugin $pluginId: ${result.name}');
+  return result;
+}
+
 /// `null` = ארגומנטים לא תקינים.
 Map<String, String?>? _parse(List<String> arguments) {
   final options = <String, String?>{};
@@ -161,7 +187,14 @@ Map<String, String?>? _parse(List<String> arguments) {
     final body = argument.substring(2);
     final equals = body.indexOf('=');
     final name = equals < 0 ? body : body.substring(0, equals);
-    if (!const {'port', 'data-dir', 'version', 'help'}.contains(name)) {
+    if (!const {
+      'port',
+      'data-dir',
+      'version',
+      'help',
+      'remove-otzaria-plugin',
+      'otzaria',
+    }.contains(name)) {
       return null;
     }
     options[name] = equals < 0 ? null : body.substring(equals + 1);

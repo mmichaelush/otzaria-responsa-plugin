@@ -22,5 +22,8 @@ class HelperPaths {
 
   String get iconCache => p.join(dataDir, 'responsa-icon.png');
 
+  /// ה-exe של אוצריא שפנו לשירות (OtzariaClients), בשביל ההסרה.
+  String get otzariaClients => p.join(dataDir, 'otzaria-clients.txt');
+
   void ensureExists() => Directory(dataDir).createSync(recursive: true);
 }

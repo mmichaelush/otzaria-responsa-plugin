@@ -807,5 +807,12 @@
       'When you need precision: for each word choose forms (with prefix letters, full or defective spelling, the whole root), add alternative words, and set where the words must appear: adjacent, close, or in the same sentence, paragraph or document.',
     'כשלא יודעים באילו מילים המקור משתמש: כותבים שאלה או נושא במילים שלכם, ובר אילן מחפש מקורות שעוסקים בזה. המקורות הרלוונטיים בדרך כלל בראש הרשימה.':
       'When you don\'t know which words the source uses: write a question or topic in your own words, and Bar-Ilan looks for sources that deal with it. The relevant sources are usually at the top of the list.',
+
+    // ---- 0.6.2: הסיכום של בר אילן אחרי חיפוש
+    'סיכום התוצאות לפי מאגרים': 'Results summary by database',
+    'אחרי חיפוש בבר אילן נפתח חלון קטן עם מספר התוצאות, ובו "הרחבה" לפירוט לפי מאגרים. כשהמתג כבוי, החלון נסגר מיד ונשאר רק חלון התוצאות.':
+      'After a search, Bar-Ilan opens a small window with the number of results, and "Expand" breaks them down by database. When this is off, that window closes right away and only the results window stays.',
+    'שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן הסיכום תמיד נפתח. כדאי להוריד את הגרסה החדשה.':
+      'The Bar-Ilan service on this computer is old and does not know this setting, so the summary always opens. Downloading the new version is recommended.',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

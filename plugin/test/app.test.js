@@ -1048,11 +1048,31 @@ const advancedHealth = reply(200, {
   capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'advancedSearch', 'showResponsa', 'notify', 'locate'],
 });
 
-async function bootAdvanced(routes) {
+async function bootAdvanced(routes, stored) {
   const context = setup(Object.assign({ '/health': advancedHealth, '/status': reply(200, ready) }, routes));
+  // ברירת המחדל של הגשר המדומה היא `true` לכל מפתח; הסיכום כבוי, כמו אצל משתמש חדש.
+  const values = Object.assign({ responsa_show_summary: null }, stored);
+  context.bridge.methods['storage.get'] = ({ key }) => (key in values ? values[key] : true);
   await context.app.boot(windows);
   return context;
 }
+
+test('סיכום התוצאות של בר אילן: נשלח רק כשהמתג דלוק', async () => {
+  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 2, query: 'נר שבת', advanced: true }) };
+  const on = await bootAdvanced(found, { responsa_show_summary: true });
+  on.app.actions.selectTab('text');
+  on.app.advancedSet({ simpleText: 'נר שבת' }, { light: true });
+  await on.app.runAdvanced();
+  assert.equal(requests(on.bridge, '/text/search')[0].body.summary, true);
+  on.app.suspend();
+
+  const off = await bootAdvanced(found);
+  off.app.actions.selectTab('text');
+  off.app.advancedSet({ simpleText: 'נר שבת' }, { light: true });
+  await off.app.runAdvanced();
+  assert.equal('summary' in requests(off.bridge, '/text/search')[0].body, false);
+  off.app.suspend();
+});
 
 test('חיפוש רגיל: המילים נשלחות צמודות, והתשובה מוצגת', async () => {
   const { app, bridge, view } = await bootAdvanced({

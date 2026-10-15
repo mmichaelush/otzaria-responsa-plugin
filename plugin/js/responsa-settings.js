@@ -25,6 +25,12 @@
      * של אוצריא (`$storage`); בלי ערך השירות מכבה אותו.
      */
     showForms: 'responsa_show_forms',
+    /**
+     * הסיכום של בר אילן אחרי חיפוש (`N תוצאות`, עם "הרחבה" לפי מאגרים).
+     * נשלח בכל חיפוש (`summary`) ובפעולת הלחיצה של אוצריא; בלי ערך השירות
+     * סוגר אותו.
+     */
+    showSummary: 'responsa_show_summary',
     /** מה נשלח לאחרונה לחיפוש הספרייה: `{ builtAt, count }`. */
     librarySync: 'responsa_library_sync',
     /** המשתמש סגר את ההערה על ההרשאה "הוספת רכיבים לתוכנה". */
@@ -91,6 +97,7 @@
     searchDialog: true,
     autoStart: true,
     showForms: false,
+    showSummary: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
@@ -114,6 +121,7 @@
         typeof value.searchDialog === 'boolean' ? value.searchDialog : DEFAULTS.searchDialog,
       autoStart: typeof value.autoStart === 'boolean' ? value.autoStart : DEFAULTS.autoStart,
       showForms: value.showForms === true,
+      showSummary: value.showSummary === true,
       startupNotice: value.startupNotice === true,
       welcomeSeen: value.welcomeSeen === true,
       browsePath:
@@ -154,6 +162,7 @@
         'searchDialog',
         'autoStart',
         'showForms',
+        'showSummary',
         'startupNotice',
         'welcomeSeen',
         'browsePath',

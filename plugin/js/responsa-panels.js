@@ -425,6 +425,24 @@
     });
   }
 
+  /** בשירות 0.6.1 ומטה הסיכום תמיד נשאר על המסך (`summary`). */
+  function showSummaryRow(model, actions) {
+    const supported = Domain.serviceCan(model.health, 'summary');
+    return switchRow({
+      iconName: 'database_search_24_regular',
+      title: t('סיכום התוצאות לפי מאגרים'),
+      subtitle: t('אחרי חיפוש בבר אילן נפתח חלון קטן עם מספר התוצאות, ובו "הרחבה" לפירוט לפי מאגרים. כשהמתג כבוי, החלון נסגר מיד ונשאר רק חלון התוצאות.'),
+      note:
+        supported || !model.health
+          ? null
+          : t('שירות בר אילן שבמחשב ישן ואינו מכיר את ההגדרה הזו, ולכן הסיכום תמיד נפתח. כדאי להוריד את הגרסה החדשה.'),
+      checked: supported || !model.health ? model.settings.showSummary : true,
+      disabled: Boolean(model.health) && !supported,
+      key: 'setting-show-summary',
+      onToggle: (value) => actions.setSetting('showSummary', value),
+    });
+  }
+
   function catalogRows(model, actions) {
     const status = model.status || {};
     const catalog = status.catalog || {};
@@ -539,7 +557,7 @@
           contextMenuRow(model, actions),
           searchDialogRow(model, actions),
         ),
-        section(t('בר אילן'), null, autoStartRow(model, actions), showFormsRow(model, actions)),
+        section(t('בר אילן'), null, autoStartRow(model, actions), showFormsRow(model, actions), showSummaryRow(model, actions)),
         section(t('תצוגה ושפה'), null, displayRows(model, actions)),
         section(t('רשימת הספרים'), null, catalogRows(model, actions)),
         shortcuts.length ? section(t('קיצורי דרך'), null, shortcuts) : null,
@@ -917,6 +935,7 @@
       [t('דיאלוג החיפוש'), onOff(startup && model.settings.searchDialog)],
       [t('הפעלת בר אילן כשהוא סגור'), onOff(model.settings.autoStart)],
       [t('חלון ניהול הצורות בחיפוש מטקסט מסומן'), onOff(model.settings.showForms)],
+      [t('סיכום התוצאות לפי מאגרים'), onOff(model.settings.showSummary)],
       [t('הוספת רכיבים לתוכנה'), yesNo(startup)],
       [t('פורט השירות'), model.servicePort ? String(model.servicePort) : '—', 'ltr'],
     ].filter(Boolean);

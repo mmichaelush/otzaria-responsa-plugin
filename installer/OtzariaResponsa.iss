@@ -88,6 +88,7 @@ he.ModeRegularNote=מסיר גם את רשימת הספרים ואת קובצי 
 he.ModeFull=הסרה מלאה
 he.ModeFullNote=מסיר הכול, כולל את התוסף מאוצריא ואת ההגדרות שלו.
 he.ModeButton=הסרה
+he.PluginCloseOtzaria=כדי להסיר את התוסף, אוצריא צריכה להיות סגורה: היא שומרת את רשימת התוספים בזמן שהיא פתוחה.%n%nסגרו את אוצריא (את כל החלונות שלה) ולחצו "אישור".%n%n"ביטול" ממשיך בהסרה ומשאיר את התוסף באוצריא.
 he.PluginRemoveSteps=אוצריא נפתחת עכשיו בהגדרות ← כלים. התוסף מוסר באוצריא עצמה, כדי שלא יישארו בה רישומים שלו.%n%n1. ברשימת התוספים סמנו את "בר אילן".%n2. לחצו "מחק" ואשרו.%n3. חזרו לחלון הזה ולחצו "אישור".%n%n"ביטול" ממשיך בהסרה ומשאיר את התוסף באוצריא.
 he.PluginStillInstalled=התוסף עדיין מותקן באוצריא.%n%nבהגדרות ← כלים סמנו את "בר אילן", לחצו "מחק" ואשרו, ואז לחצו כאן "אישור".%n%n"ביטול" ממשיך בהסרה ומשאיר את התוסף באוצריא.
 he.DoneRemoved=הוסרו:
@@ -561,22 +562,10 @@ begin
     ShellExec('', OtzariaPath, 'otzaria://open/sdk', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
 end;
 
-{ לאוצריא אין פקודה חיצונית להסרת תוסף. התוסף רשום ב-plugins_host.db עם
-  המניפסט, ההרשאות והנתונים שלו (גם רשימת הספרים לחיפוש הספרייה); מחיקת
-  התיקייה בלבד הייתה משאירה תוסף שבור ברשימה, בתפריט ובחיפוש. לכן ההסרה
-  נעשית באוצריא, וכאן רק פותחים את המסך ובודקים שהתוסף אכן נעלם. בהסרה שקטה
-  אין מי שיסיר, והתוסף נשאר. }
-procedure RemovePlugin();
-var
-  Before: TArrayOfString;
+{ פתיחת אוצריא ב"הגדרות ← כלים" והמתנה שהמשתמש ימחק שם. רק כשהשירות לא
+  מצא איפה התוסף רשום (מסד במקום לא מוכר) או נכשל. }
+procedure RemovePluginInOtzaria(Before: TArrayOfString);
 begin
-  Before := PluginReleases();
-  if GetArrayLength(Before) = 0 then
-  begin
-    RemoveEmptyDirs(RemoveBackslash(PluginRoot()));
-    Log('Plugin is not installed in Otzaria.');
-    Exit;
-  end;
   PluginKept := True;
   if UninstallSilent() or not FindOtzaria() then
   begin
@@ -602,6 +591,69 @@ begin
     Windows, בשפת המערכת, ואז הטקסט לא היה תואם לכפתור. }
   until MsgBox(CustomMessage('PluginStillInstalled'), mbError, MB_OKCANCEL) <> IDOK;
   Log('Plugin kept: still installed after the user gave up.');
+end;
+
+{ קודי היציאה של `--remove-otzaria-plugin` (PluginRemoval בשירות). }
+const
+  RemovalDone = 0;
+  RemovalNotInstalled = 10;
+  RemovalOtzariaRunning = 11;
+
+{ לאוצריא אין פקודה חיצונית להסרת תוסף, ולכן השירות עושה מה ש"מחק" שבה
+  עושה (OtzariaPluginRemover): מוחק את התוסף מ-plugins_host.db (הרישום,
+  ההרשאות, הנתונים, רשימת הספרים לחיפוש הספרייה) ואת התיקיות שלו. רק
+  כשאוצריא סגורה: היא מחזיקה את הרשימה בזיכרון וכותבת אותה שוב. גם אוצריא
+  ניידת: השירות זוכר את ה-exe שפנו אליו. }
+procedure RemovePlugin();
+var
+  Before: TArrayOfString;
+  Helper, Params: String;
+  Code: Integer;
+begin
+  Before := PluginReleases();
+  Helper := ExpandConstant('{app}\bin\{#HelperExe}');
+  if not FileExists(Helper) then
+  begin
+    Log('Plugin removal: the service executable is missing.');
+    if GetArrayLength(Before) > 0 then RemovePluginInOtzaria(Before);
+    Exit;
+  end;
+  Params := '--remove-otzaria-plugin={#PluginId}';
+  if FindOtzaria() then Params := Params + ' "--otzaria=' + OtzariaPath + '"';
+  repeat
+    if not Exec(Helper, Params, '', SW_HIDE, ewWaitUntilTerminated, Code) then Code := -1;
+    Log(Format('Plugin removal: exit code %d', [Code]));
+    case Code of
+      RemovalDone:
+        begin
+          RemoveEmptyDirs(RemoveBackslash(PluginRoot()));
+          PluginRemoved := True;
+          PluginKept := False;
+          Exit;
+        end;
+      RemovalNotInstalled:
+        begin
+          RemoveEmptyDirs(RemoveBackslash(PluginRoot()));
+          Log('Plugin is not installed in Otzaria.');
+          Exit;
+        end;
+      RemovalOtzariaRunning:
+        begin
+          PluginKept := True;
+          if UninstallSilent() then
+          begin
+            Log('Plugin kept: Otzaria is open (silent uninstall).');
+            Exit;
+          end;
+        end;
+    else
+      begin
+        RemovePluginInOtzaria(Before);
+        Exit;
+      end;
+    end;
+  until MsgBox(CustomMessage('PluginCloseOtzaria'), mbInformation, MB_OKCANCEL) <> IDOK;
+  Log('Plugin kept: Otzaria stayed open.');
 end;
 
 { TerminateProcess אסינכרוני: קובץ ההרצה, היומן והקטלוג נעולים עד שהתהליך

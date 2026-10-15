@@ -147,6 +147,37 @@ void main() {
     );
   }, timeout: const Timeout(Duration(minutes: 10)));
 
+  // הסיכום (`N תוצאות`) נסגר אחרי חיפוש שמצא, אלא אם התבקש (0.6.2).
+  test('the summary closes unless kept', () async {
+    _closeResultWindows();
+    final controller = ResponsaController(allowAutoStart: () => true);
+    int summaries() {
+      final pid = ResponsaWin32.topWindowsByClass(
+        'ResponsaProject',
+      ).firstWhere((w) => ResponsaWin32.isOnScreen(w.hwnd)).pid;
+      return ResponsaDiscovery.discoverAll(
+        pid,
+        ResponsaVersionProfile.searchSummaryHintsDefault,
+      ).length;
+    }
+
+    for (final keep in [false, true, false]) {
+      final report = await controller.searchText(
+        'נר שבת',
+        setup: ResponsaSearchSetup(easy: true, keepSummary: keep),
+      );
+      await Future<void>.delayed(const Duration(seconds: 2));
+      final open = summaries();
+      print(
+        'keep=$keep: ${report.outcome?.state.name} '
+        'count=${report.outcome?.count} summaries=$open',
+      );
+      expect(report.ok, isTrue);
+      expect(open, keep ? 1 : 0);
+    }
+    _closeResultWindows();
+  }, timeout: const Timeout(Duration(minutes: 5)));
+
   // כמו שדווח מבר אילן 31 ו-32, ובנוי כאן כמו ש-0.5.6 יצר אותו: "חיפוש
   // טבלאי" על המסך, ומעבר ל"ניסוח חופשי" מחלון מוסתר. "ביטול" של הטבלאי
   // לא עושה אז כלום.

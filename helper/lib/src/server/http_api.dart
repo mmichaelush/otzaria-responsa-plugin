@@ -19,6 +19,7 @@ class HttpApi {
     this._service, {
     required this.port,
     this.heartbeat = const Duration(seconds: 10),
+    this.buildStreamLimit = const Duration(seconds: 100),
     int? Function(int clientPort)? clientSession,
     String? Function(int clientPort)? clientExe,
     int? ownSession,
@@ -59,6 +60,11 @@ class HttpApi {
   final HelperService _service;
   final int port;
   final Duration heartbeat;
+
+  /// זרם בנייה נסגר אחרי הזמן הזה, והתוסף מצטרף שוב (`attach`). אוצריא
+  /// מוותרת על הבקשה אחרי 120 שניות אבל אינה סוגרת את החיבור: בבנייה של
+  /// ארבע שעות (CD32C במחשב איטי) נשארו פתוחים כך 112 חיבורים עד הסוף.
+  final Duration buildStreamLimit;
   final int? Function(int clientPort) _clientSession;
   final String? Function(int clientPort) _clientExe;
 
@@ -244,6 +250,7 @@ class HttpApi {
     final ticker = Timer.periodic(heartbeat, (_) {
       write(const {'type': 'heartbeat'});
     });
+    final limit = Timer(buildStreamLimit, finish);
     subscription = events.listen(
       (event) => write(event.toJson()),
       onDone: finish,
@@ -255,6 +262,7 @@ class HttpApi {
     await done.future;
     await subscription.cancel();
     ticker.cancel();
+    limit.cancel();
     await writes;
     await _close(response);
   }

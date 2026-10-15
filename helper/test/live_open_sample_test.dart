@@ -1,5 +1,5 @@
 // כלי מדידה ידני: פותח מדגם ספרים אקראי בבר אילן החי ומדווח הצלחות, כשלים וזמנים.
-// RESPONSA_DB=<catalog.db> RESPONSA_N=40 RESPONSA_SEED=7 dart test --run-skipped test/live_open_sample_test.dart
+// RESPONSA_DB=<catalog.db> RESPONSA_N=40 RESPONSA_SEED=7 [RESPONSA_PATTERN=<regex>] dart test --run-skipped test/live_open_sample_test.dart
 @Tags(['live'])
 library;
 
@@ -22,6 +22,8 @@ void main() {
     final count = int.parse(Platform.environment['RESPONSA_N'] ?? '25');
     final seed = int.parse(Platform.environment['RESPONSA_SEED'] ?? '7');
     final only = Platform.environment['RESPONSA_ONLY'];
+    // ביטוי רגולרי על הכותרת, למשל `(חלק|כרך) [א-ת]` לספרים בחלקים.
+    final pattern = Platform.environment['RESPONSA_PATTERN'];
 
     final db = sqlite3.open(path, mode: OpenMode.readOnly);
     final rows = db
@@ -45,9 +47,12 @@ void main() {
     db.close();
     print('catalog: ${rows.length} books from $installPath');
 
+    final pool = pattern == null
+        ? rows
+        : rows.where((r) => RegExp(pattern).hasMatch(r.title)).toList();
     final picked = only != null
-        ? rows.where((r) => r.title.contains(only)).take(count).toList()
-        : (List.of(rows)..shuffle(Random(seed))).take(count).toList();
+        ? pool.where((r) => r.title.contains(only)).take(count).toList()
+        : (List.of(pool)..shuffle(Random(seed))).take(count).toList();
 
     final controller = ResponsaController(allowAutoStart: () => true);
     var ok = 0;

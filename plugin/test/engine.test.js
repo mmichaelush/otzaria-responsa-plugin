@@ -210,6 +210,7 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
         responsa_welcome_seen: 'yes',
         responsa_advanced_query: ['not', 'an', 'object'],
         responsa_show_forms: 'yes',
+        responsa_show_summary: 1,
       })[key] ?? null,
   });
   const store = new Settings.SettingsStore(runtime);
@@ -222,6 +223,7 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     searchDialog: true,
     autoStart: true,
     showForms: false,
+    showSummary: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',

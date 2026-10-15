@@ -109,6 +109,10 @@ class ResponsaSearchSetup {
   /// "חיפוש קל", עם תוספות: "מילים שיוקלדו בכתיב מלא... יתקבלו גם בלעדיהן".
   final bool? spelling;
 
+  /// להשאיר את הסיכום של בר אילן (`N תוצאות`, עם "הרחבה" לפי מאגרים) על
+  /// המסך. כבוי: הסיכום נסגר ב"אישור", ונשאר חלון התוצאות.
+  final bool keepSummary;
+
   const ResponsaSearchSetup({
     this.advanced = false,
     this.freeForm = false,
@@ -121,9 +125,25 @@ class ResponsaSearchSetup {
     this.prefixes,
     this.distance,
     this.spelling,
+    this.keepSummary = false,
   });
 
   static const ResponsaSearchSetup none = ResponsaSearchSetup();
+
+  ResponsaSearchSetup withSummary(bool keep) => ResponsaSearchSetup(
+    advanced: advanced,
+    freeForm: freeForm,
+    easy: easy,
+    allDatabases: allDatabases,
+    abbreviations: abbreviations,
+    showForms: showForms,
+    scope: scope,
+    additions: additions,
+    prefixes: prefixes,
+    distance: distance,
+    spelling: spelling,
+    keepSummary: keep,
+  );
 
   /// מזהי תיבות הסימון בחלון "חיפוש מתקדם" (גרסה 25).
   static const int allDatabasesId = 1024;
@@ -313,6 +333,7 @@ class ResponsaSearchAutomation {
         atLimit,
         // גם כשלא עברנו ממנו: התוצאות שלו בלי "נמצאו N".
         anyWindowIsResult: setup.freeForm || isFreeForm(dialog.hwnd),
+        keepSummary: setup.keepSummary,
       );
     } finally {
       // חלון החיפוש עשוי להיות מושבת מתחת למודאל התוצאות; לחיצה על תיבת
@@ -334,6 +355,7 @@ class ResponsaSearchAutomation {
     Set<int> before,
     bool atLimit, {
     bool anyWindowIsResult = false,
+    bool keepSummary = false,
   }) {
     final edit = dialog.handle('query_edit')!;
     final button = dialog.handle('run_button')!;
@@ -373,10 +395,12 @@ class ResponsaSearchAutomation {
 
     if (outcome.window case final title?) _automation.adoptWindow(title);
     if (outcome.state == ResponsaSearchState.found) {
-      closeLeftoverSearchWindows(
-        dialog.hwnd,
-        underSummary: outcome.summaryShown,
-      );
+      // הסיכום מופיע אחרי כל חיפוש שמצא (חוץ מניסוח חופשי), ורוב המשתמשים
+      // אינם צריכים אותו: חלון התוצאות כבר מראה את המספר. "אישור" סוגר
+      // אותו בלבד; הוא נסגר לפני חלון החיפוש, שמושבת מתחתיו.
+      final summaryOpen =
+          outcome.summaryShown && !(keepSummary || closeSearchSummaries() == 0);
+      closeLeftoverSearchWindows(dialog.hwnd, underSummary: summaryOpen);
     }
     if (outcome.state == ResponsaSearchState.invalid) {
       // ההודעה עוברת לתוסף; חלון פתוח היה חוסם את החיפוש הבא.

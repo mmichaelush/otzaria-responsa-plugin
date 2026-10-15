@@ -12,6 +12,7 @@ import 'package:responsa_helper/src/server/catalog_store.dart';
 import 'package:responsa_helper/src/server/diagnostics.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
+import 'package:responsa_helper/src/server/otzaria_plugin_remover.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 import 'package:responsa_helper/src/text/responsa_advanced_query.dart';
@@ -35,7 +36,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.6.1';
+  static const String serverVersion = '0.6.2';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -55,6 +56,7 @@ class HelperService {
     'freeFormSearch',
     'easySearch',
     'easyOptions',
+    'summary',
   ];
 
   static const int maxPageSize = 200;
@@ -174,6 +176,10 @@ class HelperService {
 
   /// גופן האייקונים של האוצריא שפנתה לשירות, ושמות הגליפים שבו.
   Future<Map<String, Object?>> otzariaIcons({String? clientExe}) async {
+    // ההסרה המלאה מוצאת כך גם אוצריא ניידת.
+    if (clientExe != null) {
+      OtzariaClients(paths.otzariaClients).remember(clientExe);
+    }
     final font = await OtzariaIconFont.load(
       OtzariaIconFont.candidates(
         clientExe: clientExe,
@@ -379,6 +385,8 @@ class HelperService {
     final easy = !advanced && !freeForm && (_bool(body, 'easy') ?? false);
     final notify = _bool(body, 'notify') ?? false;
     final autoStart = _bool(body, 'autoStart') ?? true;
+    // הסיכום של בר אילן לפי מאגרים: רק כשהמשתמש ביקש (`responsa_show_summary`).
+    final keepSummary = _bool(body, 'summary') ?? false;
     final String text;
     var truncated = false;
     var setup = ResponsaSearchSetup.none;
@@ -441,6 +449,7 @@ class HelperService {
       // לא. התיבה שבבר אילן חוזרת אחרי החיפוש למצבה.
       setup = ResponsaSearchSetup(showForms: _bool(body, 'showForms') ?? false);
     }
+    setup = setup.withSummary(keepSummary);
     return _exclusive(_Automation.search, () async {
       final report = await _backend.searchText(
         text,

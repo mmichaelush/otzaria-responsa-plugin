@@ -509,6 +509,7 @@ class ResponsaAutomation {
       expectedTitle: expectedTitle,
       checkReference: checkReference,
       selectedIsUniqueExact: uniqueExactResult(results, usedRef) == index,
+      selectedIsUniqueNamed: uniqueNamedResult(results, usedRef) == index,
     );
     if (failed.isNotEmpty) {
       throw ResponsaAutomationException(
@@ -551,11 +552,50 @@ class ResponsaAutomation {
     // כמו ב-[verifyOpened]: תוצאה יחידה שהיא בדיוק ההפניה שנשלחה, כשאינה
     // קיצור של השם (`גינת ורדים כלל א` של `גינת ורדים כללים`). בלי זה הסולם
     // ממשיך לחוליות שנכשלות, וחוזר אליה רק אחרי כחצי דקה.
+    if (expectedTitle != null &&
+        isOwnName(expectedTitle, reference) &&
+        uniqueNamedResult(results, reference) != null) {
+      return true;
+    }
     return expectedTitle != null &&
         !ResponsaHebrew.normalize(
           wanted,
         ).startsWith(ResponsaHebrew.normalize(reference)) &&
         uniqueExactResult(results, reference) != null;
+  }
+
+  /// [reference] הוא שם הספר עצמו, בסוף הכותרת שבקטלוג, אחרי שם שמעליו
+  /// (`משנה ברורה וביאור הלכה > ביאור הלכה`). בר אילן קורא לחלון בשם הזה
+  /// בלבד (`ביאור הלכה סימן א`), ולכן הכותרת המלאה אינה מופיעה בו. שתי מילים
+  /// לפחות: שם של מילה אחת (`הקדמה`) משותף לספרים רבים. לא כשהכותרת גם
+  /// מתחילה בו: אז ייתכן שהוא שם הספר שמעל.
+  static bool isOwnName(String expectedTitle, String reference) {
+    final expected = ResponsaHebrew.normalize(
+      ResponsaNames.withoutQualifier(expectedTitle),
+    );
+    final name = ResponsaHebrew.normalize(reference);
+    return name.split(' ').length >= 2 &&
+        expected.endsWith(' $name') &&
+        !expected.startsWith('$name ');
+  }
+
+  /// [text] הוא [name], או [name] ואחריו מילים (`ביאור הלכה סימן א`).
+  static bool startsWithName(String name, String text) {
+    final want = ResponsaHebrew.normalize(name);
+    final got = ResponsaHebrew.normalize(text);
+    return want.isNotEmpty && (got == want || got.startsWith('$want '));
+  }
+
+  /// האינדקס של התוצאה היחידה שמתחילה בשם [reference]. `null` כשאין כזו או
+  /// כשיש כמה.
+  static int? uniqueNamedResult(List<String> results, String reference) {
+    int? found;
+    for (var index = 0; index < results.length; index++) {
+      if (!startsWithName(reference, results[index])) continue;
+      if (found != null) return null;
+      found = index;
+    }
+    return found;
   }
 
   /// האינדקס של התוצאה היחידה שהיא בדיוק [reference]. `null` כשאין כזו, וגם
@@ -582,6 +622,10 @@ class ResponsaAutomation {
   ///
   /// [selectedIsUniqueExact] — התוצאה שנבחרה היא היחידה ברשימה שהיא בדיוק
   /// [usedRef] ([uniqueExactResult]). רק אז מותר לוותר על הכותרת המצופה.
+  ///
+  /// [selectedIsUniqueNamed] — התוצאה שנבחרה היא היחידה שמתחילה בשם
+  /// [usedRef] ([uniqueNamedResult]). כש-[usedRef] הוא שם הספר עצמו
+  /// ([isOwnName]), חלון שמתחיל בשם הזה הוא הספר.
   static List<String> verifyOpened({
     required String window,
     required String selectedResult,
@@ -589,6 +633,7 @@ class ResponsaAutomation {
     String? expectedTitle,
     bool checkReference = true,
     bool selectedIsUniqueExact = false,
+    bool selectedIsUniqueNamed = false,
   }) {
     final failed = <String>[
       if (ResponsaHebrew.matchLevel(selectedResult, window) ==
@@ -597,6 +642,9 @@ class ResponsaAutomation {
       // המקום היחיד שמהדורה נבדקת - שאר ההשוואות מתעלמות מסוגריים בכוונה.
       if (ResponsaHebrew.editionsConflict(selectedResult, window))
         'selectedEdition',
+      // `שבט הלוי חלק יא` נפתח כ`חלק א סימן יא`, וכל המילים נמצאות בכותרת.
+      if (ResponsaHebrew.partsConflict(expectedTitle ?? usedRef, window))
+        'part',
       if (checkReference && !ResponsaHebrew.coversTitle(usedRef, window))
         'requestedRef',
     ];
@@ -613,7 +661,13 @@ class ResponsaAutomation {
           !ResponsaHebrew.normalize(
             expected,
           ).startsWith(ResponsaHebrew.normalize(usedRef));
-      if (!exactRequest && !ResponsaHebrew.coversTitle(expected, window)) {
+      final ownName =
+          selectedIsUniqueNamed &&
+          isOwnName(expectedTitle, usedRef) &&
+          startsWithName(usedRef, window);
+      if (!exactRequest &&
+          !ownName &&
+          !ResponsaHebrew.coversTitle(expected, window)) {
         failed.add('expectedTitle');
       }
     }
@@ -635,9 +689,17 @@ class ResponsaAutomation {
     for (var index = 0; index < results.length; index++) {
       // מהדורה סותרת יורדת לתחתית כבר כאן: פסילה באימות מונעת ספר שגוי אבל
       // לא פותחת את הנכון.
+      // וכך גם חלק אחר (`חלק א סימן יא` של `חלק יא`).
       final editionRank =
           expectedTitle != null &&
-              ResponsaHebrew.editionsConflict(expectedTitle, results[index])
+                  ResponsaHebrew.editionsConflict(
+                    expectedTitle,
+                    results[index],
+                  ) ||
+              ResponsaHebrew.partsConflict(
+                expectedTitle ?? openRef,
+                results[index],
+              )
           ? 0
           : 1;
       // ספירת אסימונים ולא כן/לא: כותרת שאינה מוכלת באף שורה מחזירה

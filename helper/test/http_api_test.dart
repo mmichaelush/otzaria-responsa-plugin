@@ -30,6 +30,7 @@ void main() {
     bool withCatalog = true,
     int? Function(int clientPort)? clientSession,
     String? Function(int clientPort)? clientExe,
+    Duration buildStreamLimit = const Duration(seconds: 100),
   }) async {
     if (withCatalog) writeCatalog(dir);
     // בלי משתני סביבה: אחרת אוצריא שמותקנת במחשב הייתה נמצאת בבדיקה.
@@ -43,6 +44,7 @@ void main() {
       service,
       port: server.port,
       heartbeat: const Duration(milliseconds: 50),
+      buildStreamLimit: buildStreamLimit,
       clientSession: clientSession,
       clientExe: clientExe ?? (_) => null,
       ownSession: clientSession == null ? null : 1,
@@ -682,6 +684,29 @@ void main() {
       expect(backend.searchCalls, isEmpty);
     });
 
+    test('הסיכום של בר אילן: נסגר, אלא אם התבקש', () async {
+      await call('POST', '/text/search', body: {'q': 'שבת'});
+      expect(backend.searchCalls.last.setup.keepSummary, isFalse);
+      await call('POST', '/text/search', body: {'q': 'שבת', 'summary': null});
+      expect(backend.searchCalls.last.setup.keepSummary, isFalse);
+      await call(
+        'POST',
+        '/text/search',
+        body: {'q': 'שבת', 'easy': true, 'summary': true},
+      );
+      expect(backend.searchCalls.last.setup.keepSummary, isTrue);
+      expect(backend.searchCalls.last.setup.easy, isTrue);
+      await advanced({'q': 'שבת', 'summary': true});
+      expect(backend.searchCalls.last.setup.keepSummary, isTrue);
+      expect(backend.searchCalls.last.setup.advanced, isTrue);
+      final result = await call(
+        'POST',
+        '/text/search',
+        body: {'q': 'שבת', 'summary': 'yes'},
+      );
+      expect(result.status, 400);
+    });
+
     test('חיפוש רגיל עם showForms מהתוסף', () async {
       await call('POST', '/text/search', body: {'q': 'שבת', 'showForms': true});
       expect(backend.searchCalls.single.setup.checks, {
@@ -1037,6 +1062,32 @@ void main() {
       expect(events.last['type'], 'done');
       expect(backend.buildCalls, 1);
       await firstDone;
+    });
+
+    test('זרם נסגר אחרי הזמן הקצוב, והבנייה ממשיכה', () async {
+      await server.close(force: true);
+      await start(
+        withCatalog: false,
+        buildStreamLimit: const Duration(milliseconds: 300),
+      );
+      final (_, first) = await openBuild();
+      await until(() => backend.buildEvents != null);
+      backend.buildEvents!.add(
+        const ResponsaBuildProgress(stage: ResponsaBuildStage.scanning),
+      );
+      // הזרם מסתיים בלי אירוע סיום; התוסף מצטרף שוב.
+      final events = await first.toList().timeout(const Duration(seconds: 5));
+      expect(events.where((e) => e['type'] != 'heartbeat'), isNotEmpty);
+      expect(events.map((e) => e['type']), isNot(contains('done')));
+      final (_, joined) = await openBuild(mode: 'attach');
+      final joinedAll = joined.toList();
+      backend.buildEvents!
+        ..add(
+          const ResponsaBuildProgress(stage: ResponsaBuildStage.done, books: 7),
+        )
+        ..close();
+      expect((await joinedAll).last['type'], 'done');
+      expect(backend.buildCalls, 1);
     });
 
     test('mode לא מוכר נדחה', () async {

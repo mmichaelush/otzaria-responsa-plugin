@@ -57,11 +57,21 @@
        * מפעיל, וכך גם שירות ישן שאינו מכיר את השדה.
        */
       this.autoStart = true;
+      /**
+       * "סיכום התוצאות של בר אילן" (הגדרות). רק `true` נשלח: בלעדיו השירות
+       * סוגר את הסיכום, ושירות ישן משאיר אותו בכל מקרה.
+       */
+      this.showSummary = false;
     }
 
     /** [body] של פעולה שעשויה להפעיל את בר אילן, עם ההגדרה. */
     _launching(body) {
       return this.autoStart ? body : { ...body, autoStart: false };
+    }
+
+    /** [body] של חיפוש בטקסט: מפעיל, ואולי משאיר את הסיכום. */
+    _searching(body) {
+      return this._launching(this.showSummary ? { ...body, summary: true } : body);
     }
 
     /**
@@ -138,7 +148,7 @@
 
     /** כמו פתיחה: עשוי להפעיל את בר אילן. */
     searchText(text) {
-      return this.request('POST', '/text/search', this._launching({ q: text }), MAX_STREAM_MS);
+      return this.request('POST', '/text/search', this._searching({ q: text }), MAX_STREAM_MS);
     }
 
     /**
@@ -146,7 +156,7 @@
      * אילן, `options`, `scope`). בחירת קטגוריות בבר אילן מאריכה אותו.
      */
     advancedSearch(body) {
-      return this.request('POST', '/text/search', this._launching(body), MAX_STREAM_MS);
+      return this.request('POST', '/text/search', this._searching(body), MAX_STREAM_MS);
     }
 
     /**

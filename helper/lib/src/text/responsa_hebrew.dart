@@ -266,6 +266,45 @@ class ResponsaHebrew {
     return first.intersection(second).isEmpty;
   }
 
+  /// `שבט הלוי חלק יא` מול `שו"ת שבט הלוי חלק א סימן יא`: שאר ההשוואות
+  /// רואות את כל המילים (`יא` של הסימן), אבל זה חלק אחר. סתירה רק כשבשני
+  /// הצדדים יש חלק (או כרך) שמספרו באותיות, ואין מספר משותף. חלק בשם
+  /// (`חלק אורח חיים`) אינו נבדק: שם החלק בכותרת עשוי להיכתב אחרת.
+  static bool partsConflict(String? a, String? b) {
+    final first = _partsOf(a);
+    final second = _partsOf(b);
+    if (first.isEmpty || second.isEmpty) return false;
+    return first.intersection(second).isEmpty;
+  }
+
+  static final RegExp _part = RegExp(
+    r'(?:^|\s)(?:חלק|כרך)\s+([א-ת]{1,4})(?=\s|$)',
+  );
+
+  static Set<String> _partsOf(String? text) {
+    final value = normalize(text);
+    if (value.isEmpty) return const {};
+    return {
+      for (final match in _part.allMatches(value))
+        if (_isLetterNumber(match.group(1)!)) match.group(1)!,
+    };
+  }
+
+  static const String _numberLetters = 'תשרקצפעסנמלכיטחזוהדגבא';
+
+  /// אותיות בסדר יורד של ערכן (`יא`, `קכג`, `תשפ`), כמו בכתיבת מספר; `טו`
+  /// ו-`טז` מותרים. כך `ראשון` ו-`אורח` אינם מספרים.
+  static bool _isLetterNumber(String text) {
+    var last = -1;
+    for (final rune in text.runes) {
+      final letter = String.fromCharCode(rune);
+      final rank = _numberLetters.indexOf(_finals[letter] ?? letter);
+      if (rank < 0 || rank < last) return false;
+      last = rank;
+    }
+    return true;
+  }
+
   /// הסתייגות שיש בה ספרה היא מיקום (`(עמ' 108-126)`), לא מהדורה.
   static final RegExp _digit = RegExp(r'\d');
 

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "com.otzaria-responsa",
   "name": "בר אילן",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "ספרי בר אילן המותקן במחשב: חיפוש ספרים ופתיחתם בבר אילן, חיפוש בטקסט בכל אפשרויות החיפוש של בר אילן, איתור מקום, וחיפוש בלחיצה ימנית.",
   "author": "מיכאלוש",
   "homepage": "https://github.com/mmichaelush/otzaria-responsa-plugin",
@@ -35,7 +35,8 @@
   "contributes": {
     "toolTab": {
       "title": "בר אילן",
-      "order": 910,
+      "order": 100,
+      "allowOrderBeforeBuiltIns": true,
       "defaultPinned": true,
       "iconName": "book_open_medium_search_24_regular"
     },
@@ -61,7 +62,8 @@
                 "q": { "$selection": "selectedText" },
                 "notify": true,
                 "autoStart": { "$storage": "responsa_auto_start" },
-                "showForms": { "$storage": "responsa_show_forms" }
+                "showForms": { "$storage": "responsa_show_forms" },
+                "summary": { "$storage": "responsa_show_summary" }
               },
               "pendingMessage": "מחפש בבר אילן…",
               "unavailableMessage": "שירות בר אילן אינו פועל. כדי לבדוק מה חסר, פותחים את לשונית \"בר אילן\".",

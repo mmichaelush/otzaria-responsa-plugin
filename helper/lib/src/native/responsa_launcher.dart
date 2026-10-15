@@ -151,6 +151,7 @@ class ResponsaLauncher {
     () =>
         ResponsaInstance.pick(
           ResponsaInstallationDiscovery.instancesOf(installPath),
+          log: false,
         ) !=
         null,
   );
