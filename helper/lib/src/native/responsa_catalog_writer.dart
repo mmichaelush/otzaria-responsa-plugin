@@ -10,6 +10,7 @@ import 'package:responsa_helper/src/text/responsa_author_table.dart';
 import 'package:responsa_helper/src/text/responsa_bibliography.dart';
 import 'package:responsa_helper/src/text/responsa_hebrew.dart';
 import 'package:responsa_helper/src/text/responsa_names.dart';
+import 'package:responsa_helper/src/text/responsa_structure.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 /// כתיבת `responsa_catalog.db` - הסכמה וההחלפה האטומית. הסיווג נפרד
@@ -150,6 +151,7 @@ class ResponsaCatalogWriter {
         'bibliography_entries': '${bibliography.entryCount}',
         'bibliography_matched': '$described',
         'author_table_entries': '${authors.authorCount}',
+        'author_source': authors.source,
         'books_with_author': '$authored',
       };
       final metaInsert = db.prepare(
@@ -191,6 +193,173 @@ class ResponsaCatalogWriter {
       elapsed: watch.elapsed,
       idMatching: assignment.stats,
     );
+  }
+
+  // ------------------------------------------------- השלמת המחברים
+
+  /// למה אי אפשר להשלים מחברים לרשימה ב-[targetPath], או `null`. נתיבים
+  /// של התקנה אחרת לא היו נמצאים בעץ, ומזהה החיבור שלהם שייך לספר אחר.
+  static String? authorsFillRefusal(
+    String targetPath,
+    ResponsaInstallation installation,
+  ) {
+    if (!File(targetPath).existsSync()) {
+      return 'עוד אין רשימת ספרים. יש לקרוא אותה קודם.';
+    }
+    final db = sqlite3.open(targetPath, mode: OpenMode.readOnly);
+    try {
+      final rows = db.select(
+        "SELECT value FROM db_meta WHERE key = 'install_path'",
+      );
+      final listed = rows.isEmpty ? null : rows.first['value'].toString();
+      if (listed == null ||
+          listed.toLowerCase() != installation.installPath.toLowerCase()) {
+        return 'רשימת הספרים נקראה מהתקנה אחרת של בר אילן. יש לקרוא אותה '
+            'מחדש.';
+      }
+      return null;
+    } finally {
+      db.close();
+    }
+  }
+
+  /// בארכיון אין מחברים: ההצעה להשלים אותם לא תחזור (`/status`).
+  static void markAuthorsUnavailable(String targetPath) {
+    try {
+      final db = sqlite3.open(targetPath);
+      try {
+        db.execute(
+          "INSERT OR REPLACE INTO db_meta(key, value) "
+          "VALUES('author_source', 'none')",
+        );
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      logLine('ResponsaCatalogWriter: cannot mark authors unavailable: $error');
+    }
+  }
+
+  /// הנתיבים שהשלמת המחברים פותחת בעץ: כל מה שמעל ספר ברשימה. כך נקראים
+  /// רק הספרים והאחים שלהם, ולא הפרקים והסימנים שמתחתיהם.
+  static Set<String> ancestorPaths(String targetPath) {
+    final db = sqlite3.open(targetPath, mode: OpenMode.readOnly);
+    try {
+      final paths = <String>{};
+      for (final row in db.select('SELECT ref_path FROM books')) {
+        final parts = row['ref_path'].toString().split(
+          ResponsaTreeReader.pathSeparator,
+        );
+        for (var i = 1; i < parts.length; i++) {
+          paths.add(parts.sublist(0, i).join(ResponsaTreeReader.pathSeparator));
+        }
+      }
+      return paths;
+    } finally {
+      db.close();
+    }
+  }
+
+  /// מחברים לרשימה קיימת, בלי לקרוא אותה מחדש (בר אילן 29 ו-32, שבהם
+  /// המחברים רק בקטלוג [ResponsaBookCatalog]). [nodes] — הנתיבים של
+  /// [ancestorPaths]; מהם נבנית השרשרת של כל ספר, ואיתה מזהה החיבור, בדיוק
+  /// כמו בקריאה מלאה. ספר שהנתיב שלו לא נמצא נשאר כמו שהיה.
+  ///
+  /// נכתב לעותק שמחליף את הקיים רק אחרי אימות, כמו [build].
+  static ({int books, int matched, int withAuthor}) fillAuthors({
+    required List<ResponsaTreeNode> nodes,
+    required String targetPath,
+    required ResponsaAuthorTable authors,
+    ResponsaBibliography bibliography = ResponsaBibliography.empty,
+  }) {
+    final byPath = <String, ResponsaTreeNode>{};
+    for (final node in nodes) {
+      byPath.putIfAbsent(node.path, () => node);
+    }
+    final buildingPath = '$targetPath.building';
+    final building = File(buildingPath);
+    if (building.existsSync()) building.deleteSync();
+    File(targetPath).copySync(buildingPath);
+    final db = sqlite3.open(buildingPath);
+    try {
+      final rows = db.select('SELECT book_pk, ref_path FROM books');
+      final update = db.prepare(
+        'UPDATE books SET author = ?, pub_place = ?, pub_date = ?,'
+        ' edition = ? WHERE book_pk = ?',
+      );
+      var matched = 0;
+      db.execute('BEGIN');
+      for (final row in rows) {
+        final parts = row['ref_path'].toString().split(
+          ResponsaTreeReader.pathSeparator,
+        );
+        final chain = <ResponsaChainNode>[];
+        for (var i = 1; i <= parts.length; i++) {
+          final node =
+              byPath[parts
+                  .sublist(0, i)
+                  .join(ResponsaTreeReader.pathSeparator)];
+          if (node == null) break;
+          chain.add((level: node.level, param: node.param, name: node.name));
+        }
+        if (chain.length != parts.length) continue;
+        if (ResponsaStructure.decompose(chain) == null) continue;
+        final book = ResponsaBookRow(chain: chain);
+        final record = consistentRecord(
+          book,
+          authors,
+          bibliography.lookup(book.bibliographyNames),
+        );
+        update.execute([
+          authorOf(book, authors, record),
+          record?.pubPlace,
+          record?.pubDate,
+          (record?.edition.isEmpty ?? true) ? null : record!.edition,
+          row['book_pk'],
+        ]);
+        matched++;
+      }
+      db.execute('COMMIT');
+      update.close();
+      final withAuthor =
+          (db
+                      .select(
+                        "SELECT count(*) AS n FROM books"
+                        " WHERE author IS NOT NULL AND author <> ''",
+                      )
+                      .first['n']
+                  as num)
+              .toInt();
+      final meta = db.prepare(
+        'INSERT OR REPLACE INTO db_meta(key, value) VALUES(?, ?)',
+      );
+      for (final entry in {
+        'author_table_entries': '${authors.authorCount}',
+        'author_source': authors.source,
+        'books_with_author': '$withAuthor',
+        'authors_filled_time': DateTime.now().toIso8601String(),
+        'authors_filled_matched': '$matched',
+      }.entries) {
+        meta.execute([entry.key, entry.value]);
+      }
+      meta.close();
+      _validate(db, rows.length);
+      db.close();
+      _swap(buildingPath, targetPath);
+      return (books: rows.length, matched: matched, withAuthor: withAuthor);
+    } catch (_) {
+      try {
+        db.close();
+      } catch (_) {
+        // כבר נסגר לפני ההחלפה.
+      }
+      try {
+        if (building.existsSync()) building.deleteSync();
+      } catch (_) {
+        // נעילה על קובץ זמני אינה סיבה להסתיר את הכשל האמיתי.
+      }
+      rethrow;
+    }
   }
 
   /// הטבלה קובעת גם כשאין בה מחבר (תנ"ך, משנה): הביבליוגרפיה מותאמת לפי שם

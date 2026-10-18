@@ -15,7 +15,11 @@ abstract interface class ResponsaBackend {
   Future<ResponsaStatus> status();
 
   /// מפעיל את בר אילן אם צריך. [targetPath] מוחלף רק אחרי אימות.
-  Stream<ResponsaBuildProgress> build({required String targetPath});
+  /// [authorsOnly] — רק השלמת המחברים לרשימה הקיימת.
+  Stream<ResponsaBuildProgress> build({
+    required String targetPath,
+    bool authorsOnly = false,
+  });
 
   void cancelBuild();
 
@@ -61,8 +65,10 @@ class NativeResponsaBackend implements ResponsaBackend {
   Future<ResponsaStatus> status() => _controller.status();
 
   @override
-  Stream<ResponsaBuildProgress> build({required String targetPath}) =>
-      _builder.build(targetPath: targetPath);
+  Stream<ResponsaBuildProgress> build({
+    required String targetPath,
+    bool authorsOnly = false,
+  }) => _builder.build(targetPath: targetPath, authorsOnly: authorsOnly);
 
   @override
   void cancelBuild() => _builder.cancel();

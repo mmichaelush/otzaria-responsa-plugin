@@ -186,6 +186,21 @@ test('watchBuild: attachOnly לא מתחיל בנייה, ו-idle מסיים', as
   assert.equal(bridge.requests[0].body.mode, 'attach');
 });
 
+test('watchBuild: השלמת המחברים מתחילה ב-authors, וממשיכה ב-attach', async () => {
+  let calls = 0;
+  const { bridge, service } = await connected({
+    '/catalog/build': () => {
+      calls++;
+      return calls === 1
+        ? reply(200, '{"type":"progress","purpose":"authors","scanned":1}\n')
+        : reply(200, '{"type":"done","purpose":"authors","books":900}\n');
+    },
+  });
+  const terminal = await service.watchBuild(() => {}, undefined, { authors: true });
+  assert.equal(terminal.purpose, 'authors');
+  assert.deepEqual(bridge.requests.map((r) => r.body.mode), ['authors', 'attach']);
+});
+
 test('watchBuild: זרמים ריקים ברצף לא מסתובבים לנצח', async () => {
   const sleeps = [];
   const bridge = new FakeBridge({ '/health': health, '/catalog/build': reply(200, '') });

@@ -8,6 +8,7 @@ import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_tree_reader.dart';
 import 'package:responsa_helper/src/catalog/responsa_catalog_repository.dart';
 import 'package:responsa_helper/src/catalog/responsa_catalog_schema.dart';
+import 'package:responsa_helper/src/text/responsa_author_table.dart';
 import 'package:responsa_helper/src/text/responsa_structure.dart';
 import 'package:path/path.dart' as p;
 
@@ -183,4 +184,122 @@ void main() {
       expect((await repository.info()).nodeCount, isNull);
     },
   );
+
+  group('fillAuthors — השלמת המחברים בלי קריאה מלאה', () {
+    Map<String, String?> authorsIn(String path) {
+      final db = sqlite3.sqlite3.open(path, mode: sqlite3.OpenMode.readOnly);
+      try {
+        return {
+          for (final row in db.select('SELECT title, author FROM books'))
+            row['title'].toString(): row['author'] as String?,
+        };
+      } finally {
+        db.close();
+      }
+    }
+
+    Map<String, String> metaIn(String path) {
+      final db = sqlite3.sqlite3.open(path, mode: sqlite3.OpenMode.readOnly);
+      try {
+        return {
+          for (final row in db.select('SELECT key, value FROM db_meta'))
+            row['key'].toString(): row['value'].toString(),
+        };
+      } finally {
+        db.close();
+      }
+    }
+
+    test('רק מה שמעל הספרים נפתח, והמחבר לפי מזהה החיבור', () {
+      final nodes = tree(['אבני נזר', 'חתם סופר']);
+      ResponsaCatalogWriter.build(
+        nodes: nodes,
+        fingerprint: fingerprint,
+        targetPath: target,
+      );
+      expect(ResponsaCatalogWriter.ancestorPaths(target), {'שו"ת'});
+
+      // ההליכה החלקית: השורש והספרים, בלי הסימנים שמתחתם.
+      final walked = [
+        for (final node in nodes)
+          if (node.level < 2) node,
+      ];
+      // `אבני נזר` הוא 0x40001 בעץ, ולכן 256 בטבלה.
+      final result = ResponsaCatalogWriter.fillAuthors(
+        nodes: walked,
+        targetPath: target,
+        authors: ResponsaAuthorTable.fromCatalog({
+          256: "ר' אברהם בורנשטיין (אבני נזר)",
+        }),
+      );
+
+      expect(result, (books: 2, matched: 2, withAuthor: 1));
+      expect(authorsIn(target), {
+        'אבני נזר': "ר' אברהם בורנשטיין (אבני נזר)",
+        'חתם סופר': null,
+      });
+      final meta = metaIn(target);
+      expect(meta['author_table_entries'], '1');
+      expect(meta['author_source'], 'FILE06');
+      expect(meta['books_with_author'], '1');
+      expect(File('$target.building').existsSync(), isFalse);
+    });
+
+    test('ספר שהנתיב שלו לא נמצא בעץ נשאר כמו שהיה', () {
+      ResponsaCatalogWriter.build(
+        nodes: tree(['אבני נזר']),
+        fingerprint: fingerprint,
+        targetPath: target,
+      );
+      final result = ResponsaCatalogWriter.fillAuthors(
+        nodes: tree(['אחר']).where((n) => n.level < 2).toList(),
+        targetPath: target,
+        authors: ResponsaAuthorTable.fromCatalog({256: "ר' מישהו"}),
+      );
+      expect(result.matched, 0);
+      expect(authorsIn(target), {'אבני נזר': null});
+    });
+
+    test('רשימה של התקנה אחרת, או שאין רשימה — מסרבים', () {
+      const installation = ResponsaInstallation(
+        version: 25,
+        installPath: r'C:\Program Files (x86)\ResponsaCD25',
+        displayName: 'פרויקט השו"ת 25',
+        source: 'registry',
+      );
+      expect(
+        ResponsaCatalogWriter.authorsFillRefusal(target, installation),
+        isNotNull,
+      );
+      ResponsaCatalogWriter.build(
+        nodes: tree(['אבני נזר']),
+        fingerprint: fingerprint,
+        targetPath: target,
+      );
+      expect(
+        ResponsaCatalogWriter.authorsFillRefusal(target, installation),
+        isNull,
+      );
+      const other = ResponsaInstallation(
+        version: 32,
+        installPath: r'C:\Program Files (x86)\ResponsaCD32C',
+        displayName: 'פרויקט השו"ת 32',
+        source: 'registry',
+      );
+      expect(
+        ResponsaCatalogWriter.authorsFillRefusal(target, other),
+        contains('התקנה אחרת'),
+      );
+    });
+
+    test('בלי מחברים בארכיון: נרשם, וההצעה לא חוזרת', () {
+      ResponsaCatalogWriter.build(
+        nodes: tree(['אבני נזר']),
+        fingerprint: fingerprint,
+        targetPath: target,
+      );
+      ResponsaCatalogWriter.markAuthorsUnavailable(target);
+      expect(metaIn(target)['author_source'], 'none');
+    });
+  });
 }

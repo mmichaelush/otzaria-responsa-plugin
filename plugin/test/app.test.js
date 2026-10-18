@@ -1742,6 +1742,31 @@ test('חיפוש מדיאלוג החיפוש: מרווח הופך לבונה; מ
   app.suspend();
 });
 
+test('כפתור בשדה החיפוש (0.9.99): הטקסט עובר לחיפוש בטקסט, והסשן נסגר', async () => {
+  const { app, bridge, view } = await bootAdvanced({
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 4, query: 'נר שבת', advanced: true }),
+  });
+  await app.fieldActionInvoked({ actionId: 'bar-ilan', sessionId: 's1', field: 'fullText', text: 'נר שבת' });
+  assert.equal(app.model.tab, 'text');
+  assert.equal(view.inputs['adv-simple'], 'נר שבת');
+  assert.equal(requests(bridge, '/text/search')[0].body.q, 'נר שבת');
+  const ended = bridge.calls.filter((c) => c.method === 'search.endFieldSession');
+  assert.deepEqual(ended.map((c) => c.payload.sessionId), ['s1']);
+  // כפתור של תוסף אחר, או שדה שאינו שלנו: כלום.
+  await app.fieldActionInvoked({ actionId: 'dictate', field: 'fullText', text: 'x' });
+  await app.fieldActionInvoked({ actionId: 'bar-ilan', field: 'inBook', text: 'x' });
+  assert.equal(requests(bridge, '/text/search').length, 1);
+  app.suspend();
+});
+
+test('כפתור בשדה איתור המקור (0.9.99): איתור מקום בבר אילן', async () => {
+  const { app, bridge } = await bootAdvanced({ '/reference/open': located('בראשית ב ג') });
+  await app.fieldActionInvoked({ actionId: 'bar-ilan', sessionId: 's2', field: 'findRef', text: 'בראשית ב ג' });
+  assert.equal(app.model.tab, 'locate');
+  assert.equal(requests(bridge, '/reference/open')[0].body.ref, 'בראשית ב ג');
+  app.suspend();
+});
+
 test('קיצורי מקלדת: כל פקודה פותחת את הלשונית שלה ומביאה את התוסף לחזית', async () => {
   const { app, bridge } = await bootAdvanced({});
   await app.command({ command: Domain.Command.openLocate });

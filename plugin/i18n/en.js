@@ -823,5 +823,17 @@
       'In the "Locate" tab, a place that exists in Otzaria opens in Otzaria, and Bar-Ilan opens only when the place is missing there. After it opens in Otzaria you can press "Open in Bar-Ilan anyway".',
     'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "רשימת ספרים" ו"פתיחת ספרים וניהול כרטיסיות".':
       'To use this, turn on the permissions "רשימת ספרים" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
+
+    // ---- 0.6.3: השלמת המחברים (בר אילן 29 ו-32)
+    'הוספת שמות המחברים לא הושלמה: {reason}': 'Adding the author names did not finish: {reason}',
+    'אפשר עכשיו להוסיף לרשימת הספרים את שמות המחברים מבר אילן, כדי לחפש גם לפי מחבר. זה לוקח כמה דקות, בלי לקרוא את כל הרשימה מחדש.':
+      'You can now add the author names from Bar-Ilan to the book list, so you can also search by author. It takes a few minutes, without reading the whole list again.',
+    'קורא מבר אילן את שמות הספרים, כדי להוסיף להם מחברים…': 'Reading the book names from Bar-Ilan, to add their authors…',
+    'מוסיף לרשימת הספרים את שמות המחברים. בינתיים החיפוש עובד כרגיל, ופתיחת ספרים תתאפשר בסיום.':
+      'Adding the author names to the book list. Search works as usual meanwhile, and opening books will be possible when it is done.',
+    'הוספת המחברים': 'Add the authors',
+    'הוספת שמות המחברים התחילה': 'Adding the author names started',
+    'שמות המחברים נוספו: ל-{books} יש עכשיו מחבר': 'The author names were added: {books} now have an author',
+    'הוספת שמות המחברים בוטלה': 'Adding the author names was cancelled',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

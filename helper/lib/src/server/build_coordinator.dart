@@ -37,6 +37,9 @@ class BuildProgressEvent extends BuildEvent {
   /// שורה למשתמש, למשל שבר אילן קרס והקריאה ממשיכה (מ-0.5.2).
   final String? notice;
 
+  /// השלמת המחברים ולא קריאה מלאה (מ-0.6.3).
+  final bool authors;
+
   const BuildProgressEvent({
     required this.stage,
     required this.scanned,
@@ -45,11 +48,13 @@ class BuildProgressEvent extends BuildEvent {
     this.expected,
     this.waiting = false,
     this.notice,
+    this.authors = false,
   });
 
   @override
   Map<String, Object?> toJson() => {
     'type': 'progress',
+    if (authors) 'purpose': 'authors',
     'stage': stage.name,
     'scanned': scanned,
     if (expected != null) 'expected': expected,
@@ -72,10 +77,16 @@ class BuildIdle extends BuildEvent {
 }
 
 class BuildDone extends BuildEvent {
+  /// בהשלמת המחברים: כמה ספרים יש להם עכשיו מחבר.
   final int books;
   final int scanned;
+  final bool authors;
 
-  const BuildDone({required this.books, required this.scanned});
+  const BuildDone({
+    required this.books,
+    required this.scanned,
+    this.authors = false,
+  });
 
   @override
   bool get isTerminal => true;
@@ -83,6 +94,7 @@ class BuildDone extends BuildEvent {
   @override
   Map<String, Object?> toJson() => {
     'type': 'done',
+    if (authors) 'purpose': 'authors',
     'books': books,
     'scanned': scanned,
   };
@@ -121,6 +133,9 @@ class BuildCoordinator {
 
   bool get isRunning => _running;
 
+  /// הקריאה שרצה (או האחרונה) היא השלמת מחברים.
+  bool _authors = false;
+
   /// תוצאת הקריאה האחרונה בשורה אחת, ל-`/diagnostics`. `null` עד הראשונה.
   String? get lastSummary => _lastSummary;
   String? _lastSummary;
@@ -151,15 +166,20 @@ class BuildCoordinator {
       };
     }
     if (last is BuildFailed) {
-      return {'state': 'failed', 'error': last.error.toJson()};
+      return {
+        'state': 'failed',
+        if (_authors) 'purpose': 'authors',
+        'error': last.error.toJson(),
+      };
     }
     return {'state': 'idle'};
   }
 
   /// מתחיל בנייה, או מצטרף לזו שרצה. ביטול ההאזנה אינו עוצר את הבנייה.
-  Stream<BuildEvent> watchOrStart() {
+  /// [authorsOnly] — השלמת המחברים לרשימה הקיימת, בלי לקרוא אותה מחדש.
+  Stream<BuildEvent> watchOrStart({bool authorsOnly = false}) {
     final stream = _listen();
-    if (!_running) unawaited(_run());
+    if (!_running) unawaited(_run(authorsOnly: authorsOnly));
     return stream;
   }
 
@@ -212,10 +232,13 @@ class BuildCoordinator {
               '${progress.sectionsTotal > 0 ? ', section ${progress.sectionsDone}/${progress.sectionsTotal}' : ''}'
               '${progress.expected != null ? ' of ~${progress.expected}' : ''}';
     return switch (event) {
+      BuildDone(:final books, :final scanned, authors: true) =>
+        'authors filled OK$when$took: $books books with an author, '
+            '$scanned rows read',
       BuildDone(:final books, :final scanned) =>
         'book list read OK$when$took: $books books from $scanned rows',
       BuildFailed(:final error) =>
-        'book list read FAILED$when$took$reached: '
+        '${_authors ? 'authors fill' : 'book list read'} FAILED$when$took$reached: '
             '${error.code}: ${error.message}',
       _ => 'book list read ended$when$took',
     };
@@ -239,13 +262,15 @@ class BuildCoordinator {
     }
   }
 
-  Future<void> _run() async {
+  Future<void> _run({bool authorsOnly = false}) async {
     _running = true;
+    _authors = authorsOnly;
     _last = null;
     _lastProgress = null;
     _startedAt = DateTime.now();
     _cancelRequested = false;
-    final expected = await _expectedNodes();
+    // אין מכנה: השלמת המחברים קוראת רק חלק קטן מהעץ.
+    final expected = authorsOnly ? null : await _expectedNodes();
     if (_cancelRequested) {
       _finish(
         const BuildFailed(
@@ -256,7 +281,10 @@ class BuildCoordinator {
     }
     _emit(const BuildStarted());
     try {
-      await for (final progress in _backend.build(targetPath: _targetPath)) {
+      await for (final progress in _backend.build(
+        targetPath: _targetPath,
+        authorsOnly: authorsOnly,
+      )) {
         switch (progress.stage) {
           case ResponsaBuildStage.failed:
             _finish(
@@ -271,7 +299,11 @@ class BuildCoordinator {
           case ResponsaBuildStage.done:
             _store.invalidate();
             _finish(
-              BuildDone(books: progress.books, scanned: progress.scannedNodes),
+              BuildDone(
+                books: progress.books,
+                scanned: progress.scannedNodes,
+                authors: authorsOnly,
+              ),
             );
             return;
           case ResponsaBuildStage.starting ||
@@ -286,6 +318,7 @@ class BuildCoordinator {
                 sectionsTotal: progress.sectionsTotal,
                 waiting: progress.waiting,
                 notice: progress.notice,
+                authors: authorsOnly,
               ),
             );
         }

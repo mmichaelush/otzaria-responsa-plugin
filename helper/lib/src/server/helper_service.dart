@@ -57,6 +57,7 @@ class HelperService {
     'easySearch',
     'easyOptions',
     'summary',
+    'authorsFill',
   ];
 
   static const int maxPageSize = 200;
@@ -107,6 +108,12 @@ class HelperService {
         'booksWithAuthor': ?int.tryParse(
           info.fingerprint['books_with_author'] ?? '',
         ),
+        'authorTableEntries': ?int.tryParse(
+          info.fingerprint['author_table_entries'] ?? '',
+        ),
+        // הרשימה נקראה בלי מחברים, ואפשר להשלים אותם בלי לקרוא אותה
+        // מחדש (בר אילן 29 ו-32 בשירות לפני 0.6.3; `mode: authors`).
+        'authorsFillable': _authorsFillable(info.fingerprint),
         if (info.schemaVersion != null) 'schemaVersion': info.schemaVersion,
         'outdated': info.isOutdated,
         if (info.builtAt != null) 'builtAt': info.builtAt,
@@ -118,6 +125,10 @@ class HelperService {
       'build': builds.snapshot(),
     };
   }
+
+  /// טבלת מחברים ריקה, ולא בדקנו כבר שאין בארכיון מחברים כלל.
+  static bool _authorsFillable(Map<String, String> meta) =>
+      meta['author_table_entries'] == '0' && meta['author_source'] != 'none';
 
   /// פרטים לאיתור תקלה במחשב של משתמש (docs/PROTOCOL.md): סיכום קצר וסוף
   /// היומן. נבנה רק לבקשה.
@@ -246,7 +257,7 @@ class HelperService {
 
   /// הבנייה ופתיחה לא יכולות לרוץ יחד: שתיהן מפעילות את חלון "עיון" של אותו
   /// מופע, והפתיחה הייתה משבשת את הסריקה. חיפוש מפעיל את אותו מופע.
-  Stream<BuildEvent> startBuild() {
+  Stream<BuildEvent> startBuild({bool authorsOnly = false}) {
     if (_automation case final running? when !builds.isRunning) {
       throw ApiError.busy(switch (running) {
         _Automation.open =>
@@ -255,7 +266,7 @@ class HelperService {
           'בר אילן מחפש כרגע. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
       });
     }
-    return builds.watchOrStart();
+    return builds.watchOrStart(authorsOnly: authorsOnly);
   }
 
   /// מריץ [action] כפעולת האוטומציה היחידה, או דוחה ב-`busy` עם הסבר מה

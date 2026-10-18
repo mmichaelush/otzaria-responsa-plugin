@@ -9,9 +9,21 @@ class ResponsaAuthorTable {
   final Map<int, String> _authors;
   final Set<int> _known;
 
-  const ResponsaAuthorTable._(this._authors, this._known);
+  /// מאיזה קובץ בארכיון: `FILE65`, `FILE06` (הקטלוג), או ריק.
+  final String source;
+
+  const ResponsaAuthorTable._(this._authors, this._known, [this.source = '']);
 
   static const ResponsaAuthorTable empty = ResponsaAuthorTable._({}, {});
+
+  /// מ"קטלוג ספרים" (`FILE06`): הוא מכיר רק חיבורים שיש להם מחבר, ולכן
+  /// השאר נופלים לביבליוגרפיה.
+  factory ResponsaAuthorTable.fromCatalog(Map<int, String> authors) =>
+      ResponsaAuthorTable._(
+        Map.unmodifiable(authors),
+        Set.unmodifiable(authors.keys),
+        'FILE06',
+      );
 
   bool get isEmpty => _known.isEmpty;
 
@@ -143,10 +155,14 @@ class ResponsaAuthorTable {
         (found[id] ??= {}).add(name);
       }
     }
-    return ResponsaAuthorTable._({
-      for (final MapEntry(key: id, value: names) in found.entries)
-        if (names.length == 1) id: names.single,
-    }, known);
+    return ResponsaAuthorTable._(
+      {
+        for (final MapEntry(key: id, value: names) in found.entries)
+          if (names.length == 1) id: names.single,
+      },
+      known,
+      'FILE65',
+    );
   }
 
   static const String _personLead = "ר' ";

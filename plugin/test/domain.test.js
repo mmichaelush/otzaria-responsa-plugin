@@ -117,6 +117,39 @@ test('catalogNotice', () => {
   assert.equal(Domain.catalogNotice(status()), null);
 });
 
+test('catalogNotice: השלמת המחברים (בר אילן 29 ו-32)', () => {
+  const canFill = Object.assign({}, health, { capabilities: ['authorsFill'] });
+  const fillable = Object.assign({}, catalogReady, { authorsFillable: true });
+  const notice = Domain.catalogNotice(status({ catalog: fillable }), canFill);
+  assert.equal(notice.kind, 'authorsFillable');
+  assert.equal(notice.action, 'fillAuthors');
+  // שירות ישן אינו יודע להשלים.
+  assert.equal(Domain.catalogNotice(status({ catalog: fillable }), health), null);
+  // קריאה מחדש מומלצת קודמת: היא מביאה גם את המחברים.
+  assert.equal(
+    Domain.catalogNotice(status({ catalog: Object.assign({}, fillable, { outdated: true }) }), canFill).action,
+    'rebuild',
+  );
+  const failed = (code) =>
+    Domain.catalogNotice(
+      status({
+        catalog: catalogReady,
+        build: { state: 'failed', purpose: 'authors', error: { code, message: 'x' } },
+      }),
+      canFill,
+    );
+  assert.equal(failed('notResponding').kind, 'authorsFailed');
+  assert.equal(failed('notResponding').action, 'fillAuthors');
+  // אין בארכיון מחברים: בלי כפתור לניסיון נוסף.
+  assert.equal(failed('notSupported').action, null);
+});
+
+test('buildProgress: השלמת המחברים אומרת מה היא קוראת', () => {
+  const progress = Domain.buildProgress({ stage: 'scanning', purpose: 'authors', scanned: 10 }, 0);
+  assert.match(progress.label, /מחברים/);
+  assert.doesNotMatch(Domain.buildProgress({ stage: 'scanning', scanned: 10 }, 0).label, /מחברים/);
+});
+
 test('buildProgress: עם מכנה', () => {
   const p = Domain.buildProgress(
     { stage: 'scanning', scanned: 625944, expected: 1251889 },

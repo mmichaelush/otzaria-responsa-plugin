@@ -250,7 +250,7 @@
      * [signal] עוצר את ההאזנה מיד, לא את הבנייה.
      */
     async watchBuild(onEvent, signal, options) {
-      let mode = options && options.attachOnly ? 'attach' : 'start';
+      let mode = options && options.attachOnly ? 'attach' : options && options.authors ? 'authors' : 'start';
       let emptyStreams = 0;
       if (!this.baseUrl) await this.connect();
       for (;;) {

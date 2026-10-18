@@ -309,17 +309,40 @@
   }
 
   /**
-   * הערה מעל החיפוש כשהרשימה קיימת אבל כדאי לקרוא אותה מחדש, או `null`.
-   * הרשימה עדיין שמישה בכל המקרים, ולכן זו הערה ולא חסימה.
+   * אפשר להוסיף מחברים לרשימה בלי לקרוא אותה מחדש: היא נקראה בלי מחברים
+   * (בר אילן 29 ו-32 בשירות לפני 0.6.3), והשירות יודע להשלים אותם.
    */
-  function catalogNotice(status) {
+  function authorsFillable(status, health) {
+    return (
+      serviceCan(health, 'authorsFill') &&
+      catalogReady(status) &&
+      status.catalog.authorsFillable === true &&
+      status.catalog.matchesInstallation !== false
+    );
+  }
+
+  /**
+   * הערה מעל החיפוש כשהרשימה קיימת אבל כדאי לקרוא אותה מחדש, או `null`.
+   * הרשימה עדיין שמישה בכל המקרים, ולכן זו הערה ולא חסימה. `action` — מה
+   * הכפתור שבהערה עושה: `rebuild`, `fillAuthors`, או `null` (אין כפתור).
+   */
+  function catalogNotice(status, health) {
     const catalog = (status && status.catalog) || {};
     if (!catalog.exists) return null;
     const build = status.build || {};
     const error = build.error || {};
+    if (build.state === 'failed' && error.code !== 'cancelled' && build.purpose === 'authors') {
+      return {
+        kind: 'authorsFailed',
+        text: t('הוספת שמות המחברים לא הושלמה: {reason}', { reason: errorMessage(error) }),
+        // `notSupported`: אין בבר אילן שבמחשב רשימת מחברים, וניסיון נוסף לא יעזור.
+        action: error.code === 'notSupported' ? null : 'fillAuthors',
+      };
+    }
     if (build.state === 'failed' && error.code !== 'cancelled') {
       return {
         kind: 'rebuildFailed',
+        action: 'rebuild',
         text:
           (error.message || error.code
             ? t('קריאת הרשימה מחדש לא הושלמה: {reason}', { reason: errorMessage(error) })
@@ -331,6 +354,7 @@
     if (status.installed && catalog.matchesInstallation === false) {
       return {
         kind: 'otherInstallation',
+        action: 'rebuild',
         text: t(
           'רשימת הספרים נקראה מהתקנה אחרת של בר אילן, ולכן ייתכן שחלק ' +
             'מהספרים לא ייפתחו. מומלץ לקרוא אותה מחדש.',
@@ -340,16 +364,29 @@
     if (catalog.outdated) {
       return {
         kind: 'outdated',
+        action: 'rebuild',
         text: t('רשימת הספרים נקראה בגרסה קודמת של התוסף. מומלץ לקרוא אותה מחדש.'),
+      };
+    }
+    if (authorsFillable(status, health)) {
+      return {
+        kind: 'authorsFillable',
+        action: 'fillAuthors',
+        text: t(
+          'אפשר עכשיו להוסיף לרשימת הספרים את שמות המחברים מבר אילן, כדי לחפש גם לפי מחבר. ' +
+            'זה לוקח כמה דקות, בלי לקרוא את כל הרשימה מחדש.',
+        ),
       };
     }
     return null;
   }
 
-  function stageLabel(stage) {
+  function stageLabel(stage, purpose) {
     switch (stage) {
       case 'scanning':
-        return t('קורא את רשימת הספרים מבר אילן…');
+        return purpose === 'authors'
+          ? t('קורא מבר אילן את שמות הספרים, כדי להוסיף להם מחברים…')
+          : t('קורא את רשימת הספרים מבר אילן…');
       case 'classifying':
         return t('מסדר את הספרים לפי קטגוריות…');
       default:
@@ -395,7 +432,7 @@
         .join(' · ');
     }
     return {
-      label: stageLabel(stage),
+      label: stageLabel(stage, progress && progress.purpose),
       fraction,
       percent: fraction === null ? null : Math.round(fraction * 100),
       detail,
@@ -911,6 +948,7 @@
     catalogReady,
     authorsMissing,
     catalogNotice,
+    authorsFillable,
     buildProgress,
     remainingLabel,
     needsRefresh,

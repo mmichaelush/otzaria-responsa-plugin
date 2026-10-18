@@ -95,12 +95,16 @@ class ResponsaTreeReader {
   /// [descendInto] — האם לקרוא את צאצאי הצומת (לפי ה-`param` שלו). צומת
   /// שאין נכנסים אליו נרשם בכל זאת, עם מספר הילדים שלו. חסר = הכול.
   ///
+  /// [descendPath] — כמו [descendInto], לפי הנתיב (השלמת המחברים פותחת רק את
+  /// הנתיבים של ספרים שכבר ברשימה).
+  ///
   /// [patience] — כמה לחכות לבר אילן כשהודעה לא נענתה, לפני שהסריקה נכשלת
   /// (ראו [ResponsaTreeSession.patience]).
   static List<ResponsaTreeNode> walk({
     required int pid,
     required int treeHandle,
     bool Function(int param)? descendInto,
+    bool Function(String path)? descendPath,
     void Function(int scanned)? onProgress,
     void Function(int done, int total)? onSection,
     bool Function()? shouldStop,
@@ -127,6 +131,7 @@ class ResponsaTreeReader {
       session: session,
       skip: skip,
       descendInto: descendInto,
+      descendPath: descendPath,
       onProgress: onProgress,
       shouldStop: shouldStop,
       progressEvery: progressEvery,
@@ -627,6 +632,7 @@ class ResponsaTreeSession {
 class _Walk {
   final ResponsaTreeSession session;
   final bool Function(int param)? descendInto;
+  final bool Function(String path)? descendPath;
   final void Function(int)? onProgress;
   final bool Function()? shouldStop;
   final int progressEvery;
@@ -652,6 +658,7 @@ class _Walk {
     required this.session,
     required this.skip,
     required this.descendInto,
+    this.descendPath,
     required this.onProgress,
     required this.shouldStop,
     required this.progressEvery,
@@ -682,6 +689,7 @@ class _Walk {
     if (read.children == 0) return true;
     // לא הורחב, ולכן גם אין מה למחוק.
     if (!(descendInto?.call(read.param) ?? true)) return true;
+    if (!(descendPath?.call(current) ?? true)) return true;
 
     if (skip.contains(current)) {
       logLine(

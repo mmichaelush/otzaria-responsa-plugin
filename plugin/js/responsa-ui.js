@@ -412,7 +412,9 @@
         el(
           'span',
           { class: 'rebuild-banner-text' },
-          t('קורא מחדש את רשימת הספרים. בינתיים החיפוש עובד על הרשימה הקיימת, ופתיחת ספרים תתאפשר בסיום.'),
+          model.progress && model.progress.purpose === 'authors'
+            ? t('מוסיף לרשימת הספרים את שמות המחברים. בינתיים החיפוש עובד כרגיל, ופתיחת ספרים תתאפשר בסיום.')
+            : t('קורא מחדש את רשימת הספרים. בינתיים החיפוש עובד על הרשימה הקיימת, ופתיחת ספרים תתאפשר בסיום.'),
         ),
         button('text', t('ביטול'), actions.cancelBuild, { key: 'cancel-build' }),
       ),
@@ -496,14 +498,19 @@
         button('text', t('הורדת הגרסה החדשה'), actions.download, { key: 'notice-download' }),
       );
     }
-    const notice = Domain.catalogNotice(model.status);
+    const notice = Domain.catalogNotice(model.status, model.health);
     if (!notice) return permissionNotice(model, actions);
+    const authors = notice.action === 'fillAuthors';
     return el(
       'div',
       { class: 'notice', dataset: { kind: notice.kind } },
-      icon('warning_24_regular'),
+      icon(authors ? 'info_24_regular' : 'warning_24_regular'),
       el('span', { class: 'notice-text' }, notice.text),
-      button('text', t('קריאה מחדש'), actions.rebuild, { key: 'notice-rebuild' }),
+      notice.action === null
+        ? null
+        : authors
+          ? button('text', t('הוספת המחברים'), actions.fillAuthors, { key: 'notice-fill-authors' })
+          : button('text', t('קריאה מחדש'), actions.rebuild, { key: 'notice-rebuild' }),
     );
   }
 

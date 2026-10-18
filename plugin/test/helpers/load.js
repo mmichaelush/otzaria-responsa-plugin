@@ -24,6 +24,7 @@ function loadPlugin() {
   globalThis.ResponsaIcons = { icon: () => null, names: [] };
   globalThis.ResponsaUi = { el: () => null, button: () => null, iconButton: () => null };
   globalThis.ResponsaPanels = require(js('responsa-panels.js'));
+  globalThis.ResponsaFieldActions = require(js('responsa-field-actions.js'));
   globalThis.ResponsaApp = require(js('responsa-app.js'));
   return {
     I18n: globalThis.ResponsaI18n,

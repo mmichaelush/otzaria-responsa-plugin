@@ -218,7 +218,12 @@ class HelperDiagnostics {
         '${info.nodeCount ?? '?'} rows, read ${info.builtAt ?? '?'}, '
         // מחבר חסר = חיפוש לפי מחבר לא ימצא את הספר. בלי ארכיון אין טבלה.
         'author for ${info.fingerprint['books_with_author'] ?? '?'} books '
-        '(author table: ${info.fingerprint['author_table_entries'] ?? '?'})';
+        '(author table: ${info.fingerprint['author_table_entries'] ?? '?'}'
+        '${switch (info.fingerprint['author_source']) {
+          null || '' => '',
+          final source => ' from $source',
+        }}'
+        '${info.fingerprint['authors_filled_time'] == null ? '' : ', filled ${info.fingerprint['authors_filled_time']}'})';
   }
 
   static String _logTail() {

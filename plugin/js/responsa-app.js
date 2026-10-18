@@ -17,6 +17,8 @@
   const Panels = root.ResponsaPanels;
   const Log = root.ResponsaLog;
   const Icons = root.ResponsaIcons || {};
+  // TODO(otzaria-0.9.99): הכפתור בשדות החיפוש (responsa-field-actions.js).
+  const FieldActions = root.ResponsaFieldActions || { requestFor: () => null };
   const Screen = Domain.Screen;
   const t = (text, vars) => I18n.t(text, vars);
 
@@ -318,6 +320,35 @@
     async searchRequested(payload) {
       await this.ready;
       await this.searchFromOtzaria(payload && payload.request);
+    }
+
+    /**
+     * `search.fieldAction.invoked`: הכפתור "בבר אילן" בשדה חיפוש של אוצריא
+     * (מאוצריא 0.9.99). מה שהוקלד עובר ללשונית של אותו שדה ורץ בה.
+     * TODO(otzaria-0.9.99): מחובר רק כש-`ResponsaFieldActions.ENABLED`.
+     */
+    async fieldActionInvoked(event) {
+      const request = FieldActions.requestFor(event);
+      if (!request) return;
+      // התוסף אינו כותב לשדה: הסשן נסגר מיד, והשדה נשאר של המשתמש.
+      if (request.sessionId) {
+        await this.runtime.callSoft('search.endFieldSession', { sessionId: request.sessionId });
+      }
+      await this.ready;
+      this.log.info('כפתור בשדה החיפוש של אוצריא: ' + request.tab);
+      if (!request.text) {
+        this.selectTab(request.tab);
+      } else if (request.tab === 'text') {
+        await this.searchFromOtzaria({ query: request.text });
+      } else if (request.tab === 'locate') {
+        this.selectTab('locate');
+        this._fillLocate(request.text);
+        await this.runLocate(request.text);
+      } else {
+        this.selectTab('books');
+        this.view.setInputValue('search', request.text);
+        this.search(request.text, { now: true });
+      }
     }
 
     /** אוצריא מקפיאה לשונית שאינה מוצגת; הבנייה ממשיכה בשירות. */
@@ -677,14 +708,19 @@
 
     // ---------------------------------------------------- בנייה
 
-    startBuild() {
+    /**
+     * [options.authors] — השלמת המחברים לרשימה הקיימת (`mode: authors`), בלי
+     * לקרוא אותה מחדש.
+     */
+    startBuild(options) {
       // בזמן פתיחה השירות היה מחזיר "עסוק": בר אילן תפוס.
       if (this.model.buildActive || this.model.openingKey !== null) return;
+      const authors = Boolean(options && options.authors);
       // רענון שעוד בדרך יחזור עם "אין בנייה" ויחזיר את מסך ההתחלה.
       this.refreshSeq++;
       Object.assign(this.model, {
         buildActive: true,
-        progress: { stage: 'starting' },
+        progress: authors ? { stage: 'starting', purpose: 'authors' } : { stage: 'starting' },
         buildStartedAt: Date.now(),
         elapsedMs: 0,
         cancelling: false,
@@ -696,8 +732,8 @@
       } else {
         this._show(Screen.building);
       }
-      this.view.announce(t('קריאת רשימת הספרים התחילה'));
-      this._watchBuild({ attachOnly: false });
+      this.view.announce(authors ? t('הוספת שמות המחברים התחילה') : t('קריאת רשימת הספרים התחילה'));
+      this._watchBuild({ attachOnly: false, authors });
     }
 
     /** "מבטל…" נשאר עד שהבנייה באמת נעצרת (אירוע הסיום), לא עד שהבקשה חזרה. */
@@ -743,13 +779,20 @@
       this.model.buildActive = false;
       this.model.cancelling = false;
       if (terminal && terminal.type === 'done') {
-        const text = t('רשימת ספרי בר אילן מוכנה: {books}', {
-          books: Domain.booksLabel(terminal.books),
-        });
+        const text =
+          terminal.purpose === 'authors'
+            ? t('שמות המחברים נוספו: ל-{books} יש עכשיו מחבר', { books: Domain.booksLabel(terminal.books) })
+            : t('רשימת ספרי בר אילן מוכנה: {books}', {
+                books: Domain.booksLabel(terminal.books),
+              });
         await this.runtime.notify.success(text);
         this.view.announce(text);
       } else if (terminal && terminal.type === 'error' && terminal.code === 'cancelled') {
-        this.view.announce(t('קריאת רשימת הספרים בוטלה'));
+        this.view.announce(
+          this.model.progress && this.model.progress.purpose === 'authors'
+            ? t('הוספת שמות המחברים בוטלה')
+            : t('קריאת רשימת הספרים בוטלה'),
+        );
       } else if (terminal && terminal.type === 'error' && terminal.code === 'busy') {
         // בנייה שלא התחילה אינה נרשמת ב-/status, ולכן רק כאן אפשר להסביר.
         await this.runtime.notify.error(Domain.errorMessage(terminal));
@@ -1617,6 +1660,7 @@
         toggleDetails: (key) => this.toggleDetails(key),
         startBuild: () => this.startBuild(),
         rebuild: () => this.startBuild(),
+        fillAuthors: () => this.startBuild({ authors: true }),
         cancelBuild: () => this.cancelBuild(),
         search: (query, options) => this.search(query, options),
         browseTo: (path) => this.browseTo(path),

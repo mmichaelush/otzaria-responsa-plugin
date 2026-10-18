@@ -18,6 +18,7 @@ class FakeBackend implements ResponsaBackend {
 
   StreamController<ResponsaBuildProgress>? buildEvents;
   int buildCalls = 0;
+  int authorsBuildCalls = 0;
   int cancelCalls = 0;
 
   /// `autoStart` של כל פתיחה, איתור וחיפוש, לפי הסדר.
@@ -73,8 +74,12 @@ class FakeBackend implements ResponsaBackend {
       : ResponsaStatus.notInstalled;
 
   @override
-  Stream<ResponsaBuildProgress> build({required String targetPath}) {
+  Stream<ResponsaBuildProgress> build({
+    required String targetPath,
+    bool authorsOnly = false,
+  }) {
     buildCalls++;
+    if (authorsOnly) authorsBuildCalls++;
     final controller = StreamController<ResponsaBuildProgress>();
     buildEvents = controller;
     return controller.stream;

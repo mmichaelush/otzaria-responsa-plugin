@@ -24,6 +24,7 @@ import 'package:responsa_helper/src/native/responsa_instance.dart';
 import 'package:responsa_helper/src/native/responsa_launcher.dart';
 import 'package:responsa_helper/src/native/responsa_profile.dart';
 import 'package:responsa_helper/src/native/responsa_tree_reader.dart';
+import 'package:responsa_helper/src/text/responsa_author_table.dart';
 
 /// שלב בבניית הקטלוג, לתצוגה למשתמש.
 enum ResponsaBuildStage { starting, scanning, classifying, done, failed }
@@ -245,7 +246,13 @@ class ResponsaCatalogBuildService {
 
   /// [targetPath] הוא היעד הסופי; הבנייה נכתבת לקובץ צדדי ומוחלפת אטומית רק
   /// אחרי שעברה אימות.
-  Stream<ResponsaBuildProgress> build({required String targetPath}) {
+  ///
+  /// [authorsOnly] — השלמת המחברים לרשימה הקיימת: נקראים רק הנתיבים של
+  /// הספרים שבה ([ResponsaCatalogWriter.fillAuthors]).
+  Stream<ResponsaBuildProgress> build({
+    required String targetPath,
+    bool authorsOnly = false,
+  }) {
     final controller = StreamController<ResponsaBuildProgress>();
     // בנייה אחת בכל האפליקציה (גם אחרי יציאה מהמסך): שתיים כותבות לאותו
     // `<target>.building`, והשנייה מוחקת את זה של הראשונה.
@@ -260,7 +267,7 @@ class ResponsaCatalogBuildService {
         ..close();
       return controller.stream;
     }
-    _start(controller, targetPath);
+    _start(controller, targetPath, authorsOnly);
     return controller.stream;
   }
 
@@ -279,6 +286,7 @@ class ResponsaCatalogBuildService {
   Future<void> _start(
     StreamController<ResponsaBuildProgress> controller,
     String targetPath,
+    bool authorsOnly,
   ) async {
     if (!Platform.isWindows) {
       controller
@@ -314,6 +322,7 @@ class ResponsaCatalogBuildService {
             cancelFlagAddress: flag.address,
             fromSection: fromSection,
             prior: prior,
+            authorsOnly: authorsOnly,
           ),
           (progress) => controller.add(progress.withNotice(notice)),
         );
@@ -542,6 +551,41 @@ class ResponsaCatalogBuildService {
         return;
       }
 
+      // השלמת המחברים: רק כשיש מאיפה, ורק לרשימה של ההתקנה הזו.
+      ResponsaAuthorTable? authors;
+      Set<String>? paths;
+      if (request.authorsOnly) {
+        final refusal = ResponsaCatalogWriter.authorsFillRefusal(
+          request.targetPath,
+          installation,
+        );
+        if (refusal != null) {
+          send.send(
+            ResponsaBuildProgress.failed(
+              ResponsaBuildFailure.notSupported,
+              refusal,
+            ),
+          );
+          return;
+        }
+        authors = ResponsaAuthorTableReader.forInstallation(installation);
+        if (authors.authorCount == 0) {
+          ResponsaCatalogWriter.markAuthorsUnavailable(request.targetPath);
+          send.send(
+            const ResponsaBuildProgress.failed(
+              ResponsaBuildFailure.notSupported,
+              'בבר אילן שבמחשב לא נמצאה רשימת המחברים.',
+            ),
+          );
+          return;
+        }
+        paths = ResponsaCatalogWriter.ancestorPaths(request.targetPath);
+        logLine(
+          'ResponsaCatalogBuildService: authors only: ${authors.authorCount} '
+          'authors (${authors.source}), ${paths.length} paths to open',
+        );
+      }
+
       final prior = request.prior;
       send.send(
         ResponsaBuildProgress(
@@ -566,6 +610,7 @@ class ResponsaCatalogBuildService {
         pid: instance.pid,
         treeHandle: tree,
         descendInto: ResponsaCatalogBuilder.mayContainBooks,
+        descendPath: paths?.contains,
         progressEvery: 2000,
         shouldStop: cancelled,
         patience: const Duration(minutes: 3),
@@ -602,6 +647,30 @@ class ResponsaCatalogBuildService {
           scannedNodes: nodes.length,
         ),
       );
+
+      if (authors != null) {
+        final filled = ResponsaCatalogWriter.fillAuthors(
+          nodes: nodes,
+          targetPath: request.targetPath,
+          authors: authors,
+          bibliography: ResponsaBibliographyReader.forInstallation(
+            installation,
+          ),
+        );
+        logLine(
+          'ResponsaCatalogBuildService: authors filled: '
+          '${filled.matched}/${filled.books} books found in the tree, '
+          '${filled.withAuthor} with an author',
+        );
+        send.send(
+          ResponsaBuildProgress(
+            stage: ResponsaBuildStage.done,
+            scannedNodes: nodes.length,
+            books: filled.withAuthor,
+          ),
+        );
+        return;
+      }
 
       final result = ResponsaCatalogWriter.build(
         nodes: nodes,
@@ -691,12 +760,14 @@ class _BuildRequest {
   /// מאיזה ענף עליון לקרוא, ומה כבר נקרא לפניו (אחרי קריסה של בר אילן).
   final int fromSection;
   final List<ResponsaTreeNode> prior;
+  final bool authorsOnly;
 
   const _BuildRequest({
     required this.targetPath,
     required this.cancelFlagAddress,
     this.fromSection = 0,
     this.prior = const [],
+    this.authorsOnly = false,
     this.port,
   });
 
@@ -707,6 +778,7 @@ class _BuildRequest {
     cancelFlagAddress: cancelFlagAddress,
     fromSection: fromSection,
     prior: prior,
+    authorsOnly: authorsOnly,
     port: sendPort,
   );
 }

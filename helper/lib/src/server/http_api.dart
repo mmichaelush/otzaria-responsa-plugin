@@ -95,13 +95,15 @@ class HttpApi {
         _requireMethod(request, 'POST');
         final body = await _readJson(request);
         final mode = body['mode'] ?? 'start';
-        if (mode != 'start' && mode != 'attach') {
-          throw const ApiError.badRequest('mode חייב להיות start או attach.');
-        }
-        await _streamBuild(
-          request,
-          mode == 'start' ? _service.startBuild() : _service.builds.attach(),
-        );
+        await _streamBuild(request, switch (mode) {
+          'start' => _service.startBuild(),
+          // השלמת המחברים לרשימה הקיימת (מ-0.6.3).
+          'authors' => _service.startBuild(authorsOnly: true),
+          'attach' => _service.builds.attach(),
+          _ => throw const ApiError.badRequest(
+            'mode חייב להיות start, authors או attach.',
+          ),
+        });
       } else if (_get[path] case final handler?) {
         _requireMethod(request, 'GET');
         final clientPort = request.connectionInfo?.remotePort;

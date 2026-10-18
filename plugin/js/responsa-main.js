@@ -38,4 +38,7 @@
   on('app.command', (payload) => app.command(payload));
   on('contextMenu.itemClicked', (payload) => app.contextMenuClicked(payload));
   on('search.requested', (payload) => app.searchRequested(payload));
+  // TODO(otzaria-0.9.99): כפתור "בבר אילן" בשדות החיפוש. כבוי עד 0.9.99
+  // (`ResponsaFieldActions.ENABLED`), ואז זה מחבר אותו בלי שינוי כאן.
+  window.ResponsaFieldActions.register(on, app);
 })();

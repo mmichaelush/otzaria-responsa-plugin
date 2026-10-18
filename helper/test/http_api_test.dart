@@ -1090,6 +1090,30 @@ void main() {
       expect(backend.buildCalls, 1);
     });
 
+    test('mode authors: השלמת המחברים, והאירועים מסומנים', () async {
+      final (_, lines) = await openBuild(mode: 'authors');
+      final all = lines.toList();
+      await until(() => backend.buildEvents != null);
+      backend.buildEvents!
+        ..add(
+          const ResponsaBuildProgress(
+            stage: ResponsaBuildStage.scanning,
+            scannedNodes: 40,
+          ),
+        )
+        ..add(
+          const ResponsaBuildProgress(stage: ResponsaBuildStage.done, books: 9),
+        )
+        ..close();
+      final events = (await all).where((e) => e['type'] != 'heartbeat');
+      expect(backend.authorsBuildCalls, 1);
+      final progress = events.firstWhere((e) => e['type'] == 'progress');
+      expect(progress['purpose'], 'authors');
+      expect(progress.containsKey('expected'), isFalse);
+      expect(events.last, containsPair('purpose', 'authors'));
+      expect(events.last['books'], 9);
+    });
+
     test('mode לא מוכר נדחה', () async {
       final result = await call(
         'POST',
