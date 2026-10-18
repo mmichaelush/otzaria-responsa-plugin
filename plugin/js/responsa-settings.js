@@ -36,6 +36,8 @@
      * חסר שם (issue #4).
      */
     otzariaFirst: 'responsa_otzaria_first',
+    /** חיפוש בטקסט: אותן מילים גם בחיפוש של אוצריא, בכרטיסייה משלה. */
+    alsoOtzaria: 'responsa_also_otzaria',
     /** מה נשלח לאחרונה לחיפוש הספרייה: `{ builtAt, count }`. */
     librarySync: 'responsa_library_sync',
     /** המשתמש סגר את ההערה על ההרשאה "הוספת רכיבים לתוכנה". */
@@ -104,6 +106,7 @@
     showForms: false,
     showSummary: false,
     otzariaFirst: false,
+    alsoOtzaria: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
@@ -129,6 +132,7 @@
       showForms: value.showForms === true,
       showSummary: value.showSummary === true,
       otzariaFirst: value.otzariaFirst === true,
+      alsoOtzaria: value.alsoOtzaria === true,
       startupNotice: value.startupNotice === true,
       welcomeSeen: value.welcomeSeen === true,
       browsePath:
@@ -171,6 +175,7 @@
         'showForms',
         'showSummary',
         'otzariaFirst',
+        'alsoOtzaria',
         'startupNotice',
         'welcomeSeen',
         'browsePath',

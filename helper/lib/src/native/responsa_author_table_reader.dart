@@ -71,9 +71,8 @@ class ResponsaAuthorTableReader {
         'ResponsaAuthorTable: ${table.authorCount} מחברים '
         'מתוך ${members.length} קבצים',
       );
-      if (table.authorCount > 0) return table;
-
-      // בר אילן 29 ו-32: `FILE65` ריק, והמחברים רק בקטלוג.
+      // בר אילן 29 ו-32: `FILE65` ריק, והמחברים רק בקטלוג. בכל מהדורה —
+      // הקטלוג משלים חיבור שאין לו שם ב-`FILE65`.
       final fromCatalog = catalog == null
           ? null
           : ResponsaBookCatalog.authors(catalog);
@@ -85,12 +84,15 @@ class ResponsaAuthorTableReader {
             ? 'unknown structure, ${catalog.length} bytes'
             : '${fromCatalog.length} books with an author'}',
       );
-      if (fromCatalog != null && fromCatalog.isNotEmpty) {
-        return ResponsaAuthorTable.fromCatalog(fromCatalog);
-      }
+      final merged = ResponsaAuthorTable.merged(
+        table,
+        fromCatalog == null || fromCatalog.isEmpty
+            ? ResponsaAuthorTable.empty
+            : ResponsaAuthorTable.fromCatalog(fromCatalog),
+      );
       // מה שצריך כדי להבין מבנה חדש מהדיווח הבא, בלי עוד כלי בדיקה.
-      _describeFormat(members, catalog);
-      return table;
+      if (merged.authorCount == 0) _describeFormat(members, catalog);
+      return merged;
     } catch (error) {
       logLine('ResponsaAuthorTable: $error');
       return ResponsaAuthorTable.empty;

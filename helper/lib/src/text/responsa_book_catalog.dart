@@ -25,10 +25,26 @@ class ResponsaBookCatalog {
 
   /// המחברים לפי מזהה החיבור. `null` כשהמבנה אינו מוכר: הרשומות חייבות
   /// לכסות את הקובץ בדיוק, אחרת אין לסמוך על אף אחת מהן.
+  ///
+  /// הכותרת היא 8 בתים ב-CD25. במהדורה שבה היא באורך אחר, הרשומות מתחילות
+  /// במקום שממנו הן מכסות את הקובץ עד סופו ויש בהן מחברים.
   static Map<int, String>? authors(Uint8List bytes) {
-    if (bytes.length <= _headerSize) return null;
+    final usual = _parse(bytes, _headerSize);
+    if (usual != null) return usual;
+    for (var start = 0; start <= _maxHeaderSize; start++) {
+      if (start == _headerSize) continue;
+      final found = _parse(bytes, start);
+      if (found != null && found.isNotEmpty) return found;
+    }
+    return null;
+  }
+
+  static const int _maxHeaderSize = 64;
+
+  static Map<int, String>? _parse(Uint8List bytes, int start) {
+    if (bytes.length <= start) return null;
     final byBook = <int, List<String>>{};
-    var at = _headerSize;
+    var at = start;
     while (at < bytes.length) {
       if (at + _recordHead > bytes.length) return null;
       final id = (bytes[at + 1] << 8) | bytes[at + 2];
@@ -45,11 +61,15 @@ class ResponsaBookCatalog {
       final names = byBook[id] ??= [];
       if (!names.contains(name)) names.add(name);
     }
-    return {
-      for (final MapEntry(key: id, value: names) in byBook.entries)
-        if (names.length <= _maxAuthorsPerBook) id: names.join('; '),
-    };
+    return joined(byBook);
   }
+
+  /// כמה מחברים לחיבור: יחד, עד [_maxAuthorsPerBook]; יותר מזה אינו רשימה.
+  static Map<int, String> joined(Map<int, List<String>> byBook) => {
+    for (final MapEntry(key: id, value: names) in byBook.entries)
+      if (names.isNotEmpty && names.length <= _maxAuthorsPerBook)
+        id: names.join('; '),
+  };
 
   /// שם המחבר מרשומה, בצורה של `FILE65` (`ר' שלמה בן יהודה אבן גבירול`),
   /// עם הכינוי בסוגריים (`(רשב"ג)`) — לפיו מחפשים. `null` לרשומת ספר.
@@ -60,9 +80,19 @@ class ResponsaBookCatalog {
     final separator = head.indexOf('\u0000');
     // `\0` לפני ה-`*` הראשון: הספר בסוגריים שבסוף השם.
     final singleBook = separator >= 0;
-    final raw = (singleBook ? head.substring(0, separator) : head).trim();
-    if (raw.isEmpty) return null;
-    final (:base, :note) = _splitNote(raw);
+    return authorName(
+      singleBook ? head.substring(0, separator) : head,
+      singleBook: singleBook,
+    );
+  }
+
+  /// [raw] כפי שבקטלוג: `שם, ר' פרטי (ספר)` למחבר של ספר אחד
+  /// ([singleBook] — הספר נשמט, וכינוי שלפניו נשאר), או `שם, ר' פרטי
+  /// (כינוי)` למחבר של כמה ספרים.
+  static String? authorName(String raw, {required bool singleBook}) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    final (:base, :note) = _splitNote(value);
     var nickname = note;
     if (singleBook && note != null) {
       final pieces = note.split(';');
@@ -76,6 +106,33 @@ class ResponsaBookCatalog {
     if (name.isEmpty) return null;
     return nickname == null || nickname.isEmpty ? name : '$name ($nickname)';
   }
+
+  /// שם מהעץ של הקטלוג החי: מה שבסוף נשמר שם בסדר חזותי, בתחילת השם
+  /// ומהופך (`([ר' אברהם בן דוד (הראב"ד [השלישי` הוא
+  /// `ר' אברהם בן דוד (הראב"ד [השלישי])`).
+  static String fromVisual(String raw) {
+    final value = raw.trim();
+    var lead = 0;
+    while (lead < value.length && _closing.containsKey(value[lead])) {
+      lead++;
+    }
+    if (lead == 0) return value;
+    final tail = [
+      for (final char in value.substring(0, lead).split('').reversed)
+        _closing[char]!,
+    ].join();
+    return '${value.substring(lead).trim()}$tail';
+  }
+
+  /// מה שבסוף השם עובר בשמירה החזותית לתחילתו, בסדר הפוך ומהופך: גם גרש
+  /// ומרכאות (`('ר' יוסף חיים (בן איש חי` הוא `ר' יוסף חיים (בן איש חי')`).
+  static const Map<String, String> _closing = {
+    '(': ')',
+    '[': ']',
+    '{': '}',
+    "'": "'",
+    '"': '"',
+  };
 
   /// `אבן גבירול, ר' שלמה` → `ר' שלמה אבן גבירול`: כמו ב-`FILE65`.
   static String _givenFirst(String name) {

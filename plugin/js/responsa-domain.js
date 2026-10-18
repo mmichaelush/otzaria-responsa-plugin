@@ -707,6 +707,11 @@
     return OTZARIA_FIRST_PERMISSIONS.every((permission) => has(permissions, permission));
   }
 
+  /** "חיפוש גם באוצריא": כרטיסיית חיפוש של אוצריא (`reader.openSearchTab`). */
+  function canOpenSearchTab(permissions) {
+    return has(permissions, 'reader.open');
+  }
+
   function hostSupportsLibrary(permissions) {
     return has(permissions, LIBRARY_PERMISSION);
   }
@@ -961,6 +966,7 @@
     searchOutcomeMessage,
     searchSucceeded,
     canOpenInOtzaria,
+    canOpenSearchTab,
     OTZARIA_FIRST_PERMISSIONS,
     hostSupportsLibrary,
     lacksStartupPermission,

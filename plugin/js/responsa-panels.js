@@ -957,6 +957,7 @@
       [t('חלון ניהול הצורות בחיפוש מטקסט מסומן'), onOff(model.settings.showForms)],
       [t('סיכום התוצאות לפי מאגרים'), onOff(model.settings.showSummary)],
       [t('איתור מקום: קודם באוצריא'), onOff(model.settings.otzariaFirst && Domain.canOpenInOtzaria(model.permissions))],
+      [t('חיפוש גם באוצריא'), onOff(model.settings.alsoOtzaria && Domain.canOpenSearchTab(model.permissions))],
       [t('הוספת רכיבים לתוכנה'), yesNo(startup)],
       [t('פורט השירות'), model.servicePort ? String(model.servicePort) : '—', 'ltr'],
     ].filter(Boolean);

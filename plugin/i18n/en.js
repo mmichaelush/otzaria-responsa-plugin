@@ -835,5 +835,26 @@
     'הוספת שמות המחברים התחילה': 'Adding the author names started',
     'שמות המחברים נוספו: ל-{books} יש עכשיו מחבר': 'The author names were added: {books} now have an author',
     'הוספת שמות המחברים בוטלה': 'Adding the author names was cancelled',
+
+    // ---- 0.6.3: שורת החיפוש בתחביר של בר אילן, וחיפוש גם באוצריא
+    'למשל: #נר [1:4] (שבת/חנוכה)': 'For example: #נר [1:4] (שבת/חנוכה)',
+    'שורת החיפוש בתחביר של בר אילן': 'Search line in Bar-Ilan syntax',
+    'השורה לא עודכנה בשדות: {reason}': 'The line did not update the fields: {reason}',
+    'מי שמכיר את התחביר של בר אילן כותב כאן, והשורה מתפרקת לשדות שלמטה. שינוי בשדות מעדכן אותה.':
+      'If you know the Bar-Ilan syntax, write here and the line is split into the fields below. Changing the fields updates it.',
+    'חיפוש כמו שנכתב': 'Search as written',
+    'חיפוש גם באוצריא': 'Also search in Otzaria',
+    'אותן מילים נפתחות גם בחיפוש של אוצריא, בכרטיסייה משלו, כולל מה שהחיפוש שם כולל. גם חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" ירוץ אז גם באוצריא.':
+      'The same words also open in Otzaria search, in a tab of their own, including whatever that search covers. A search from the Otzaria search dialog with "Search in Bar-Ilan" will then also run in Otzaria.',
+    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".':
+      'To use this, turn on the permission "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
+    'חיפוש בבר אילן ובאוצריא': 'Search in Bar-Ilan and Otzaria',
+    'חסר סוגר: "}}" או "]".': 'A closing "}}" or "]" is missing.',
+    'למרחק "{gap}" אין שדה מתאים. בטבלה: [1:N] או [-N:N].': 'The distance "{gap}" has no matching field. The fields take [1:N] or [-N:N].',
+    'בחיפוש בטווח (משפט, פסקה, מסמך או "N:") אין מרחקים בין המילים.':
+      'A search within a span (sentence, paragraph, document or "N:") has no distances between the words.',
+    'מרחק צריך לבוא בין שתי מילים.': 'A distance must come between two words.',
+    '"{word}" אינה מילה שהטבלה מכירה.': '"{word}" is not a word the fields can hold.',
+    'בטבלה יש מקום ל-{max} מילים.': 'The fields have room for {max} words.',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

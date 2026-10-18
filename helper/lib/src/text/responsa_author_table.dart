@@ -18,12 +18,35 @@ class ResponsaAuthorTable {
 
   /// מ"קטלוג ספרים" (`FILE06`): הוא מכיר רק חיבורים שיש להם מחבר, ולכן
   /// השאר נופלים לביבליוגרפיה.
-  factory ResponsaAuthorTable.fromCatalog(Map<int, String> authors) =>
-      ResponsaAuthorTable._(
-        Map.unmodifiable(authors),
-        Set.unmodifiable(authors.keys),
-        'FILE06',
-      );
+  factory ResponsaAuthorTable.fromCatalog(
+    Map<int, String> authors, {
+    String source = 'FILE06',
+  }) => ResponsaAuthorTable._(
+    Map.unmodifiable(authors),
+    Set.unmodifiable(authors.keys),
+    source,
+  );
+
+  /// [primary] קודם; [fallback] רק לחיבור שאין לו שם ב-[primary]. כך כל
+  /// מהדורה מקבלת מה שיש בה, באיזה קובץ שהוא: ב-25 וב-27 `FILE65` ממלא כמעט
+  /// הכול, ב-29 וב-32 `FILE06`.
+  static ResponsaAuthorTable merged(
+    ResponsaAuthorTable primary,
+    ResponsaAuthorTable fallback,
+  ) {
+    if (fallback.authorCount == 0) return primary;
+    if (primary.authorCount == 0) return fallback;
+    final authors = {...primary._authors};
+    for (final MapEntry(key: id, value: name) in fallback._authors.entries) {
+      authors.putIfAbsent(id, () => name);
+    }
+    final added = authors.length - primary._authors.length;
+    return ResponsaAuthorTable._(
+      Map.unmodifiable(authors),
+      Set.unmodifiable({...primary._known, ...fallback._known}),
+      added == 0 ? primary.source : '${primary.source}+${fallback.source}',
+    );
+  }
 
   bool get isEmpty => _known.isEmpty;
 
@@ -151,8 +174,9 @@ class ResponsaAuthorTable {
       final sectionTitles = titles[section] ?? const <int>{};
       for (final MapEntry(key: id, value: name) in byId.entries) {
         if (!sectionTitles.contains(id)) continue;
-        if (!name.startsWith(_personLead)) continue;
-        (found[id] ??= {}).add(name);
+        final person = asPerson(name);
+        if (person == null) continue;
+        (found[id] ??= {}).add(person);
       }
     }
     return ResponsaAuthorTable._(
@@ -166,6 +190,17 @@ class ResponsaAuthorTable {
   }
 
   static const String _personLead = "ר' ";
+
+  /// אדם: `ר' פרטי משפחה`, או בסדר של הקטלוג, `משפחה, ר' פרטי` (מהדורה
+  /// שכתבה כך גם את `FILE65`), שהופך לסדר הראשון. אחרת `null`.
+  static String? asPerson(String name) {
+    if (name.startsWith(_personLead)) return name;
+    final comma = name.indexOf(', $_personLead');
+    if (comma <= 0) return null;
+    final surname = name.substring(0, comma).trim();
+    final given = name.substring(comma + 2).trim();
+    return '$given $surname';
+  }
 
   static List<({int id, String text})>? _records(Uint8List bytes) {
     if (bytes.isEmpty || bytes.length % recordSize != 0) return null;

@@ -211,6 +211,90 @@ test('מודל שנשמר פגום חוזר לברירות המחדל', () => {
   assert.equal(q.options.abbreviations, false);
 });
 
+test('parseLine: כל דוגמה של הבונה חוזרת מהשורה לאותם שדות', () => {
+  for (const example of Advanced.EXAMPLES) {
+    const q = Advanced.applyExample(emptyQuery(), example.id);
+    const line = buildQuery(q);
+    const parsed = Advanced.parseLine(line);
+    assert.ok(parsed.ok, example.id + ': ' + (parsed.message || ''));
+    const again = Advanced.normalize({ ...q, ...parsed.patch });
+    // אותה שאילתה; תווים כלליים מסביב (`*ט*ל*פ*ן*`) יכולים להיות גם הצורה "מכילה".
+    assert.equal(buildQuery(again), line, example.id);
+    assert.equal(again.terms.length, q.terms.length, example.id);
+  }
+});
+
+test('parseLine: צורות, חלופות, מרחקים וטווחים', () => {
+  const parsed = Advanced.parseLine('#!נר [1:4] (שבת/חנוכה)  -מוקצה  [-2:2] {{צער בעלי חיים}}');
+  assert.ok(parsed.ok);
+  assert.deepEqual(
+    parsed.patch.terms.map((term) => [term.words, term.form, term.exclude]),
+    [
+      [['נר'], 'spellingPrefixes', false],
+      [['שבת', 'חנוכה'], 'exact', false],
+      [['מוקצה'], 'exact', true],
+      [['צער בעלי חיים'], 'exact', false],
+    ],
+  );
+  assert.deepEqual(parsed.patch.gaps, [
+    { kind: 'after', distance: 4 },
+    { kind: 'adjacent', distance: 3 },
+    { kind: 'around', distance: 2 },
+  ]);
+  assert.equal(Advanced.parseLine('10: נר שבת').patch.span, 'words');
+  assert.equal(Advanced.parseLine('10: נר שבת').patch.within, 10);
+  assert.equal(Advanced.parseLine('מסמך: נר שבת').patch.span, 'document');
+  // בלי רווח לפני המרחק, ותווים כלליים בתוך מילה.
+  assert.equal(buildQuery(Advanced.normalize({ mode: 'builder', ...Advanced.parseLine('נר[1:3]שבת').patch })), 'נר [1:3] שבת');
+  assert.equal(Advanced.parseLine('*ט(ע/י/@)ל*').patch.terms[0].form, 'contains');
+  assert.equal(Advanced.parseLine('<משפחה>').patch.terms[0].form, 'family');
+});
+
+test('parseLine: מה שאין לו מקום בשדות — הסבר, ולא ניחוש', () => {
+  for (const line of ['נר [2:5] שבת', 'משפט: נר [1:2] שבת', '[1:3] נר', 'נר [1:3]', '{{צער', 'abc', 'נר [1:4] [1:4] שבת']) {
+    const parsed = Advanced.parseLine(line);
+    assert.equal(parsed.ok, false, line);
+    assert.ok(parsed.message, line);
+  }
+  const nine = Array.from({ length: Advanced.MAX_TERMS + 1 }, () => 'נר').join(' ');
+  assert.equal(Advanced.parseLine(nine).ok, false);
+  assert.ok(Advanced.parseLine('').ok);
+});
+
+test('toOtzariaSearch: אותן מילים באוצריא, בקירוב של ההגדרות', () => {
+  const builder = (line, extra) => Advanced.normalize({ mode: 'builder', ...Advanced.parseLine(line).patch, ...extra });
+  assert.deepEqual(Advanced.toOtzariaSearch(builder('נר שבת')), { query: 'נר שבת', settings: { mode: 'exact' } });
+  // המרחק באוצריא הוא המילים *שבין* המילים; חלופות — הראשונה; "בלי" — לא נשלח.
+  assert.deepEqual(Advanced.toOtzariaSearch(builder('#נר [1:4] (שבת/חנוכה) -מוקצה')), {
+    query: 'נר שבת',
+    settings: { mode: 'advanced', distance: 3, wordOptions: { 'נר_0': { 'קידומות דקדוקיות': true } } },
+  });
+  assert.deepEqual(Advanced.toOtzariaSearch(builder('פסקה: נר שבת')).settings, {
+    mode: 'advanced',
+    proximityScope: 'sameParagraph',
+  });
+  assert.deepEqual(Advanced.toOtzariaSearch(builder('נר שבת', { options: { abbreviations: true } })).settings, {
+    mode: 'advanced',
+    distance: 0,
+    options: { 'ראשי תיבות': true },
+  });
+  // ביטוי — כל מילה במקום משלה.
+  assert.equal(Advanced.toOtzariaSearch(builder('{{צער בעלי חיים}}')).query, 'צער בעלי חיים');
+  // חיפוש רגיל, ניסוח בעצמי: רק המילים, בהגדרות של אוצריא.
+  assert.deepEqual(Advanced.toOtzariaSearch(Advanced.normalize({ mode: 'simple', simpleText: 'נר שבת' })), { query: 'נר שבת' });
+  assert.deepEqual(Advanced.toOtzariaSearch(Advanced.normalize({ mode: 'manual', manualText: '#נר [1:4] שבת' })), { query: 'נר שבת' });
+  assert.equal(Advanced.toOtzariaSearch(Advanced.normalize({ mode: 'simple', simpleText: 'abc' })), null);
+});
+
+test('otzariaSearchFrom: הבקשה מהדיאלוג של אוצריא, רק השדות שהכרטיסייה מקבלת', () => {
+  assert.deepEqual(
+    Advanced.otzariaSearchFrom({ query: 'נר שבת', mode: 'advanced', distance: 2, facets: ['/'], negativeQuery: '' }),
+    { query: 'נר שבת', settings: { mode: 'advanced', distance: 2 } },
+  );
+  assert.deepEqual(Advanced.otzariaSearchFrom({ query: 'נר שבת' }), { query: 'נר שבת' });
+  assert.equal(Advanced.otzariaSearchFrom({ query: 'abc' }), null);
+});
+
 test('כל דוגמה נבנית לשאילתה תקינה, באופן שלה', () => {
   const all = [
     ...Advanced.EXAMPLES.map((example) => [example, 'builder']),

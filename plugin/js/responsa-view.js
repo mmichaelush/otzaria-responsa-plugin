@@ -434,6 +434,10 @@
         this.focusInSheet('adv-word-' + problem.term + '-0');
         return;
       }
+      if (problem.line) {
+        this.focusInSheet('adv-line');
+        return;
+      }
       const input = this.content.querySelector('.simple-input, .manual-input');
       if (input) input.focus();
     }
@@ -458,6 +462,8 @@
         const fresh = root.ResponsaAdvancedUi.summaryLines(model);
         if (fresh.textContent !== summary.textContent) summary.replaceChildren(...fresh.childNodes);
       }
+      const line = this.content.querySelector('[data-focus-key="adv-line"]');
+      if (line && !state.line && line.value !== text) line.value = text;
       const problem = this.content.querySelector('[data-role="adv-problem"]');
       if (problem) {
         problem.hidden = !state.problem;

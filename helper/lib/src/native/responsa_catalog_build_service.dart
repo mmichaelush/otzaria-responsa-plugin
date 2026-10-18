@@ -14,7 +14,10 @@ import 'package:win32/win32.dart'
         SetThreadExecutionState;
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
+import 'package:responsa_helper/src/native/responsa_author_catalog_reader.dart';
 import 'package:responsa_helper/src/native/responsa_author_table_reader.dart';
+import 'package:responsa_helper/src/native/responsa_discovery.dart';
+import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_automation.dart';
 import 'package:responsa_helper/src/native/responsa_bibliography_reader.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_builder.dart';
@@ -568,7 +571,7 @@ class ResponsaCatalogBuildService {
           );
           return;
         }
-        authors = ResponsaAuthorTableReader.forInstallation(installation);
+        authors = _authorsFor(installation, automation, dialog);
         if (authors.authorCount == 0) {
           ResponsaCatalogWriter.markAuthorsUnavailable(request.targetPath);
           send.send(
@@ -677,7 +680,7 @@ class ResponsaCatalogBuildService {
         fingerprint: ResponsaInstallationDiscovery.fingerprint(installation),
         targetPath: request.targetPath,
         bibliography: ResponsaBibliographyReader.forInstallation(installation),
-        authors: ResponsaAuthorTableReader.forInstallation(installation),
+        authors: _authorsFor(installation, automation, dialog),
       );
       send.send(
         ResponsaBuildProgress(
@@ -750,6 +753,25 @@ class ResponsaCatalogBuildService {
       SetThreadExecutionState(ES_CONTINUOUS);
     }
   }
+}
+
+/// המחברים מהארכיון, ואם אין בו — מ"קטלוג ספרים" החי
+/// ([ResponsaAuthorCatalogReader]), שעובד בכל מהדורה איך שהקבצים בנויים.
+/// בר אילן כבר פתוח, וחלון העיון כבר מוצג.
+ResponsaAuthorTable _authorsFor(
+  ResponsaInstallation installation,
+  ResponsaAutomation automation,
+  DiscoveredDialog dialog,
+) {
+  final fromFiles = ResponsaAuthorTableReader.forInstallation(installation);
+  if (fromFiles.authorCount > 0) return fromFiles;
+  final live = ResponsaAuthorCatalogReader.read(
+    automation: automation,
+    citationDialog: dialog,
+  );
+  return live.isEmpty
+      ? fromFiles
+      : ResponsaAuthorTable.fromCatalog(live, source: 'dialog');
 }
 
 class _BuildRequest {

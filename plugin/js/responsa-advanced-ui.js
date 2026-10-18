@@ -246,6 +246,50 @@
     );
   }
 
+  /**
+   * שורה אחת בתחביר של בר אילן מעל השדות: מי שמכיר את התחביר כותב כאן,
+   * והשורה מתפרקת לשדות שלמטה; שינוי בשדות כותב אותה מחדש. מה שאין לו
+   * מקום בשדות — הסבר, ו"ניסוח בעצמי" מחפש אותו כמו שהוא.
+   */
+  function lineEditor(state, actions) {
+    const line = state.line;
+    const input = el('input', {
+      class: 'line-input',
+      type: 'text',
+      dir: 'rtl',
+      maxlength: String(Advanced.MAX_QUERY_LENGTH),
+      placeholder: t('למשל: #נר [1:4] (שבת/חנוכה)'),
+      'aria-label': t('שורת החיפוש בתחביר של בר אילן'),
+      'aria-describedby': 'adv-line-hint',
+      spellcheck: 'false',
+      autocomplete: 'off',
+      dataset: { focusKey: 'adv-line' },
+    });
+    input.value = line ? line.text : Advanced.buildQuery(state.query);
+    input.addEventListener('input', () => actions.advancedLine(input.value));
+    onEnter(input, () => actions.runAdvanced());
+    const error = line && line.error;
+    return el(
+      'div',
+      { class: 'line-editor' + (error ? ' is-error' : '') },
+      input,
+      el(
+        'p',
+        { class: 'advanced-hint', id: 'adv-line-hint', 'data-role': 'adv-line-hint' },
+        // `[1:N]` במשפט מימין לשמאל מתהפך בלי בידוד (`displayQuery`).
+        error
+          ? Advanced.displayQuery(t('השורה לא עודכנה בשדות: {reason}', { reason: error }))
+          : t('מי שמכיר את התחביר של בר אילן כותב כאן, והשורה מתפרקת לשדות שלמטה. שינוי בשדות מעדכן אותה.'),
+      ),
+      error
+        ? button('text', t('חיפוש כמו שנכתב'), () => actions.advancedLineAsIs(input.value), {
+            icon: 'code_24_regular',
+            key: 'adv-line-as-is',
+          })
+        : null,
+    );
+  }
+
   function builder(state, actions) {
     const query = state.query;
     const chain = query.span === Advanced.Span.chain;
@@ -255,6 +299,7 @@
       items.push(termCard(state, actions, term, index));
     });
     return [
+      lineEditor(state, actions),
       examples(Advanced.EXAMPLES, actions, 4),
       el('ol', { class: 'term-list' }, items),
       el(
@@ -654,6 +699,36 @@
     );
   }
 
+  /**
+   * "חיפוש גם באוצריא": אותן מילים גם בחיפוש של אוצריא, בכרטיסייה שלה
+   * (וכולל מה שהחיפוש שם כולל). בלי ההרשאה — מושבת, עם הסבר.
+   */
+  function otzariaSection(model, actions) {
+    const granted = Domain.canOpenSearchTab(model.permissions);
+    const known = Array.isArray(model.permissions);
+    return el(
+      'section',
+      { class: 'advanced-section' },
+      el(
+        'div',
+        { class: 'settings-card advanced-card' },
+        switchRow({
+          iconName: 'library_24_regular',
+          title: t('חיפוש גם באוצריא'),
+          subtitle: t('אותן מילים נפתחות גם בחיפוש של אוצריא, בכרטיסייה משלו, כולל מה שהחיפוש שם כולל. גם חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" ירוץ אז גם באוצריא.'),
+          note:
+            granted || !known
+              ? null
+              : t('כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".'),
+          checked: model.settings.alsoOtzaria,
+          disabled: known && !granted,
+          onToggle: (value) => actions.setSetting('alsoOtzaria', value),
+          key: 'adv-also-otzaria',
+        }),
+      ),
+    );
+  }
+
   /** "רק ב: שו"ת, רמב"ם" — המקום, במשפט ההסבר. */
   function scopeLabel(query, catalogReady) {
     const scope = query.scope;
@@ -776,7 +851,7 @@
         'div',
         { class: 'advanced-actions' },
         button('text', t('ניקוי'), actions.advancedClear, { key: 'adv-clear', disabled: state.running }),
-        button('filled', t('חיפוש בבר אילן'), actions.runAdvanced, {
+        button('filled', alsoOtzaria(model) ? t('חיפוש בבר אילן ובאוצריא') : t('חיפוש בבר אילן'), actions.runAdvanced, {
           icon: 'search_24_regular',
           key: 'adv-run',
           busy: state.running,
@@ -785,6 +860,10 @@
         }),
       ),
     );
+  }
+
+  function alsoOtzaria(model) {
+    return Boolean(model.settings && model.settings.alsoOtzaria) && Domain.canOpenSearchTab(model.permissions);
   }
 
   /** הלשונית "חיפוש בטקסט". [catalogReady] — יש רשימת ספרים לבחירת קטגוריות. */
@@ -830,6 +909,7 @@
                 scopeSection(state, actions, advanced ? 2 : null, catalogReady),
                 // ראשי תיבות ו"ניהול הצורות" אינם חלק מניסוח חופשי.
                 mode === Mode.free || easy ? null : optionsSection(state, actions, advanced ? 3 : null),
+                otzariaSection(model, actions),
                 summaryCard(model, actions),
                 advanced ? guideSection(actions) : null,
               ],

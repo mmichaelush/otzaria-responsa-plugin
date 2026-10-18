@@ -166,4 +166,86 @@ void main() {
     // חיבור בלי רשומת מחבר אינו "מוכר": הביבליוגרפיה יכולה למלא אותו.
     expect(table.knows(3), isFalse);
   });
+
+  group('הקטלוג החי ושאר המהדורות', () {
+    test('fromVisual: מה שבסוף השם נשמר בתחילתו, הפוך ומהופך', () {
+      expect(
+        ResponsaBookCatalog.fromVisual(
+          '(אבא שאול, ר\' בן ציון (שו"ת אור לציון',
+        ),
+        'אבא שאול, ר\' בן ציון (שו"ת אור לציון)',
+      );
+      expect(
+        ResponsaBookCatalog.fromVisual('([ר\' אברהם בן דוד (הראב"ד [השלישי'),
+        'ר\' אברהם בן דוד (הראב"ד [השלישי])',
+      );
+      expect(
+        ResponsaBookCatalog.fromVisual("('ר' יוסף חיים (מהרי\"ח; 'בן איש חי"),
+        "ר' יוסף חיים (מהרי\"ח; 'בן איש חי')",
+      );
+      expect(
+        ResponsaBookCatalog.fromVisual('אבן גיאת, ר\' יצחק'),
+        'אבן גיאת, ר\' יצחק',
+      );
+    });
+
+    test('authorName: ספר אחד — הספר נשמט; כמה ספרים — הכינוי נשאר', () {
+      expect(
+        ResponsaBookCatalog.authorName(
+          'אבן דנאן, ר\' שלמה (שו"ת אשר לשלמה)',
+          singleBook: true,
+        ),
+        "ר' שלמה אבן דנאן",
+      );
+      expect(
+        ResponsaBookCatalog.authorName(
+          'אבן גבירול, ר\' שלמה בן יהודה (רשב"ג)',
+          singleBook: false,
+        ),
+        'ר\' שלמה בן יהודה אבן גבירול (רשב"ג)',
+      );
+    });
+
+    test('כותרת באורך אחר: הרשומות נמצאות לפי הכיסוי', () {
+      final usual = catalog([
+        entry(2401, "מלצר, ר' איסר זלמן (אבן האזל)\u0000a*b"),
+      ]);
+      // 12 בתים של כותרת במקום 8.
+      final longer = Uint8List.fromList([0, 0, 0, 0, ...usual]);
+      expect(ResponsaBookCatalog.authors(longer), {2401: "ר' איסר זלמן מלצר"});
+    });
+
+    test('FILE65 בסדר של הקטלוג (משפחה, ר\' פרטי) — עדיין אדם', () {
+      expect(
+        ResponsaAuthorTable.asPerson("מלצר, ר' איסר זלמן"),
+        "ר' איסר זלמן מלצר",
+      );
+      expect(
+        ResponsaAuthorTable.asPerson("ר' איסר זלמן מלצר"),
+        "ר' איסר זלמן מלצר",
+      );
+      expect(ResponsaAuthorTable.asPerson('החינוך'), isNull);
+    });
+
+    test('merged: FILE65 קודם, והקטלוג רק לחיבור שאין לו שם', () {
+      final dir = Directory.systemTemp.createTempSync('responsa_merge');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final primary = ResponsaAuthorTable.fromCatalog({
+        1: "ר' א",
+      }, source: 'FILE65');
+      final fallback = ResponsaAuthorTable.fromCatalog({1: "ר' ב", 2: "ר' ג"});
+      final merged = ResponsaAuthorTable.merged(primary, fallback);
+      expect(merged.authorOf(1), "ר' א");
+      expect(merged.authorOf(2), "ר' ג");
+      expect(merged.source, 'FILE65+FILE06');
+      expect(
+        ResponsaAuthorTable.merged(primary, ResponsaAuthorTable.empty).source,
+        'FILE65',
+      );
+      expect(
+        ResponsaAuthorTable.merged(ResponsaAuthorTable.empty, fallback).source,
+        'FILE06',
+      );
+    });
+  });
 }

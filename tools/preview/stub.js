@@ -67,6 +67,10 @@
     if (params.get('noauthors') && base.catalog.exists) {
       base = { ...base, catalog: { ...base.catalog, booksWithAuthor: 0 }, version: 32 };
     }
+    // `authorsfill=1`: רשימה שנקראה בלי מחברים, והשירות יכול להשלים (29, 32).
+    if (params.get('authorsfill') && base.catalog.exists) {
+      base = { ...base, catalog: { ...base.catalog, authorTableEntries: 0, authorsFillable: true }, version: 29 };
+    }
     return Object.assign(
       {
         installed: true,
@@ -165,6 +169,8 @@
                     ...(params.get('noeasy') ? [] : ['easySearch']),
                     // `noeasyopts=1`: שירות 0.5.6/0.5.7, שאינו מקבל את ההגדרות של "חיפוש קל".
                     ...(params.get('noeasy') || params.get('noeasyopts') ? [] : ['easyOptions']),
+                    'summary',
+                    'authorsFill',
                   ],
             };
       case '/status':
@@ -329,6 +335,8 @@
               'navigation.write',
               'ui.create_shortcut',
               'library.books.provide',
+              'library.books.read',
+              'reader.open',
             ],
       theme: {
         mode: dark ? 'dark' : 'light',
