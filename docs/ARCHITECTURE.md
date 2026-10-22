@@ -383,6 +383,8 @@ sequenceDiagram
 
 **לא בכלל, כי אין עדיין ממשק:** העברת חיפוש לבר אילן כשאוצריא מצאה מעט תוצאות. בקשנו מאוצריא אירוע עם מספר התוצאות (Otzaria/otzaria#2583, פתוח).
 
+**העברת חיפוש מאוצריא (`js/responsa-search-handoff.js`, שני מתגים כבויים):** (1) `SCOPE_ENABLED` — Otzaria/otzaria#3067: `reader.openSearchTab` מקבל ב-`settings` היקף (`facets`, `categories`, `books`, `authors`, `eras`, `baseBooksOnly`) ושלילה; `Advanced.otzariaSearchFrom` מוסיף אותם מהבקשה של אוצריא (בלי `order`, `limit`, `grouping`, וכל הספרייה `["/"]` אינה נשלחת). (2) `RESULTS_ACTION_ENABLED` — #3068: `resultsAction` בשורת `responsa-search-dialog` מציג כפתור בטאב החיפוש של אוצריא, ו-`search.requested` מגיע ממנו. כשהוא דלוק `_otzariaFirstSearch` לא סופר (המשתמש רואה את התוצאות ומחליט) ו"גם באוצריא" אינו פותח כרטיסייה כפולה. להדלקה: המתג, `minAppVersion` 0.9.99 ו-`resultsAction` במניפסט; `test/search-handoff.test.js` נכשל עד שהם תואמים. לבדוק בחי מה מגיע ב-`search.requested` מהכפתור.
+
 ### בלי אינטרנט
 
 התוסף עצמו אינו צריך אינטרנט: כל התקשורת היא ל-`127.0.0.1`. מה שמשתנה:

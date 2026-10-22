@@ -19,6 +19,8 @@
   const Icons = root.ResponsaIcons || {};
   // TODO(otzaria-0.9.99): הכפתור בשדות החיפוש (responsa-field-actions.js).
   const FieldActions = root.ResponsaFieldActions || { requestFor: () => null };
+  // TODO(otzaria-0.9.99): העברת חיפוש מאוצריא (responsa-search-handoff.js).
+  const Handoff = root.ResponsaSearchHandoff || { RESULTS_ACTION_ENABLED: false };
   const Screen = Domain.Screen;
   const t = (text, vars) => I18n.t(text, vars);
 
@@ -1142,7 +1144,9 @@
       if (otzaria && otzaria.found) return;
       // "חיפוש בבר אילן" בדיאלוג מחליף את החיפוש של אוצריא; עם "חיפוש גם
       // באוצריא" — הבקשה רצה גם שם, בהגדרות שנבחרו בדיאלוג.
-      if (!otzaria) await this._alsoInOtzaria(Advanced.otzariaSearchFrom(request));
+      // TODO(otzaria-0.9.99): בלחיצה על הכפתור בתוצאות (#3068) החיפוש כבר פתוח
+      // באוצריא, ו"גם באוצריא" היה פותח כרטיסייה כפולה.
+      if (!otzaria && !Handoff.RESULTS_ACTION_ENABLED) await this._alsoInOtzaria(Advanced.otzariaSearchFrom(request));
       await this.runAdvanced({ otzaria: false });
       if (otzaria && state.status && state.status.kind === 'success') {
         state.status = { ...state.status, text: t('אוצריא לא מצאה תוצאות, ולכן החיפוש הועבר לבר אילן.') + ' ' + state.status.text };
@@ -1170,6 +1174,9 @@
      */
     async _otzariaFirstSearch(request) {
       const model = this.model;
+      // TODO(otzaria-0.9.99): עם כפתור בתוצאות של אוצריא (#3068) המשתמש מחליט
+      // אחרי שראה אותן, ואין סיבה לחפש שם פעמיים כדי לספור.
+      if (Handoff.RESULTS_ACTION_ENABLED) return null;
       if (!model.settings.otzariaFirstSearch || !Domain.canSearchOtzariaFirst(model.permissions)) return null;
       const target = Advanced.otzariaSearchFrom(request);
       if (!target) return null;

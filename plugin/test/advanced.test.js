@@ -296,6 +296,16 @@ test('מודל מגרסה 0.4: כתיבה חופשית, או בונה שמולא
   assert.equal(normalize({ mode: 'nope' }).mode, 'simple');
 });
 
+test('מעבר לבונה מניסוח חופשי או מתחביר: המילים שנכתבו שם עוברות למשבצות', () => {
+  const free = Advanced.setMode({ ...emptyQuery(), mode: 'free', freeText: 'מה דין נר שבת' }, 'builder');
+  assert.deepEqual(free.terms.map((entry) => entry.words[0]), ['מה', 'דין', 'נר', 'שבת']);
+  const manual = Advanced.setMode({ ...emptyQuery(), mode: 'manual', manualText: 'נר [1:4] שבת' }, 'builder');
+  assert.deepEqual(manual.terms.map((entry) => entry.words[0]), ['נר', 'שבת']);
+  // האופן הפתוח קודם: מה שנשאר בשדה רגיל ישן אינו גובר עליו.
+  const open = Advanced.setMode({ ...emptyQuery(), mode: 'free', freeText: 'נר שבת', simpleText: 'ישן' }, 'builder');
+  assert.deepEqual(open.terms.map((entry) => entry.words[0]), ['נר', 'שבת']);
+});
+
 test('מעבר מחיפוש רגיל לבונה: המילים שנכתבו הופכות למילים בבונה', () => {
   let q = { ...emptyQuery(), simpleText: 'נר של שבת' };
   q = Advanced.setMode(q, 'builder');

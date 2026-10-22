@@ -600,7 +600,8 @@
 
   /**
    * בקשה שהגיעה מדיאלוג החיפוש של אוצריא ← אותו חיפוש באוצריא, בהגדרות
-   * שנבחרו שם. רק השדות ש-`reader.openSearchTab` מקבל ב-`settings`.
+   * שנבחרו שם. רק השדות ש-`reader.openSearchTab` מקבל ב-`settings`; ההיקף
+   * והשלילה רק מ-0.9.99 (`ResponsaSearchHandoff.SCOPE_ENABLED`).
    */
   function otzariaSearchFrom(request) {
     const source = request && typeof request === 'object' ? request : {};
@@ -610,6 +611,8 @@
     for (const key of ['mode', 'distance', 'proximityScope', 'wordMatchMode', 'wordMatchCount', 'options', 'wordOptions']) {
       if (source[key] !== undefined && source[key] !== null) settings[key] = source[key];
     }
+    // TODO(otzaria-0.9.99): היקף ושלילה (Otzaria/otzaria#3067), כבוי עד שיצא.
+    Object.assign(settings, (root.ResponsaSearchHandoff || { scopeSettings: () => ({}) }).scopeSettings(source));
     return Object.keys(settings).length ? { query, settings } : { query };
   }
 
@@ -935,7 +938,10 @@
     const next = { ...query, mode };
     const builderEmpty = !query.terms.some((term) => wordsOf(term).length);
     if (mode === Mode.builder && builderEmpty) {
-      const words = simpleWords(query.simpleText).slice(0, MAX_TERMS);
+      // המילים שנכתבו באופן שהיה פתוח; ואם הוא ריק, באחר.
+      const sources = { [Mode.simple]: query.simpleText, [Mode.manual]: query.manualText, [Mode.free]: query.freeText };
+      const written = [sources[query.mode], query.simpleText, query.manualText, query.freeText].find((text) => simpleWords(text).length);
+      const words = simpleWords(written).slice(0, MAX_TERMS);
       if (words.length) {
         next.terms = words.map((word) => newTerm(word));
         next.gaps = words.slice(1).map(() => newGap());

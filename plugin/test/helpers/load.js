@@ -10,6 +10,7 @@ const js = (name) => plugin('js', name);
 function loadPlugin() {
   globalThis.ResponsaI18n = require(js('responsa-i18n.js'));
   require(plugin('i18n', 'en.js'));
+  globalThis.ResponsaSearchHandoff = require(js('responsa-search-handoff.js'));
   globalThis.ResponsaDomain = require(js('responsa-domain.js'));
   globalThis.ResponsaAdvanced = require(js('responsa-advanced.js'));
   globalThis.ResponsaLocate = require(js('responsa-locate.js'));
