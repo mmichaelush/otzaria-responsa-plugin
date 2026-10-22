@@ -3,6 +3,10 @@
 enum ResponsaFailure {
   responsaNotRunning,
 
+  /// בר אילן רץ בהרשאה גבוהה מהשירות (כמנהל מערכת), ו-Windows בולעת כל
+  /// הודעה אליו.
+  elevated,
+
   /// פעולה אחרת של אוצריא רצה כבר מול אותו מופע.
   busy,
   citationDialogNotFound,

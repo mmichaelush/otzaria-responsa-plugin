@@ -398,6 +398,8 @@ class ResponsaCatalogBuildService {
     return ResponsaBuildProgress.failed(
       launch.installPath == null
           ? ResponsaBuildFailure.notInstalled
+          : launch.elevated
+          ? ResponsaBuildFailure.elevated
           : ResponsaBuildFailure.notRunning,
       launch.message ?? 'לא ניתן להפעיל את בר אילן.',
     );

@@ -3,6 +3,7 @@ import 'dart:isolate';
 
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
+import 'package:responsa_helper/src/native/responsa_integrity.dart';
 import 'package:responsa_helper/src/native/responsa_instance.dart';
 import 'package:responsa_helper/src/native/responsa_shortcuts.dart';
 
@@ -17,10 +18,15 @@ class ResponsaLaunchResult {
   /// הודעה למשתמש כש-[running] הוא `false`.
   final String? message;
 
+  /// יש מופע חי, אבל הוא רץ בהרשאה גבוהה מהשירות (כמנהל מערכת), ולכן
+  /// Windows בולעת כל פקודה אליו ([ResponsaIntegrity]).
+  final bool elevated;
+
   const ResponsaLaunchResult({
     required this.running,
     this.installPath,
     this.message,
+    this.elevated = false,
   });
 }
 
@@ -37,16 +43,20 @@ class ResponsaLauncher {
 
   /// `running` = יש מופע שמיש, לא "יש תהליך" (חונה נחשב כבוי). באיזולט רקע
   /// כי סריקת הכוננים חוסמת.
-  static Future<({String executable, String installPath, bool running})?>
+  static Future<
+    ({String executable, String installPath, bool running, bool elevated})?
+  >
   resolve(String? installPath) => Isolate.run(() {
     final selection = ResponsaInstallationDiscovery.selectInstallation(
       preferredPath: installPath,
     );
     if (selection == null) return null;
+    final instance = ResponsaInstance.pick(selection.instances);
     return (
       executable: selection.installation.executable,
       installPath: selection.installation.installPath,
-      running: ResponsaInstance.pick(selection.instances) != null,
+      running: instance != null,
+      elevated: instance != null && ResponsaIntegrity.blocks(instance.pid),
     );
   });
 
@@ -69,6 +79,17 @@ class ResponsaLauncher {
       return const ResponsaLaunchResult(
         running: false,
         message: 'בר אילן (פרויקט השו"ת) אינו מותקן במחשב הזה.',
+      );
+    }
+    if (target.running && target.elevated) {
+      // לא מנסים לפתוח כלום: הפקודות נבלעות, והמשתמש היה רואה "הדיאלוג לא
+      // נפתח" אחרי דקה (דיווח מ-28, 22.10.2026).
+      logLine('ResponsaLauncher: ${target.installPath} runs elevated');
+      return ResponsaLaunchResult(
+        running: false,
+        installPath: target.installPath,
+        message: ResponsaIntegrity.elevatedMessage,
+        elevated: true,
       );
     }
     if (target.running) {
@@ -112,11 +133,14 @@ class ResponsaLauncher {
     try {
       // כמו הקיצור של המשתמש: מוגדל או רגיל. נכשל — כמו קודם.
       final show = ResponsaShortcuts.showCommandFor(installPath);
+      // בלי הרמת הרשאות: התוכנה שמוגדרת "הפעל כמנהל" (תאימות או מניפסט)
+      // הייתה עולה גבוהה מהשירות, ואי אפשר היה לשלוט בה.
       if (!ResponsaShortcuts.start(executable, installPath, show)) {
         await Process.start(
           executable,
           const [],
           workingDirectory: installPath,
+          environment: ResponsaShortcuts.runAsInvoker,
           mode: ProcessStartMode.detached,
         );
       }

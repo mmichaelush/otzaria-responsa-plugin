@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'dart:io' show sleep;
 import 'dart:typed_data';
 import 'package:responsa_helper/src/log.dart';
+import 'package:responsa_helper/src/native/responsa_integrity.dart';
 
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
@@ -118,8 +119,7 @@ class ResponsaTreeReader {
     final session = ResponsaTreeSession.open(pid, treeHandle);
     if (session == null) {
       throw const ResponsaTreeReadException(
-        'אין גישה לבר אילן, כנראה כי הוא פועל כמנהל מערכת. '
-        'יש לסגור אותו ולפתוח אותו שוב כרגיל, לא דרך "הפעל כמנהל".',
+        ResponsaIntegrity.elevatedMessage,
         accessDenied: true,
       );
     }

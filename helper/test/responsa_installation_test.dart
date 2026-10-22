@@ -202,6 +202,25 @@ void main() {
       );
     });
 
+    test('מפתח בשם חדש ב-[Environment] שערכו נתיב: מוצא את הארכיון', () {
+      // מהדורה שקראה למפתחות אחרת (לא Sh_hdisk ולא Sh_cdrom).
+      final data = Directory(p.join(root.path, 'data'))
+        ..createSync(recursive: true);
+      final device = Directory(p.join(root.path, 'media'))
+        ..createSync(recursive: true);
+      File(p.join(device.path, 'FILE00')).writeAsStringSync('');
+      File(
+        p.join(root.path, 'Responsa.env'),
+      ).writeAsStringSync('DataLocation=${data.path}');
+      File(p.join(data.path, 'Responsa.ini')).writeAsStringSync(
+        ['[Environment]', 'Sh_media=${device.path}', 'Level=3'].join('\r\n'),
+      );
+      expect(
+        installationAt(root.path).archivePath,
+        p.join(device.path, 'FILE00'),
+      );
+    });
+
     test('מפתח מחוץ ל-[Environment] אינו נקרא', () {
       final data = Directory(p.join(root.path, 'data'))
         ..createSync(recursive: true);
@@ -236,6 +255,40 @@ void main() {
       final installation = installationAt(root.path);
       expect(installation.volumeLabel, 'RESPONSAV25');
       expect(installation.archivePath, p.join(disk.path, 'FILE00'));
+    });
+
+    for (final withBom in [true, false]) {
+      test('Responsa.ini ב-UTF-16 (32C)${withBom ? '' : ' בלי BOM'} נקרא', () {
+        // 42KB ו-"0 סעיפים" בקריאה כ-CP1255: Sh_cdrom ותווית ההתקן אבדו,
+        // וההתקנה נשארה בלי ארכיון.
+        final data = Directory(p.join(root.path, 'data'))
+          ..createSync(recursive: true);
+        final device = Directory(p.join(root.path, 'התקן'))
+          ..createSync(recursive: true);
+        File(p.join(device.path, 'FILE00')).writeAsStringSync('');
+        File(
+          p.join(root.path, 'Responsa.env'),
+        ).writeAsStringSync('DataLocation=${data.path}');
+        final text =
+            '[Environment]\r\nSh_cdrom=${device.path}\\\r\n'
+            'VolLabel=RESPONSAV32\r\n[Fonts]\r\nName=עברית\r\n';
+        File(p.join(data.path, 'Responsa.ini')).writeAsBytesSync([
+          if (withBom) ...[0xFF, 0xFE],
+          for (final unit in text.codeUnits) ...[unit & 0xFF, unit >> 8],
+        ]);
+        final installation = installationAt(root.path);
+        expect(installation.volumeLabel, 'RESPONSAV32');
+        expect(installation.archivePath, p.join('${device.path}\\', 'FILE00'));
+      });
+    }
+
+    test('תווית של כונן קיים נקראת, וכונן שאינו קיים — null', () {
+      final drive = ResponsaInstallationDiscovery.drives().first;
+      expect(
+        () => ResponsaInstallationDiscovery.volumeLabel(drive),
+        returnsNormally,
+      );
+      expect(ResponsaInstallationDiscovery.volumeLabel('Q:\\'), isNull);
     });
 
     test('אין Responsa.ini — מפה ריקה ולא חריג', () {

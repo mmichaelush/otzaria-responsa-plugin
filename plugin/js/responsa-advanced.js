@@ -527,175 +527,6 @@
     return result({ ...base, options, mode: Mode.simple, simpleText: found.join(' ') }, approximate);
   }
 
-  /**
-   * שאילתה ארוכה מהמותר בבר אילן מאבדת חלופות מהסוף, מהמילה שיש לה הכי
-   * הרבה, עד שהיא נכנסת. מה שנשמט נוסף ל-[missing].
-   */
-  // ------------------------------------------------------ שורה בתחביר של בר אילן
-
-  /** הקידומת של טווח בתחילת השורה (`משפט:`, `10:`). */
-  const SPAN_LEAD = /^(משפט:|פסקה:|מסמך:|(\d+):)\s*/;
-
-  /**
-   * מפרק את השורה לחלקים: מילה, ביטוי `{{...}}` (עם הרווחים שבו) או מרחק
-   * `[...]`. מרחק הוא חלק בפני עצמו גם כשאין רווח לפניו.
-   */
-  function lineTokens(text) {
-    const tokens = [];
-    let current = '';
-    const flush = () => {
-      if (current) tokens.push(current);
-      current = '';
-    };
-    for (let i = 0; i < text.length; i++) {
-      if (text.startsWith('{{', i)) {
-        const end = text.indexOf('}}', i + 2);
-        if (end < 0) return null;
-        current += text.slice(i, end + 2);
-        i = end + 1;
-      } else if (text[i] === '[') {
-        const end = text.indexOf(']', i);
-        if (end < 0) return null;
-        flush();
-        tokens.push(text.slice(i, end + 1));
-        i = end;
-      } else if (/\s/.test(text[i])) {
-        flush();
-      } else {
-        current += text[i];
-      }
-    }
-    flush();
-    return tokens;
-  }
-
-  /** מילה או ביטוי בשדה: `null` כשאין להם מקום בטבלה. */
-  function lineWord(value) {
-    const phrase = /^\{\{(.+)\}\}$/.exec(value);
-    if (phrase) {
-      const words = phrase[1].trim().split(/\s+/);
-      return words.every((word) => WORD.test(word) && LETTER.test(word)) ? words.join(' ') : null;
-    }
-    return WORD.test(value) && LETTER.test(value) ? value : null;
-  }
-
-  /** `(א/ב/{{ג ד}})` ← החלופות, או `null` כשאין כאן חלופות. */
-  function lineAlternatives(core) {
-    if (!core.startsWith('(') || !core.endsWith(')')) return null;
-    const parts = [];
-    let depth = 0;
-    let current = '';
-    const inner = core.slice(1, -1);
-    for (let i = 0; i < inner.length; i++) {
-      if (inner.startsWith('{{', i)) {
-        const end = inner.indexOf('}}', i + 2);
-        if (end < 0) return null;
-        current += inner.slice(i, end + 2);
-        i = end + 1;
-        continue;
-      }
-      const char = inner[i];
-      if (char === '(') depth++;
-      if (char === ')') depth--;
-      if (char === '/' && depth === 0) {
-        parts.push(current);
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    parts.push(current);
-    if (parts.length < 2) return null;
-    const words = parts.map(lineWord);
-    return words.every(Boolean) ? words : null;
-  }
-
-  /** הצורות, מהארוכה לקצרה: `#!` לפני `#` ולפני `!`. */
-  const FORMS_BY_LENGTH = Object.freeze(
-    [...FORMS].sort((a, b) => b.before.length + b.after.length - (a.before.length + a.after.length)),
-  );
-
-  /** מילה אחת בשורה ← שדה בטבלה, או `null`. */
-  function lineTerm(token) {
-    const exclude = token.startsWith('-') && token.length > 1;
-    const rest = exclude ? token.slice(1) : token;
-    for (const form of FORMS_BY_LENGTH) {
-      if (!rest.startsWith(form.before) || !rest.endsWith(form.after)) continue;
-      if (rest.length <= form.before.length + form.after.length) continue;
-      // `{{ביטוי}}` אינו חיפוש שמור (`{שם}`).
-      if (form.id === 'saved' && rest.startsWith('{{')) continue;
-      const core = rest.slice(form.before.length, rest.length - form.after.length);
-      const alternatives = form.single ? null : lineAlternatives(core);
-      const words = alternatives || [lineWord(core)];
-      if (words.some((word) => word === null)) continue;
-      if (words.length > MAX_ALTERNATIVES) return null;
-      // ביטוי מחופש כמו שהוא (validate): רק בצורה "בדיוק כפי שנכתבה".
-      if (words.some(isPhrase) && form.id !== 'exact') continue;
-      return { words, form: form.id, exclude };
-    }
-    return null;
-  }
-
-  /** `[1:4]` ← "עד 4 מילים אחריה", `[-2:2]` ← "עד 2 מילים לפניה או אחריה". */
-  function lineGap(token) {
-    const match = /^\[(-?\d+):(\d+)\]$/.exec(token);
-    if (!match) return null;
-    const from = Number(match[1]);
-    const to = Number(match[2]);
-    if (to < 1 || to > MAX_DISTANCE) return null;
-    if (from === 1) return { kind: 'after', distance: to };
-    if (from === -to) return { kind: 'around', distance: to };
-    return null;
-  }
-
-  /**
-   * שורה בתחביר של בר אילן ← השדות של בונה החיפוש: `{ ok: true, patch }`
-   * (`terms`, `gaps`, `span`, `within`), או `{ ok: false, message }` כשמשהו
-   * בה אין לו מקום בטבלה. ההפך של [buildQuery], כך ש-`buildQuery` של
-   * התוצאה הוא השורה (בלי רווחים כפולים).
-   */
-  function parseLine(value) {
-    let text = String(value || '').replace(/\s+/g, ' ').trim();
-    if (!text) return { ok: true, patch: { terms: [newTerm()], gaps: [], span: Span.chain } };
-    const patch = { span: Span.chain };
-    const lead = SPAN_LEAD.exec(text);
-    if (lead) {
-      if (lead[2]) {
-        patch.span = Span.words;
-        patch.within = clampInt(lead[2], 1, MAX_DISTANCE, 10);
-      } else {
-        patch.span = Object.keys(SPAN_PREFIX).find((span) => SPAN_PREFIX[span] === lead[1]);
-      }
-      text = text.slice(lead[0].length);
-    }
-    const tokens = lineTokens(text);
-    if (!tokens) return { ok: false, message: t('חסר סוגר: "}}" או "]".') };
-    const terms = [];
-    const gaps = [];
-    let pendingGap = null;
-    for (const token of tokens) {
-      if (token.startsWith('[')) {
-        const gap = lineGap(token);
-        if (!gap) return { ok: false, message: t('למרחק "{gap}" אין שדה מתאים. בטבלה: [1:N] או [-N:N].', { gap: token }) };
-        if (patch.span !== Span.chain) {
-          return { ok: false, message: t('בחיפוש בטווח (משפט, פסקה, מסמך או "N:") אין מרחקים בין המילים.') };
-        }
-        if (!terms.length || pendingGap) return { ok: false, message: t('מרחק צריך לבוא בין שתי מילים.') };
-        pendingGap = gap;
-        continue;
-      }
-      const term = lineTerm(token);
-      if (!term) return { ok: false, message: t('"{word}" אינה מילה שהטבלה מכירה.', { word: token }) };
-      if (terms.length) gaps.push(pendingGap || newGap());
-      pendingGap = null;
-      terms.push(term);
-      if (terms.length > MAX_TERMS) return { ok: false, message: t('בטבלה יש מקום ל-{max} מילים.', { max: MAX_TERMS }) };
-    }
-    if (pendingGap) return { ok: false, message: t('מרחק צריך לבוא בין שתי מילים.') };
-    if (!terms.length) return { ok: false, message: t('כתבו לפחות מילה אחת לחיפוש.') };
-    return { ok: true, patch: { ...patch, terms, gaps } };
-  }
-
   // ------------------------------------------------------ גם באוצריא
 
   /** הצורה של בר אילן ← אפשרויות המילה של אוצריא (ההפך של `otzariaTerm`). */
@@ -782,6 +613,10 @@
     return Object.keys(settings).length ? { query, settings } : { query };
   }
 
+  /**
+   * שאילתה ארוכה מהמותר בבר אילן מאבדת חלופות מהסוף, מהמילה שיש לה הכי
+   * הרבה, עד שהיא נכנסת. מה שנשמט נוסף ל-[missing].
+   */
   function fit(query, missing) {
     let next = query;
     while (buildQuery(next).length > MAX_QUERY_LENGTH) {
@@ -1351,7 +1186,6 @@
     describe,
     setMode,
     fromOtzariaSearch,
-    parseLine,
     toOtzariaSearch,
     otzariaSearchFrom,
     displayQuery,

@@ -79,37 +79,56 @@
      * בידי משתמש Windows אחר עונה `otherSession`, ומדלגים עליו.
      */
     async connect() {
-      let foreign = false;
       const ordered = this.baseUrl
         ? [this.baseUrl, ...this.urls.filter((url) => url !== this.baseUrl)]
         : this.urls;
-      for (const url of ordered) {
-        try {
-          const health = await this._request(url, 'GET', '/health', undefined, PROBE_MS);
-          if (health && health.service === Domain.SERVICE_ID) {
-            if (this.baseUrl !== url) {
-              this.log.info('נמצא השירות ב-' + url + ', גרסה ' + health.serverVersion);
-            }
-            this.baseUrl = url;
-            this.health = health;
-            return health;
-          }
-          foreign = true;
-        } catch (error) {
-          if (error.code === 'permissionDenied' || error.code === 'hostBusy') {
-            throw error;
-          }
-          if (error.code !== 'serviceUnavailable' && error.code !== 'otherSession') {
-            foreign = true;
-          }
+      // הראשון לבד: בדרך כלל השירות שם, ואין סיבה לשאול את כולם. אם לא —
+      // השאר במקביל. פורט סגור שמסרב להשיב (חומת אש, תוכנת סינון) עולה
+      // PROBE_MS, ועשרה כאלה ברצף היו שלושים שניות של "השירות לא נמצא".
+      const [first, ...rest] = ordered;
+      const probes = [await this._probe(first)];
+      // הרשאה או עומס במארח אינם תלויים בפורט.
+      if (probes[0].error) throw probes[0].error;
+      if (!probes[0].health) probes.push(...(await Promise.all(rest.map((url) => this._probe(url)))));
+      const found = probes.find((probe) => probe.health);
+      if (found) {
+        if (this.baseUrl !== found.url) {
+          this.log.info('נמצא השירות ב-' + found.url + ', גרסה ' + found.health.serverVersion);
         }
+        this.baseUrl = found.url;
+        this.health = found.health;
+        return found.health;
       }
+      const blocked = probes.find((probe) => probe.error);
+      if (blocked) throw blocked.error;
+      const foreign = probes.some((probe) => probe.foreign);
+      const slow = probes.filter((probe) => probe.slow).length;
       this.baseUrl = null;
       this.health = null;
-      this.log.debug(foreign ? 'פורט השירות תפוס בידי תוכנה אחרת' : 'השירות לא נמצא באף פורט');
+      this.log.debug(
+        (foreign ? 'פורט השירות תפוס בידי תוכנה אחרת' : 'השירות לא נמצא באף פורט') +
+          (slow ? ' (' + slow + ' פורטים לא ענו בכלל, ולא סירבו — חומת אש או תוכנת הגנה?)' : ''),
+      );
       throw foreign
         ? new ServiceError('portTaken', t('תוכנה אחרת במחשב משתמשת בחיבור של השירות.'))
         : new ServiceError('serviceUnavailable', unavailableMessage());
+    }
+
+    /** `/health` של כתובת אחת: `{ url, health }`, או למה אין — בלי לזרוק. */
+    async _probe(url) {
+      const started = this.now();
+      try {
+        const health = await this._request(url, 'GET', '/health', undefined, PROBE_MS);
+        if (health && health.service === Domain.SERVICE_ID) return { url, health };
+        return { url, foreign: true };
+      } catch (error) {
+        if (error.code === 'permissionDenied' || error.code === 'hostBusy') return { url, error };
+        if (error.code === 'serviceUnavailable' || error.code === 'otherSession') {
+          // סירוב מגיע מיד; תשובה שלא הגיעה כל הזמן שהוקצב אינה סירוב.
+          return { url, slow: this.now() - started >= PROBE_MS - 100 };
+        }
+        return { url, foreign: true };
+      }
     }
 
     status() {

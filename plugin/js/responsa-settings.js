@@ -38,6 +38,11 @@
     otzariaFirst: 'responsa_otzaria_first',
     /** חיפוש בטקסט: אותן מילים גם בחיפוש של אוצריא, בכרטיסייה משלה. */
     alsoOtzaria: 'responsa_also_otzaria',
+    /**
+     * חיפוש מדיאלוג החיפוש של אוצריא: קודם באוצריא, ובבר אילן רק כשאוצריא
+     * לא מצאה כלום (issue #6, mmichaelush/otzaria#2583).
+     */
+    otzariaFirstSearch: 'responsa_otzaria_first_search',
     /** מה נשלח לאחרונה לחיפוש הספרייה: `{ builtAt, count }`. */
     librarySync: 'responsa_library_sync',
     /** המשתמש סגר את ההערה על ההרשאה "הוספת רכיבים לתוכנה". */
@@ -107,6 +112,7 @@
     showSummary: false,
     otzariaFirst: false,
     alsoOtzaria: false,
+    otzariaFirstSearch: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',
@@ -133,6 +139,7 @@
       showSummary: value.showSummary === true,
       otzariaFirst: value.otzariaFirst === true,
       alsoOtzaria: value.alsoOtzaria === true,
+      otzariaFirstSearch: value.otzariaFirstSearch === true,
       startupNotice: value.startupNotice === true,
       welcomeSeen: value.welcomeSeen === true,
       browsePath:
@@ -176,6 +183,7 @@
         'showSummary',
         'otzariaFirst',
         'alsoOtzaria',
+        'otzariaFirstSearch',
         'startupNotice',
         'welcomeSeen',
         'browsePath',

@@ -712,6 +712,14 @@
     return has(permissions, 'reader.open');
   }
 
+  /**
+   * "קודם באוצריא" בחיפוש: לספור את התוצאות באוצריא (`search.query`) ולפתוח
+   * אותן בכרטיסיית חיפוש שלה.
+   */
+  function canSearchOtzariaFirst(permissions) {
+    return has(permissions, 'search.fulltext.read') && canOpenSearchTab(permissions);
+  }
+
   function hostSupportsLibrary(permissions) {
     return has(permissions, LIBRARY_PERMISSION);
   }
@@ -967,6 +975,7 @@
     searchSucceeded,
     canOpenInOtzaria,
     canOpenSearchTab,
+    canSearchOtzariaFirst,
     OTZARIA_FIRST_PERMISSIONS,
     hostSupportsLibrary,
     lacksStartupPermission,

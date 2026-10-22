@@ -232,6 +232,10 @@ class ResponsaCatalogWriter {
           "INSERT OR REPLACE INTO db_meta(key, value) "
           "VALUES('author_source', 'none')",
         );
+        db.execute(
+          "INSERT OR REPLACE INTO db_meta(key, value) "
+          "VALUES('authors_checked_revision', '${ResponsaAuthorTable.readerRevision}')",
+        );
       } finally {
         db.close();
       }

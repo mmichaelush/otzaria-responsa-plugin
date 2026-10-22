@@ -135,6 +135,30 @@
       }
     }
 
+    /**
+     * הקריאה הראשונה בלבד משיטה שמחזירה זרם (`search.query`): ה-chunk הראשון
+     * נושא את הספירות. עצירת הלולאה מבטלת את הפעולה בצד אוצריא. זורק
+     * [SdkError] כשהשיטה נדחית או הזרם נכשל.
+     */
+    async function firstChunk(method, payload) {
+      if (!bridge || typeof bridge.call !== 'function') {
+        throw new SdkError(method, { error: { code: CODES.unavailable, message: 'no SDK' } });
+      }
+      await reserveSlot();
+      let stream = await bridge.call(method, payload || {});
+      if (stream && stream.success === false) throw new SdkError(method, stream);
+      if (stream && !stream[Symbol.asyncIterator] && stream.data !== undefined) stream = stream.data;
+      if (!stream || typeof stream[Symbol.asyncIterator] !== 'function') return stream;
+      try {
+        for await (const chunk of stream) return chunk;
+      } catch (error) {
+        if (error instanceof SdkError) throw error;
+        const code = (error && error.code) || 'error.unknown';
+        throw new SdkError(method, { error: { code, message: (error && error.message) || String(error) } });
+      }
+      return null;
+    }
+
     /** כל הודעה שהמשתמש ראה נרשמת: כך היומן מספר את הסיפור כפי שהוא חווה אותו. */
     const show = (method, level, message) => {
       if (typeof logger[level] === 'function') logger[level]('הודעה: ' + message);
@@ -157,7 +181,7 @@
       return () => bridge.off && bridge.off(eventName, wrapped);
     }
 
-    return Object.freeze({ bridge, call, callRaw, callSoft, notify, on });
+    return Object.freeze({ bridge, call, callRaw, callSoft, firstChunk, notify, on });
   }
 
   const api = { CODES, SdkError, createRuntime };

@@ -23,6 +23,8 @@
   const t = (text, vars) => I18n.t(text, vars);
 
   /** כמה זמן לחכות להקלדה לפני חיפוש. */
+  /** כמה לחכות לספירת התוצאות של אוצריא ב"קודם באוצריא", לפני שמחפשים בבר אילן. */
+  const OTZARIA_COUNT_MS = 25000;
   const SEARCH_DEBOUNCE_MS = 250;
 
   /** החיפוש המתקדם נשמר אחרי הפסקה קצרה בהקלדה, ולא בכל אות. */
@@ -273,11 +275,16 @@
       if (!payload || payload.itemId !== Domain.LOCATE_MENU_ITEM) return;
       await this.ready;
       const headings = await this._readerHeadings(payload);
-      await this.locateFromReader(
-        payload.currentBook,
-        headings || payload.currentRef,
-        Locate.fromSelection(payload.selectedText),
-      );
+      const place = Locate.fromSelection(payload.selectedText);
+      // סימון שאינו נראה כמקום נשלח בכל זאת, לפני המקום שפתוח: מי שסימן ביקש
+      // לאתר אותו (דיווח משתמש 10.2026: נשלח המקום בספר ולא הטקסט שסומן).
+      const selected = place || Locate.selectionGuess(payload.selectedText);
+      if (payload.selectedText) {
+        this.log.info(
+          'איתור מקום מאוצריא: סימון ' + (place ? 'שנראה כמקום' : selected ? 'שאינו נראה כמקום' : 'שלא נשלח (ארוך או מילה אחת)'),
+        );
+      }
+      await this.locateFromReader(payload.currentBook, headings || payload.currentRef, selected);
     }
 
     /** הכותרות של השורה שסומנה (`Locate.headingsAt`), או `null`. */
@@ -869,39 +876,11 @@
       const state = this.model.advanced;
       state.query = query;
       state.status = null;
-      // שינוי שלא בא מהשורה: השורה נכתבת מחדש מהשדות.
-      if (!(options && options.fromLine)) state.line = null;
       // אחרי ניסיון שנכשל, ההערה מתעדכנת תוך כדי תיקון.
       if (state.problem) state.problem = Advanced.validate(query);
       this._saveAdvancedSoon();
       if (options && options.light) this.view.updateAdvanced(this.model);
       else this._renderPage();
-      if (!state.line) this.view.setInputValue('adv-line', Advanced.buildQuery(query));
-    }
-
-    /**
-     * השורה בתחביר של בר אילן: מה שמתפרק — נכנס לשדות; מה שלא — נשאר
-     * בשורה עם הסבר, והשדות כמו שהיו (והחיפוש מחכה לתיקון).
-     */
-    advancedLine(text) {
-      const state = this.model.advanced;
-      const parsed = Advanced.parseLine(text);
-      state.line = { text, error: parsed.ok ? null : parsed.message };
-      if (!parsed.ok) {
-        this._renderPage();
-        return;
-      }
-      if (state.problem && state.problem.line) state.problem = null;
-      this._editAdvanced(Advanced.normalize({ ...state.query, ...parsed.patch }), { fromLine: true });
-    }
-
-    /** "חיפוש כמו שנכתב": השורה עוברת ל"כתיבה בתחביר של בר אילן" ורצה שם. */
-    advancedLineAsIs(text) {
-      const state = this.model.advanced;
-      state.line = null;
-      state.problem = null;
-      this._editAdvanced({ ...state.query, mode: Advanced.Mode.manual, manualText: String(text || '').trim() });
-      return this.runAdvanced();
     }
 
     _saveAdvancedSoon() {
@@ -1020,11 +999,7 @@
       // שירות ישן מניסוח חופשי: הלשונית כבר מסבירה, והכפתור כבוי.
       if (Advanced.serviceNote(state.query, (name) => Domain.serviceCan(this.model.health, name))) return;
       const query = Advanced.withAvailableScope(state.query, Domain.catalogReady(this.model.status));
-      // שורה שלא התפרקה: השדות אינם מה שנכתב, ואין לחפש אותם במקומה.
-      const lineError = query.mode === Advanced.Mode.builder && state.line && state.line.error;
-      const problem = lineError
-        ? { message: Advanced.displayQuery(t('השורה לא עודכנה בשדות: {reason}', { reason: lineError })), line: true }
-        : Advanced.validate(query);
+      const problem = Advanced.validate(query);
       state.problem = problem;
       if (problem) {
         state.status = null;
@@ -1070,22 +1045,69 @@
      */
     async _alsoInOtzaria(target) {
       if (!target || !this.model.settings.alsoOtzaria || !Domain.canOpenSearchTab(this.model.permissions)) return;
+      await this._openOtzariaSearch(target);
+    }
+
+    /** כרטיסיית חיפוש של אוצריא ל-[target]; `true` כשנפתחה. */
+    async _openOtzariaSearch(target) {
       // בלי שורות של התוסף מסומנות: החיפוש שם רץ באוצריא ולא חוזר לכאן.
       const params = { query: target.query, autoSearch: true, selectItems: [] };
       try {
         await this.runtime.call('reader.openSearchTab', target.settings ? { ...params, settings: target.settings } : params);
-        this.log.info('חיפוש גם באוצריא: ' + target.query, target.settings || {});
-        return;
+        this.log.info('חיפוש באוצריא: ' + target.query, target.settings || {});
+        return true;
       } catch (error) {
         this.log.debug('חיפוש באוצריא עם ההגדרות נכשל', error);
       }
-      if (!target.settings) return;
+      if (!target.settings) return false;
       try {
         await this.runtime.call('reader.openSearchTab', params);
-        this.log.info('חיפוש גם באוצריא, בלי ההגדרות: ' + target.query);
+        this.log.info('חיפוש באוצריא, בלי ההגדרות: ' + target.query);
+        return true;
       } catch (error) {
         this.log.warn('פתיחת החיפוש באוצריא נכשלה', error);
+        return false;
       }
+    }
+
+    /**
+     * כמה תוצאות יש באוצריא לבקשה מדיאלוג החיפוש שלה: `search.query` מזרים,
+     * וה-`total` בא ב-chunk הראשון (העצירה אחריו מבטלת את החיפוש). `null`
+     * כשלא ניתן לדעת (שגיאה, זמן): אז לא מחליטים בשם אוצריא.
+     */
+    async _otzariaTotal(request) {
+      const base = { ...request, limit: 1, offset: 0 };
+      const attempt = async (payload) => {
+        let timer = null;
+        const late = new Promise((resolve) => {
+          timer = setTimeout(() => resolve('timeout'), OTZARIA_COUNT_MS);
+        });
+        try {
+          return await Promise.race([this.runtime.firstChunk('search.query', payload), late]);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      let chunk;
+      try {
+        try {
+          chunk = await attempt(base);
+        } catch (error) {
+          // אוצריא 0.9.98 אינה מכירה `anyOrder` (מ-0.9.99).
+          if (!(error && error.code === 'error.invalid_params' && 'anyOrder' in base)) throw error;
+          const { anyOrder, ...without } = base;
+          chunk = await attempt(without);
+        }
+      } catch (error) {
+        this.log.warn('ספירת התוצאות באוצריא נכשלה', error);
+        return null;
+      }
+      if (!chunk || chunk === 'timeout') {
+        this.log.warn('ספירת התוצאות באוצריא: ' + (chunk || 'אין תשובה'));
+        return null;
+      }
+      const listed = Array.isArray(chunk.results) ? chunk.results.length : 0;
+      return typeof chunk.total === 'number' ? Math.max(chunk.total, listed) : listed;
     }
 
     /**
@@ -1115,10 +1137,17 @@
       );
       if (Domain.SETUP_SCREENS.has(this.model.screen)) return;
       this.log.info('חיפוש מדיאלוג החיפוש של אוצריא' + (mapped.approximate ? ' (בקירוב)' : ''));
+      // "קודם באוצריא": אוצריא מצאה — החיפוש נשאר שם, ובר אילן רק בבקשה.
+      const otzaria = await this._otzariaFirstSearch(request);
+      if (otzaria && otzaria.found) return;
       // "חיפוש בבר אילן" בדיאלוג מחליף את החיפוש של אוצריא; עם "חיפוש גם
       // באוצריא" — הבקשה רצה גם שם, בהגדרות שנבחרו בדיאלוג.
-      await this._alsoInOtzaria(Advanced.otzariaSearchFrom(request));
+      if (!otzaria) await this._alsoInOtzaria(Advanced.otzariaSearchFrom(request));
       await this.runAdvanced({ otzaria: false });
+      if (otzaria && state.status && state.status.kind === 'success') {
+        state.status = { ...state.status, text: t('אוצריא לא מצאה תוצאות, ולכן החיפוש הועבר לבר אילן.') + ' ' + state.status.text };
+        this._renderPage();
+      }
       if (mapped.approximate && state.status && state.status.kind === 'success') {
         state.status = {
           ...state.status,
@@ -1131,6 +1160,46 @@
         };
         this._renderPage();
       }
+    }
+
+    /**
+     * "חיפוש מאוצריא: קודם באוצריא" (הגדרה, כבויה כברירת מחדל). `null` —
+     * כבוי, בלי הרשאה, או שלא ניתן לדעת: הדיאלוג מתנהג כרגיל. אחרת
+     * `{ found }`: אוצריא מצאה — החיפוש נפתח בכרטיסייה שלה (בלי בר אילן) —
+     * או שלא מצאה, ואז בר אילן ממשיך.
+     */
+    async _otzariaFirstSearch(request) {
+      const model = this.model;
+      if (!model.settings.otzariaFirstSearch || !Domain.canSearchOtzariaFirst(model.permissions)) return null;
+      const target = Advanced.otzariaSearchFrom(request);
+      if (!target) return null;
+      const state = model.advanced;
+      state.status = { kind: 'info', text: t('בודק אם אוצריא מוצאת תוצאות…') };
+      this._renderPage();
+      const total = await this._otzariaTotal(request);
+      if (total === null) {
+        state.status = null;
+        this._renderPage();
+        return null;
+      }
+      if (total === 0) {
+        this.log.info('אוצריא לא מצאה תוצאות: החיפוש עובר לבר אילן');
+        state.status = null;
+        return { found: false };
+      }
+      if (!(await this._openOtzariaSearch(target))) {
+        state.status = null;
+        this._renderPage();
+        return null;
+      }
+      this.log.info('אוצריא מצאה ' + total + ' תוצאות: החיפוש נשאר באוצריא');
+      state.status = {
+        kind: 'success',
+        text: t('אוצריא מצאה תוצאות, והן נפתחו בכרטיסיית חיפוש שלה, ולכן החיפוש לא הועבר לבר אילן. כדי לחפש גם בבר אילן, לוחצים "חיפוש בבר אילן".'),
+      };
+      this._renderPage();
+      this.view.announce(state.status.text);
+      return { found: true, total };
     }
 
     /** "פתיחת בר אילן", מהפס העליון. */
@@ -1730,8 +1799,6 @@
         loadMore: () => this.loadMore(),
         selectTab: (tab, options) => this.selectTab(tab, options),
         advancedMode: (mode, how) => this.advancedMode(mode, how),
-        advancedLine: (text) => this.advancedLine(text),
-        advancedLineAsIs: (text) => this.advancedLineAsIs(text),
         advancedBrowse: (path) => this.advancedBrowse(path, { focus: true }),
         advancedSet: (patch, options) => this.advancedSet(patch, options),
         advancedWord: (index, alternative, value) => this.advancedWord(index, alternative, value),

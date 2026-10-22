@@ -70,6 +70,7 @@ he.ConfirmUninstall=להסיר את %1 מהמחשב?
 he.UninstalledAll=ההסרה של %1 הסתיימה.
 
 [CustomMessages]
+he.OtherUser=ההתקנה רצה כמשתמש אחר מזה שמחובר עכשיו בשולחן העבודה (כנראה בלחיצה על "הפעל כמנהל" מחשבון רגיל, ואז Windows מבקשת סיסמה של מנהל).%n%nהשירות יותקן ויופעל רק עבור המשתמש שהמתקין רץ בשמו, ולא יעבוד אצל המשתמש המחובר: בהתחלה הוא נראה פועל, ואחרי התנתקות או הפעלה מחדש הוא נעלם.%n%nמומלץ לסגור את ההתקנה ולהפעיל אותה שוב בלחיצה כפולה רגילה, בלי "הפעל כמנהל" ובלי "הפעל כמשתמש אחר". לא נדרשות הרשאות מנהל.%n%nלהמשיך בכל זאת?
 he.InstallPlugin=להתקין את התוסף באוצריא (מומלץ)
 he.UpdatePlugin=לעדכן את התוסף באוצריא לגרסה %1 (מומלץ)
 ; מסך הסיום לפי מצב התוסף באוצריא (CurPageChanged). אוצריא מציעה את שתי
@@ -105,6 +106,8 @@ Source: "staging\bin\{#HelperExe}"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "staging\lib\sqlite3.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
 Source: "staging\{#PluginFile}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+; לבדיקה לפני ההתקנה (OtherUserWarning): איזה משתמש רץ, ואיזה בשולחן העבודה.
+Source: "staging\bin\{#HelperExe}"; DestDir: "{tmp}"; Flags: dontcopy
 
 [Registry]
 ; הפעלה בכל כניסה למשתמש. המרכאות נדרשות בגלל רווחים אפשריים בנתיב.
@@ -332,6 +335,25 @@ begin
   WizardForm.FinishedLabel.Caption := Text + #13#10#13#10 + SetupMessage(msgClickFinish);
   WizardForm.AdjustLabelHeight(WizardForm.FinishedLabel);
   WizardForm.RunList.Top := WizardForm.RunList.Top + WizardForm.FinishedLabel.Height - OldHeight;
+end;
+
+{ מתקין שהורץ כמנהל מחשבון רגיל רץ כחשבון המנהל, ומתקין את השירות אצלו.
+  השירות עצמו משווה את המשתמש שלו לבעלים של שולחן העבודה (--check-install-user,
+  קוד 20 = משתמש אחר); כשאי אפשר לדעת, ממשיכים. }
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  if (CurPageID <> wpWelcome) or WizardSilent() then Exit;
+  try
+    ExtractTemporaryFile('{#HelperExe}');
+    if Exec(ExpandConstant('{tmp}\{#HelperExe}'), '--check-install-user', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode) and (ResultCode = 20) then
+      Result := MsgBox(CustomMessage('OtherUser'), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+  except
+    { בדיקה שנכשלה אינה סיבה לעצור התקנה. }
+  end;
 end;
 
 { עדכון: השירות הקודם מחזיק את קובץ ההרצה ואת הפורט. }

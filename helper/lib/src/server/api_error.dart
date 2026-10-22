@@ -45,6 +45,7 @@ class ApiError implements Exception {
         message,
         details,
       ),
+      ResponsaFailure.elevated => ApiError('elevated', 409, message, details),
       ResponsaFailure.busy => ApiError('busy', 409, message, details),
       ResponsaFailure.citationDialogNotFound ||
       ResponsaFailure.searchDialogNotFound ||

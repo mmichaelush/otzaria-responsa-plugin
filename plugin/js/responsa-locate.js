@@ -100,6 +100,19 @@
   }
 
   /**
+   * כל טקסט קצר שסומן, גם כשאינו נראה כמקום (`חזון איש חושן משפט`): מי שסימן
+   * ביקש לאתר אותו, ולא את המקום שבו הוא קורא. בר אילן יחליט אם הוא מכיר;
+   * אם לא, המקום שפתוח הוא הגיבוי (`_locateSelection`). `null` — אין סימון,
+   * מילה אחת, או קטע מהספר.
+   */
+  function selectionGuess(text) {
+    const ref = normalize(text).replace(/^[([{\s]+|[)\]}\s,;]+$/g, '');
+    if (!ref || ref.length > MAX_SELECTION_LENGTH || validate(ref)) return null;
+    const tokens = ref.replace(/[,;]/g, ' ').split(' ').filter(Boolean);
+    return tokens.length > MAX_SELECTION_WORDS ? null : ref;
+  }
+
+  /**
    * ציון דף כמו בגמרא (`שבת לא.`, `ב"מ ד' ע"ב`) ← הצורה שבר אילן מזהה
    * (`שבת דף לא עמוד א`); כמו [readerHeading] בכותרת. רק מספר אחד בסוף,
    * אחרי שם: `עירובין ד' ה.` עמום, ונשאר כפי שסומן.
@@ -354,6 +367,7 @@
     headingsAt,
     fromReader,
     fromSelection,
+    selectionGuess,
     talmudPage,
     rankChoices,
     displayOrder,

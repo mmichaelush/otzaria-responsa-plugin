@@ -10,9 +10,13 @@ import 'package:responsa_helper/src/text/responsa_bibliography.dart';
 import 'package:responsa_helper/src/text/responsa_structure.dart';
 import 'package:path/path.dart' as p;
 
-/// רשומה של 73 בתים: מזהה big-endian וטקסט CP862 מרופד.
-Uint8List record(int id, String text) {
-  final bytes = Uint8List(ResponsaAuthorTable.recordSize);
+/// רשומה של 73 בתים (או [size]): מזהה big-endian וטקסט CP862 מרופד.
+Uint8List record(
+  int id,
+  String text, {
+  int size = ResponsaAuthorTable.recordSize,
+}) {
+  final bytes = Uint8List(size);
   bytes[0] = id >> 8;
   bytes[1] = id & 0xFF;
   var at = 2;
@@ -95,6 +99,103 @@ void main() {
       });
       expect(t.knows(7), isTrue);
       expect(t.authorOf(7), isNull);
+    });
+
+    test('FILE25 של 103 בתים (בר אילן 32) נקרא, ולא מפיל את כל המחברים', () {
+      // הכותרות בשם ארוך: 101 בתים של טקסט. עד 0.6.3 הקובץ נפסל כולו,
+      // וכל המחברים איתו.
+      final longTitle = 'בית הבחירה על מסכת ' * 4;
+      final t = ResponsaAuthorTable.parse({
+        'FILE25.MA': table([
+          record(2201, longTitle, size: ResponsaAuthorTable.titleRecordSize),
+          record(2202, 'ספר', size: ResponsaAuthorTable.titleRecordSize),
+        ]),
+        'FILE65.MA': table([record(2201, "ר' מנחם בן שלמה המאירי")]),
+      });
+      expect(t.knows(2201), isTrue);
+      expect(t.knows(2202), isTrue);
+      expect(t.authorOf(2201), "ר' מנחם בן שלמה המאירי");
+    });
+
+    test('FILE25 שבו בית אחד אינו קריא עדיין נותן את המזהים', () {
+      final broken = record(
+        2201,
+        'ספר',
+        size: ResponsaAuthorTable.titleRecordSize,
+      )..[40] = 0xF0;
+      final t = ResponsaAuthorTable.parse({
+        'FILE25.MA': table([broken]),
+        'FILE65.MA': table([record(2201, "ר' מנחם המאירי")]),
+      });
+      expect(t.authorOf(2201), "ר' מנחם המאירי");
+    });
+
+    test('FILE65 שרוב רשומותיו אינן קריאות אינו המבנה — מדולג', () {
+      final garbage = Uint8List(ResponsaAuthorTable.recordSize * 4)
+        ..fillRange(0, ResponsaAuthorTable.recordSize * 4, 0xF0);
+      final t = ResponsaAuthorTable.parse({
+        'FILE25.A': table([record(1, 'X')]),
+        'FILE65.A': garbage,
+      });
+      expect(t.authorOf(1), isNull);
+    });
+
+    test('גודל רשומה שלא נמדד מעולם (מהדורה עתידית) נקבע מהתוכן', () {
+      for (final size in [48, 100, 120, 160, 256]) {
+        final t = ResponsaAuthorTable.parse({
+          'FILE25.MA': table([
+            for (var i = 1; i <= 6; i++)
+              record(2200 + i, 'ספר מספר $i', size: size),
+          ]),
+          'FILE65.MA': table([
+            record(2201, "ר' מנחם בן שלמה המאירי", size: size),
+            record(2202, "ר' משה בן מיימון", size: size),
+            record(2203, "ר' יוסף קארו", size: size),
+          ]),
+        });
+        expect(t.authorOf(2201), "ר' מנחם בן שלמה המאירי", reason: '$size');
+        expect(t.authorOf(2203), "ר' יוסף קארו", reason: '$size');
+      }
+    });
+
+    test('כפולה של הגודל האמיתי אינה נבחרת במקומו', () {
+      // 6 רשומות של 73 מתחלקות גם ב-146 וב-219.
+      final t = ResponsaAuthorTable.parse({
+        'FILE25.A': table([for (var i = 1; i <= 6; i++) record(i, 'ספר $i')]),
+        'FILE65.A': table([
+          for (var i = 1; i <= 6; i++) record(i, "ר' מחבר $i"),
+        ]),
+      });
+      for (var i = 1; i <= 6; i++) {
+        expect(t.authorOf(i), "ר' מחבר $i");
+      }
+    });
+
+    test('זבל אחרי סוף הטקסט ברשומה אינו משבש את הזיהוי', () {
+      Uint8List dirty(int id, String text) {
+        final bytes = record(id, text, size: 90);
+        for (var i = 40; i < 90; i++) {
+          if (bytes[i] == 0) bytes[i] = 0xF1;
+        }
+        return bytes;
+      }
+
+      final t = ResponsaAuthorTable.parse({
+        'FILE25.A': table([dirty(1, 'ספר'), dirty(2, 'ספר ב')]),
+        'FILE65.A': table([dirty(1, "ר' ראשון"), dirty(2, "ר' שני")]),
+      });
+      expect(t.authorOf(2), "ר' שני");
+    });
+
+    test('describeTables מראה גודל וספירה לכל מדור', () {
+      final report = ResponsaAuthorTable.describeTables({
+        'FILE25.AH': table([
+          record(1, 'X', size: ResponsaAuthorTable.titleRecordSize),
+        ]),
+        'FILE65.AH': table([record(1, "ר' א")]),
+        'FILE65.ZZ': Uint8List(10),
+      });
+      expect(report, 'AH 25:103x1 65:73x1, ZZ 65:?10');
     });
 
     test('קובץ שגודלו אינו כפולה של רשומה מדולג כולו', () {

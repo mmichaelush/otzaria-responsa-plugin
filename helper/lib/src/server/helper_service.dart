@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:meta/meta.dart';
+
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
+import 'package:responsa_helper/src/native/responsa_integrity.dart';
 import 'package:responsa_helper/src/native/responsa_controller.dart';
 import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/server/api_error.dart';
@@ -16,6 +19,7 @@ import 'package:responsa_helper/src/server/otzaria_plugin_remover.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 import 'package:responsa_helper/src/text/responsa_advanced_query.dart';
+import 'package:responsa_helper/src/text/responsa_author_table.dart';
 import 'package:responsa_helper/src/text/responsa_hebrew.dart';
 import 'package:responsa_helper/src/text/responsa_query.dart';
 
@@ -36,7 +40,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.6.3';
+  static const String serverVersion = '0.6.4';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -113,7 +117,7 @@ class HelperService {
         ),
         // הרשימה נקראה בלי מחברים, ואפשר להשלים אותם בלי לקרוא אותה
         // מחדש (בר אילן 29 ו-32 בשירות לפני 0.6.3; `mode: authors`).
-        'authorsFillable': _authorsFillable(info.fingerprint),
+        'authorsFillable': authorsFillable(info.fingerprint),
         if (info.schemaVersion != null) 'schemaVersion': info.schemaVersion,
         'outdated': info.isOutdated,
         if (info.builtAt != null) 'builtAt': info.builtAt,
@@ -126,9 +130,14 @@ class HelperService {
     };
   }
 
-  /// טבלת מחברים ריקה, ולא בדקנו כבר שאין בארכיון מחברים כלל.
-  static bool _authorsFillable(Map<String, String> meta) =>
-      meta['author_table_entries'] == '0' && meta['author_source'] != 'none';
+  /// טבלת מחברים ריקה, ולא בדקנו כבר שאין בארכיון מחברים כלל — עם הקריאה
+  /// הנוכחית של הארכיון ([ResponsaAuthorTable.readerRevision]).
+  @visibleForTesting
+  static bool authorsFillable(Map<String, String> meta) =>
+      meta['author_table_entries'] == '0' &&
+      (meta['author_source'] != 'none' ||
+          meta['authors_checked_revision'] !=
+              '${ResponsaAuthorTable.readerRevision}');
 
   /// פרטים לאיתור תקלה במחשב של משתמש (docs/PROTOCOL.md): סיכום קצר וסוף
   /// היומן. נבנה רק לבקשה.
@@ -844,6 +853,7 @@ class HelperService {
         detail ??
             'בר אילן אינו פעיל ולא ניתן היה להפעיל אותו. '
                 'יש לפתוח את פרויקט השו"ת ולנסות שוב.',
+      ResponsaFailure.elevated => detail ?? ResponsaIntegrity.elevatedMessage,
       ResponsaFailure.citationDialogNotFound =>
         'בר אילן לא פתח את חלון "עיון", ולכן לא ניתן היה לפתוח את $book. '
             'ייתכן שחלון אחר פתוח בבר אילן וממתין לתשובה. יש לסגור אותו '
@@ -888,6 +898,7 @@ class HelperService {
       detail ??
           'בר אילן אינו פעיל ולא ניתן היה להפעיל אותו. '
               'יש לפתוח את פרויקט השו"ת ולנסות שוב.',
+    ResponsaFailure.elevated => detail ?? ResponsaIntegrity.elevatedMessage,
     ResponsaFailure.searchDialogNotFound =>
       'בר אילן לא פתח את חלון החיפוש. ייתכן שחלון אחר פתוח בבר אילן '
           'וממתין לתשובה. יש לסגור אותו ולנסות שוב.',

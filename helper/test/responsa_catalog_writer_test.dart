@@ -8,6 +8,7 @@ import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_tree_reader.dart';
 import 'package:responsa_helper/src/catalog/responsa_catalog_repository.dart';
 import 'package:responsa_helper/src/catalog/responsa_catalog_schema.dart';
+import 'package:responsa_helper/src/server/helper_service.dart';
 import 'package:responsa_helper/src/text/responsa_author_table.dart';
 import 'package:responsa_helper/src/text/responsa_structure.dart';
 import 'package:path/path.dart' as p;
@@ -300,6 +301,32 @@ void main() {
       );
       ResponsaCatalogWriter.markAuthorsUnavailable(target);
       expect(metaIn(target)['author_source'], 'none');
+      expect(
+        metaIn(target)['authors_checked_revision'],
+        '${ResponsaAuthorTable.readerRevision}',
+      );
+    });
+
+    test('"אין מחברים" שנרשם בקריאה ישנה של הארכיון — מוצע להשלמה שוב', () {
+      final empty = {'author_table_entries': '0'};
+      expect(HelperService.authorsFillable(empty), isTrue);
+      // רשום "none" בלי גרסה (0.6.3): הקריאה השתפרה מאז.
+      expect(
+        HelperService.authorsFillable({...empty, 'author_source': 'none'}),
+        isTrue,
+      );
+      expect(
+        HelperService.authorsFillable({
+          ...empty,
+          'author_source': 'none',
+          'authors_checked_revision': '${ResponsaAuthorTable.readerRevision}',
+        }),
+        isFalse,
+      );
+      expect(
+        HelperService.authorsFillable({'author_table_entries': '1398'}),
+        isFalse,
+      );
     });
   });
 }

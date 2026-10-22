@@ -36,24 +36,65 @@ class ResponsaInstallation {
   /// לפי שרשרת הפתרון של התוכנה (`Sh_hdisk` + `db\`). בהתקנה חלקית הארכיון על
   /// התקן נשלף שאות הכונן שלו משתנה, ו-`null` (לא מחובר) הוא מצב חוקי.
   String? get archivePath {
-    final settings = iniSettings;
-    for (final candidate in [
-      if (settings['sh_hdisk'] case final value?)
-        path.join(value, 'db', 'FILE00'),
-      path.join(installPath, 'DB', 'FILE00'),
-      if (dataLocation case final data?) path.join(data, 'DB', 'FILE00'),
-      if (settings['sh_cdrom'] case final value?) ...[
-        path.join(value, 'db', 'FILE00'),
-        // ההתקן עצמו (דיסק-און-קי, או עותק שלו): `FILE00` בשורש, ליד
-        // `INSTALL\` (docs/56 §23; ב-CD25 של משתמש 29C, 15.10.2026).
-        path.join(value, 'FILE00'),
-      ],
-      for (final drive in ResponsaInstallationDiscovery.drives())
-        path.join(drive, 'db', 'FILE00'),
-    ]) {
+    for (final candidate in _archiveCandidates()) {
       if (File(candidate).existsSync()) return candidate;
     }
     return null;
+  }
+
+  Iterable<String> _archiveCandidates() sync* {
+    final settings = iniSettings;
+    if (settings['sh_hdisk'] case final value?) {
+      yield path.join(value, 'db', 'FILE00');
+    }
+    yield path.join(installPath, 'DB', 'FILE00');
+    if (dataLocation case final data?) yield path.join(data, 'DB', 'FILE00');
+    if (settings['sh_cdrom'] case final value?) {
+      yield path.join(value, 'db', 'FILE00');
+      // ההתקן עצמו (דיסק-און-קי, או עותק שלו): `FILE00` בשורש, ליד
+      // `INSTALL\` (docs/56 §23; ב-CD25 של משתמש 29C, 15.10.2026).
+      yield path.join(value, 'FILE00');
+    }
+    final drives = ResponsaInstallationDiscovery.drives();
+    for (final drive in drives) {
+      yield path.join(drive, 'db', 'FILE00');
+    }
+    // 32C: האות של ההתקן נשלף (דיסק וירטואלי `F:`), וב-ini אין אותה — רק
+    // התווית (`RESPONSAV32`) מזהה שזה ההתקן של המהדורה הזאת ולא של אחרת.
+    for (final drive in drives) {
+      if (_isMediaOfThisEdition(
+        ResponsaInstallationDiscovery.volumeLabel(drive),
+      )) {
+        yield path.join(drive, 'FILE00');
+      }
+    }
+    // מהדורה שקראה למפתחות אחרת (לא `Sh_hdisk` ולא `Sh_cdrom`): כל ערך ב-ini
+    // שהוא נתיב. הארכיון נבחר בפועל רק אם הקובץ קיים, והאחרונים בתור כדי
+    // שהמפתחות שנמדדו יקדימו.
+    for (final value in settings.values) {
+      if (!_looksLikePath(value)) continue;
+      yield path.join(value, 'db', 'FILE00');
+      yield path.join(value, 'FILE00');
+    }
+  }
+
+  static bool _looksLikePath(String value) =>
+      value.length >= 3 &&
+      (RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value) || value.startsWith(r'\\'));
+
+  /// [label] הוא של התקן המהדורה: התווית מה-ini, ובלעדיה `RESPONSAV<גרסה>`
+  /// (המספר הוא של ההתקנה, לא קבוע: 25, 28, 33...). כשגם הגרסה אינה ידועה,
+  /// כל תווית שמתחילה ב-`RESPONSA`.
+  bool _isMediaOfThisEdition(String? label) {
+    if (label == null || label.isEmpty) return false;
+    final upper = label.toUpperCase();
+    final wanted = iniSettings['vollabel'];
+    if (wanted != null && wanted.isNotEmpty) {
+      return upper == wanted.toUpperCase();
+    }
+    final edition = version;
+    if (edition == null) return upper.startsWith('RESPONSA');
+    return upper == 'RESPONSAV$edition';
   }
 
   /// תיקיית נתוני המשתמש מ-`Responsa.env`; `null` כשהקובץ חסר - מצב חוקי.
@@ -81,6 +122,8 @@ class ResponsaInstallation {
       logLine('ResponsaInstallation: cannot read $filePath: $e');
       return const [];
     }
+    final wide = _decodeUtf16(bytes);
+    if (wide != null) return const LineSplitter().convert(wide);
     for (final codec in <Encoding>[utf8, systemEncoding, latin1]) {
       try {
         return const LineSplitter().convert(codec.decode(bytes));
@@ -89,6 +132,38 @@ class ResponsaInstallation {
       }
     }
     return const [];
+  }
+
+  /// `Responsa.ini` של 32C הוא UTF-16 (42KB, "0 סעיפים" בקריאה כ-CP1255):
+  /// בלעדי הפענוח לא נקראים `Sh_cdrom` ותווית ההתקן, וההתקנה נשארת בלי
+  /// ארכיון. עם BOM, או בלעדיו כשכל בית שני אפס ברוב הקובץ.
+  static String? _decodeUtf16(List<int> bytes) {
+    if (bytes.length < 4) return null;
+    final bigEndian = bytes[0] == 0xFE && bytes[1] == 0xFF;
+    final littleEndian = bytes[0] == 0xFF && bytes[1] == 0xFE;
+    var evenZeros = 0;
+    var oddZeros = 0;
+    final sample = bytes.length < 400 ? bytes.length : 400;
+    for (var i = 0; i < sample; i++) {
+      if (bytes[i] != 0) continue;
+      if (i.isEven) {
+        evenZeros++;
+      } else {
+        oddZeros++;
+      }
+    }
+    final quarter = sample ~/ 4;
+    final asLittle = littleEndian || (!bigEndian && oddZeros > quarter);
+    final asBig = bigEndian || (!littleEndian && evenZeros > quarter);
+    if (!asLittle && !asBig) return null;
+    final start = bigEndian || littleEndian ? 2 : 0;
+    final units = <int>[
+      for (var i = start; i + 1 < bytes.length; i += 2)
+        asLittle
+            ? bytes[i] | (bytes[i + 1] << 8)
+            : (bytes[i] << 8) | bytes[i + 1],
+    ];
+    return String.fromCharCodes(units);
   }
 
   /// `[Environment]` של `Responsa.ini`, במפתחות קטנים. הקובץ יושב באתר

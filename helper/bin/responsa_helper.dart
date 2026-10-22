@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:responsa_helper/src/log.dart';
+import 'package:responsa_helper/src/native/responsa_integrity.dart';
+import 'package:responsa_helper/src/native/responsa_session_user.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/helper_service.dart';
 import 'package:responsa_helper/src/server/http_api.dart';
@@ -19,6 +21,9 @@ abstract final class ExitCodes {
 
   /// כל הפורטים בטווח תפוסים בידי תוכנות אחרות או משתמשים אחרים.
   static const int portTaken = 4;
+
+  /// `--check-install-user`: התהליך רץ כמשתמש אחר מזה שבשולחן העבודה.
+  static const int otherUser = 20;
 }
 
 /// הפורט הראשון בטווח. התוסף סורק את אותו טווח (responsa-domain.js).
@@ -34,6 +39,9 @@ responsa_helper — שירות מקומי שמחבר את אוצריא לפרו�
   --port=<n>        פורט קבוע, בלי חיפוש בטווח. לפיתוח בלבד.
   --data-dir=<dir>  תיקיית נתונים (ברירת מחדל %LOCALAPPDATA%\\OtzariaResponsa).
   --version         מדפיס גרסה ויוצא.
+  --check-install-user
+                    יוצא ב-20 כשהתהליך רץ כמשתמש אחר מזה שמחובר בשולחן
+                    העבודה (מתקין שהורץ כמנהל מחשבון רגיל), אחרת ב-0.
   --remove-otzaria-plugin=<id> [--otzaria=<otzaria.exe>]
                     מסיר את התוסף מאוצריא סגורה, ויוצא בקוד מ-PluginRemoval.
                     המתקין קורא לזה ב"הסרה מלאה".
@@ -57,6 +65,11 @@ Future<void> _run(List<String> arguments) async {
   if (options.containsKey('version')) {
     _say(HelperService.serverVersion);
     return;
+  }
+  if (options.containsKey('check-install-user')) {
+    final same = ResponsaSessionUser.sameAsShellUser();
+    logLine('check-install-user: ${same ?? 'unknown'}');
+    exit(same == false ? ExitCodes.otherUser : ExitCodes.ok);
   }
   if (options['remove-otzaria-plugin'] case final pluginId?) {
     exit(_removePlugin(pluginId, options).exitCode);
@@ -87,7 +100,9 @@ Future<void> _run(List<String> arguments) async {
   logLine(
     'responsa_helper ${HelperService.serverVersion} listening on '
     '127.0.0.1:$port, data ${paths.dataDir}, pid $pid, '
-    '${Platform.operatingSystemVersion}',
+    '${Platform.operatingSystemVersion}, '
+    'user ${Platform.environment['USERNAME'] ?? '?'}, '
+    '${ResponsaIntegrity.describe(ResponsaIntegrity.own)}',
   );
   // היומן מסובב גם בזמן ריצה: שירות שרץ שבועות, ותוסף שבודק כל 10 שניות
   // מול שירות שנכשל, היו מגדילים אותו בלי סוף.
@@ -191,6 +206,7 @@ Map<String, String?>? _parse(List<String> arguments) {
       'port',
       'data-dir',
       'version',
+      'check-install-user',
       'help',
       'remove-otzaria-plugin',
       'otzaria',

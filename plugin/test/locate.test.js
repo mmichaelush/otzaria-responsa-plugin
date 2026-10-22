@@ -64,6 +64,15 @@ test('fromSelection: טקסט מסומן שהוא מקום — בלי הסוגר
 });
 
 
+test('selectionGuess: כל טקסט קצר שסומן, גם בלי מקום בסופו', () => {
+  assert.equal(Locate.selectionGuess(' (חזון איש חושן משפט) '), 'חזון איש חושן משפט');
+  assert.equal(Locate.selectionGuess('ויאמר משה'), 'ויאמר משה');
+  // מילה אחת, ריק, וקטע ארוך — לא.
+  assert.equal(Locate.selectionGuess('בראשית'), null);
+  assert.equal(Locate.selectionGuess(''), null);
+  assert.equal(Locate.selectionGuess('ויכל אלהים ביום השביעי מלאכתו אשר עשה וישבת ביום השביעי'), null);
+});
+
 test('fromReader: שם הספר בצורה של בר אילן, וכותרת שהיא שם הספר נמחקת', () => {
   assert.deepEqual(Locate.fromReader('בראשית', 'בראשית, פרק ב'), { title: 'בראשית', refs: ['בראשית פרק ב'] });
   assert.deepEqual(Locate.fromReader('רש"י על בראשית', 'רש"י על בראשית, פרשת בראשית, פרק ב').refs, ['רש"י בראשית פרק ב']);

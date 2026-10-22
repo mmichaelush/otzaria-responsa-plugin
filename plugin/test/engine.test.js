@@ -226,6 +226,7 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     showSummary: false,
     otzariaFirst: false,
     alsoOtzaria: false,
+    otzariaFirstSearch: false,
     startupNotice: false,
     welcomeSeen: false,
     browsePath: '',

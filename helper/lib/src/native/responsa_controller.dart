@@ -276,11 +276,11 @@ class ResponsaController {
     final request = Stopwatch()..start();
     try {
       if (await _launchFailure(installPath, allowLaunch: allowLaunch)
-          case final message?) {
+          case final launchFailure?) {
         return ResponsaOpenReport(
           ok: false,
-          failure: ResponsaFailure.responsaNotRunning,
-          message: message,
+          failure: launchFailure.failure,
+          message: launchFailure.message,
         );
       }
 
@@ -329,11 +329,11 @@ class ResponsaController {
     final started = Stopwatch()..start();
     try {
       if (await _launchFailure(installPath, allowLaunch: allowLaunch)
-          case final message?) {
+          case final launchFailure?) {
         return ResponsaOpenReport(
           ok: false,
-          failure: ResponsaFailure.responsaNotRunning,
-          message: message,
+          failure: launchFailure.failure,
+          message: launchFailure.message,
         );
       }
       final request = _LocateRequest(
@@ -388,11 +388,11 @@ class ResponsaController {
     final started = Stopwatch()..start();
     try {
       if (await _launchFailure(installPath, allowLaunch: allowLaunch)
-          case final message?) {
+          case final launchFailure?) {
         return ResponsaSearchReport(
           ok: false,
-          failure: ResponsaFailure.responsaNotRunning,
-          message: message,
+          failure: launchFailure.failure,
+          message: launchFailure.message,
         );
       }
 
@@ -433,11 +433,11 @@ class ResponsaController {
       );
     }
     if (await _launchFailure(installPath, allowLaunch: true)
-        case final message?) {
+        case final launchFailure?) {
       return ResponsaShowReport(
         ok: false,
-        failure: ResponsaFailure.responsaNotRunning,
-        message: message,
+        failure: launchFailure.failure,
+        message: launchFailure.message,
       );
     }
     try {
@@ -473,10 +473,10 @@ class ResponsaController {
     }
   }
 
-  /// `null` כשהכול תקין; אחרת ההודעה למשתמש. הכשל הוא `responsaNotRunning`
-  /// ולא `timeout`, שהיה מציג בטעות "התוכנה אינה מגיבה".
+  /// `null` כשהכול תקין; אחרת הכשל וההודעה למשתמש. הכשל הוא
+  /// `responsaNotRunning` (או `elevated`) ולא `timeout`, שהיה מציג בטעות "התוכנה אינה מגיבה".
   /// [allowLaunch] מגיע מהבקשה (הגדרת "הפעלת בר אילן" בתוסף), וחסר = [autoStart].
-  Future<String?> _launchFailure(
+  Future<({ResponsaFailure failure, String message})?> _launchFailure(
     String? installPath, {
     bool? allowLaunch,
   }) async {
@@ -486,8 +486,14 @@ class ResponsaController {
       timeout: launchTimeout,
     );
     if (result.running) return null;
-    return result.message ??
-        'בר אילן אינו פעיל. יש לפתוח את פרויקט השו"ת ולנסות שוב.';
+    return (
+      failure: result.elevated
+          ? ResponsaFailure.elevated
+          : ResponsaFailure.responsaNotRunning,
+      message:
+          result.message ??
+          'בר אילן אינו פעיל. יש לפתוח את פרויקט השו"ת ולנסות שוב.',
+    );
   }
 
   // ------------------------------------------------ מה שרץ באיזולט

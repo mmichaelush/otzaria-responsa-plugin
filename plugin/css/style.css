@@ -2233,6 +2233,11 @@ span.breadcrumb {
   margin-bottom: var(--space-3);
 }
 
+/* הכפתור לכתיבה בתחביר של בר אילן, מעל הטבלה. */
+.builder-top {
+  margin-bottom: var(--space-2);
+}
+
 .term-card.is-excluded {
   background: color-mix(in srgb, var(--color-error-container) 35%, var(--color-surface-container-low));
 }
@@ -2510,8 +2515,7 @@ span.breadcrumb {
 .term-input,
 .number-input,
 .select,
-.manual-input,
-.line-input {
+.manual-input {
   min-height: 2.6em;
   padding: 0 var(--space-3);
   color: var(--color-on-surface);
@@ -2524,8 +2528,7 @@ span.breadcrumb {
 .term-input:hover,
 .number-input:hover,
 .select:hover,
-.manual-input:hover,
-.line-input:hover {
+.manual-input:hover {
   border-color: var(--color-outline);
 }
 
@@ -2550,27 +2553,6 @@ span.breadcrumb {
   cursor: pointer;
 }
 
-/* שורה אחת בתחביר של בר אילן מעל השדות של בונה החיפוש. */
-.line-editor {
-  display: grid;
-  gap: var(--space-1);
-  margin-block-end: var(--space-3);
-}
-
-.line-input {
-  display: block;
-  width: 100%;
-  font-size: 1.1em;
-}
-
-.line-editor.is-error .line-input {
-  border-color: var(--color-error);
-}
-
-.line-editor.is-error .advanced-hint {
-  color: var(--color-error);
-}
-
 .manual-input {
   /* בלי הרווח של שורת טקסט מתחתיו, כמו שדה החיפוש הרגיל. */
   display: block;
@@ -2584,8 +2566,7 @@ span.breadcrumb {
 .term-input:focus,
 .number-input:focus,
 .select:focus,
-.manual-input:focus,
-.line-input:focus {
+.manual-input:focus {
   border-color: var(--color-primary);
   outline: 1px solid var(--color-primary);
 }

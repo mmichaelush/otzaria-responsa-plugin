@@ -15,6 +15,9 @@ class ResponsaAuthorTableReader {
   /// חסם: ספרייה שגויה לא תגרום לקריאת מאות מגה-בתים לזיכרון.
   static const int _maxMemberBytes = 1 << 20;
 
+  /// "קטלוג ספרים" (`FILE06`) גדול מהטבלאות: ברשומות של כל החיבורים והמחברים.
+  static const int _maxCatalogBytes = 32 << 20;
+
   /// [ResponsaAuthorTable.empty] כשאין ארכיון או שהמבנה לא מוכר - לא עוצרים
   /// בנייה בגלל זה, הביבליוגרפיה נשארת נסיגה.
   static ResponsaAuthorTable forInstallation(
@@ -57,7 +60,12 @@ class ResponsaAuthorTableReader {
         if (!isCatalog && !ResponsaAuthorTable.isTableMember(entry.name)) {
           continue;
         }
-        if (entry.size > _maxMemberBytes) continue;
+        if (entry.size > (isCatalog ? _maxCatalogBytes : _maxMemberBytes)) {
+          logLine(
+            'ResponsaAuthorTable: ${entry.name} is ${entry.size} bytes; skipped',
+          );
+          continue;
+        }
         file.setPositionSync(entry.offset);
         final bytes = file.readSync(entry.size);
         if (isCatalog) {
@@ -69,10 +77,10 @@ class ResponsaAuthorTableReader {
       final table = ResponsaAuthorTable.parse(members);
       logLine(
         'ResponsaAuthorTable: ${table.authorCount} מחברים '
-        'מתוך ${members.length} קבצים',
+        'מתוך ${members.length} קבצים; גודל רשומה לפי מדור: '
+        '${ResponsaAuthorTable.describeTables(members)}',
       );
-      // בר אילן 29 ו-32: `FILE65` ריק, והמחברים רק בקטלוג. בכל מהדורה —
-      // הקטלוג משלים חיבור שאין לו שם ב-`FILE65`.
+      // בכל מהדורה הקטלוג משלים חיבור שאין לו שם ב-`FILE65`.
       final fromCatalog = catalog == null
           ? null
           : ResponsaBookCatalog.authors(catalog);
@@ -91,7 +99,10 @@ class ResponsaAuthorTableReader {
             : ResponsaAuthorTable.fromCatalog(fromCatalog),
       );
       // מה שצריך כדי להבין מבנה חדש מהדיווח הבא, בלי עוד כלי בדיקה.
-      if (merged.authorCount == 0) _describeFormat(members, catalog);
+      if (merged.authorCount == 0) {
+        _describeFormat(members, catalog);
+        _describeDirectory(directory);
+      }
       return merged;
     } catch (error) {
       logLine('ResponsaAuthorTable: $error');
@@ -121,6 +132,28 @@ class ResponsaAuthorTableReader {
       '${catalog == null ? '' : '; FILE06: ${head(catalog)}'}',
     );
   }
+
+  /// שמות הקבצים שבארכיון לפי קידומת, עם מספרם וגודלם: מהדורה שמספרה אחר
+  /// (או שמות אחרים) מתגלה מהדיווח הראשון, בלי כלי בדיקה.
+  static void _describeDirectory(
+    List<({String name, int offset, int size})> directory,
+  ) {
+    final groups = <String, ({int count, int bytes})>{};
+    for (final entry in directory) {
+      final base = entry.name.split('.').first.toUpperCase();
+      final seen = groups[base] ?? (count: 0, bytes: 0);
+      groups[base] = (count: seen.count + 1, bytes: seen.bytes + entry.size);
+    }
+    final names = groups.keys.toList()..sort();
+    final shown = names.take(_describedGroups);
+    logLine(
+      'ResponsaAuthorTable: directory ${directory.length} entries: '
+      '${[for (final name in shown) '$name x${groups[name]!.count} ${groups[name]!.bytes ~/ 1024}KB'].join(', ')}'
+      '${names.length > _describedGroups ? ', +${names.length - _describedGroups} more' : ''}',
+    );
+  }
+
+  static const int _describedGroups = 80;
 
   static const int _describedBytes = 96;
 }

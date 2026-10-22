@@ -292,3 +292,21 @@ test('diagnostics: כשל אינו נזרק, אלא חוזר כהערה בשור
   });
   assert.deepEqual(await missing.service.diagnostics(), { summary: '', logTail: '', note: '' });
 });
+
+test('connect: פורטים שלא עונים כלל נבדקים במקביל, ולא אחד אחרי השני', async () => {
+  let open = 0;
+  let peak = 0;
+  const bridge = {
+    call() {
+      open += 1;
+      peak = Math.max(peak, open);
+      return (async function* () {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        open -= 1;
+        throw new Error('Connection refused');
+      })();
+    },
+  };
+  await assert.rejects(new ServiceClient(bridge).connect(), { code: 'serviceUnavailable' });
+  assert.ok(peak >= 9, 'peak ' + peak);
+});

@@ -100,8 +100,29 @@ class ResponsaAuthorTable {
     'דה',
   };
 
-  /// גודל רשומה, בשתי הטבלאות.
+  /// גרסת קריאת הארכיון. "אין מחברים בארכיון" שנרשם ברשימה (`none`) תקף רק
+  /// לגרסה שבדקה; כשהקריאה משתפרת (2: `FILE25` של 103 בתים, ו-`Responsa.ini`
+  /// ב-UTF-16), הרשימה מוצעת שוב להשלמה ([HelperService]).
+  static const int readerRevision = 2;
+
+  /// הגדלים שנמדדו: `FILE65`, ו-`FILE25` במהדורות עד 25.
   static const int recordSize = 73;
+
+  /// `FILE25` במהדורות החדשות (נמדד ב-32): שם החיבור ארוך יותר. הטבלה שלא
+  /// נקראה בגלל הגודל השאירה כל חיבור בלי "כותרת באותו מדור", ולכן כל
+  /// המחברים נפסלו — מה שנראה כ-`FILE65` ריק.
+  static const int titleRecordSize = 103;
+
+  /// הגדלים שנמדדו הם רק נסיגה כשהתוכן אינו מכריע. הגודל נקבע מהקובץ עצמו
+  /// ([_layout]), כי מהדורה חדשה (28, 33...) יכולה לשנות אותו שוב.
+  static const List<int> _knownSizes = [recordSize, titleRecordSize];
+
+  static const int _minRecordSize = 16;
+  static const int _maxRecordSize = 512;
+
+  /// לקביעת המבנה די בתחילת הקובץ; קובץ של מגה-בייט נבדק כך בפחות ממיליון
+  /// פעולות לגודל מועמד.
+  static const int _scoredBytes = 64 << 10;
 
   /// גודל רשומה בספריית המכל.
   static const int directoryEntrySize = 28;
@@ -156,14 +177,17 @@ class ResponsaAuthorTable {
     for (final entry in members.entries) {
       final parts = entry.key.toUpperCase().split('.');
       if (parts.length != 2) continue;
-      final records = _records(entry.value);
-      if (records == null) continue;
       switch (parts.first) {
         case _titlesMember:
-          titles[parts.last] = {for (final record in records) record.id};
+          // רק המזהים; הטקסט של הכותרות אינו בשימוש.
+          final records = _records(entry.value, strict: false);
+          if (records == null) continue;
+          titles[parts.last] = {for (final record in records.list) record.id};
         case _authorsMember:
+          final records = _records(entry.value, strict: true);
+          if (records == null) continue;
           authors[parts.last] = {
-            for (final record in records) record.id: record.text,
+            for (final record in records.list) record.id: ?record.text,
           };
       }
     }
@@ -202,16 +226,117 @@ class ResponsaAuthorTable {
     return '$given $surname';
   }
 
-  static List<({int id, String text})>? _records(Uint8List bytes) {
-    if (bytes.isEmpty || bytes.length % recordSize != 0) return null;
-    final records = <({int id, String text})>[];
-    for (var at = 0; at < bytes.length; at += recordSize) {
+  /// רשומות הקובץ: `u16` מזהה (big-endian) וטקסט CP862 עד `\0`, בגודל קבוע.
+  /// הגודל וההיסט נקבעים מהתוכן ([_layout]), לא לפי מהדורה; `null` כשאין
+  /// גודל שהקובץ מתחלק בו. [strict]: קובץ שרוב רשומותיו אינן טקסט קריא אינו
+  /// המבנה שחשבנו (מחבר שגוי גרוע מהיעדר מחבר), ורשומה בודדת שאינה קריאה
+  /// מדולגת. בלי [strict] (מזהים בלבד) הטקסט אינו קובע.
+  static ({int size, List<({int id, String? text})> list})? _records(
+    Uint8List bytes, {
+    required bool strict,
+  }) {
+    final layout = _layout(bytes);
+    if (layout == null) return null;
+    final list = <({int id, String? text})>[];
+    var readable = 0;
+    for (var at = 0; at < bytes.length; at += layout) {
       final id = (bytes[at] << 8) | bytes[at + 1];
-      final text = decodeCp862(bytes.sublist(at + 2, at + recordSize));
-      if (text == null) return null;
-      records.add((id: id, text: text));
+      final text = decodeCp862(bytes.sublist(at + 2, at + layout));
+      if (text != null) readable++;
+      list.add((id: id, text: text));
     }
-    return records;
+    if (strict && readable * 10 < list.length * 9) return null;
+    return (size: layout, list: list);
+  }
+
+  /// גודל הרשומה שבו רוב הרשומות הן טקסט קריא שנגמר ב-`\0`. כפולה של הגודל
+  /// האמיתי נותנת חצי מהרשומות, וחצי גודל חותך כל טקסט ארוך, ולכן הגודל
+  /// האמיתי מנצח; בשוויון — הגדול. כשהתוכן אינו מכריע (טבלה קטנה מאוד, או
+  /// בלי טקסט) נשארים הגדלים שנמדדו. קובץ עם בתים עודפים (כותרת או סוף)
+  /// אינו מתחלק, ומדולג: מחבר שגוי גרוע מהיעדר מחבר.
+  static int? _layout(Uint8List bytes) {
+    int? best;
+    var bestScore = 0;
+    for (var size = _minRecordSize; size <= _maxRecordSize; size++) {
+      if (size > bytes.length) break;
+      if (bytes.length % size != 0) continue;
+      // רשומה אחת בגודל הקובץ כולו היא כל קובץ; רק גודל שנמדד מוכר כך.
+      if (bytes.length == size && !_knownSizes.contains(size)) continue;
+      final (:score, :records) = _score(bytes, size);
+      // רוב הרשומות טקסט: גודל שחותך את הרשומות האמיתיות משאיר חצי ריקות.
+      if (score * 2 < records) continue;
+      if (score > bestScore || (score == bestScore && score > 0)) {
+        best = size;
+        bestScore = score;
+      }
+    }
+    if (best != null) return best;
+    for (final size in _knownSizes) {
+      if (bytes.isNotEmpty && bytes.length % size == 0) return size;
+    }
+    return null;
+  }
+
+  /// כמה רשומות, מתוך [records] בתחילת הקובץ, הן טקסט קריא (אותיות עברית או ASCII מודפס)
+  /// שנגמר ב-`\0` בתוך הרשומה. מה שאחרי ה-`\0` אינו נבדק: ריפוד אינו
+  /// מובטח.
+  static ({int score, int records}) _score(Uint8List bytes, int size) {
+    final end = _scoredBytes ~/ size * size;
+    final limit = end > bytes.length ? bytes.length : end;
+    var score = 0;
+    var records = 0;
+    for (var at = 0; at + size <= limit; at += size) {
+      records++;
+      var letters = 0;
+      var terminated = false;
+      var readable = true;
+      for (var i = at + 2; i < at + size; i++) {
+        final byte = bytes[i];
+        if (byte == 0) {
+          terminated = true;
+          break;
+        }
+        if (byte >= 0x80 && byte <= 0x9A) {
+          letters++;
+        } else if (byte > 0x20 && byte < 0x7F) {
+          letters++;
+        } else if (byte != 0x20) {
+          readable = false;
+          break;
+        }
+      }
+      if (readable && terminated && letters > 0) score++;
+    }
+    return (score: score, records: records);
+  }
+
+  /// מה נקרא מכל מדור, ליומן: `AH 25:103x2501 65:73x156`.
+  /// כך דיווח אחד מראה איזה גודל רשומה יש במהדורה, בלי כלי בדיקה נוסף.
+  static String describeTables(Map<String, Uint8List> members) {
+    final sections = <String, List<String>>{};
+    for (final entry in members.entries) {
+      final parts = entry.key.toUpperCase().split('.');
+      if (parts.length != 2) continue;
+      final number = switch (parts.first) {
+        _titlesMember => '25',
+        _authorsMember => '65',
+        _ => null,
+      };
+      if (number == null) continue;
+      final records = _records(
+        entry.value,
+        strict: parts.first == _authorsMember,
+      );
+      (sections[parts.last] ??= []).add(
+        records == null
+            ? '$number:?${entry.value.length}'
+            : '$number:${records.size}x${records.list.length}',
+      );
+    }
+    final keys = sections.keys.toList()..sort();
+    return [
+      for (final key in keys) '$key ${sections[key]!.join(' ')}',
+    ].join(', ');
   }
 
   /// `null` כשיש תו שאינו אות עברית או ASCII מודפס. הסוגריים הפוכים, כי

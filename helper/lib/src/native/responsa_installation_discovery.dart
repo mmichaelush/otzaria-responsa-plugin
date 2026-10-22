@@ -1,13 +1,16 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:ffi/ffi.dart';
 import 'package:meta/meta.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_instance.dart';
 import 'package:responsa_helper/src/native/responsa_win32.dart';
 import 'package:path/path.dart' as path;
-import 'package:win32/win32.dart' show GetLogicalDrives;
+import 'package:win32/win32.dart'
+    show GetLogicalDrives, GetVolumeInformation, PCWSTR, PWSTR;
 import 'package:win32_registry/win32_registry.dart';
 
 /// מחזיר רשימה ולא התקנה יחידה: יתכנו כמה מהדורות זו לצד זו. הגרסה נלקחת
@@ -296,6 +299,43 @@ class ResponsaInstallationDiscovery {
           '${String.fromCharCode(65 + index)}:${path.separator}',
     ];
   }
+
+  static final Map<String, ({String? label, DateTime at})> _labels = {};
+
+  /// תווית הכונן (`RESPONSAV32`), או `null` בכונן ריק או שאינו מוכן. נשמרת
+  /// דקה: `archivePath` נקרא בכל פעולה, וכונן רשת איטי היה מעכב כל אחת.
+  static String? volumeLabel(String drive) {
+    final cached = _labels[drive];
+    final now = DateTime.now();
+    if (cached != null && now.difference(cached.at).inSeconds < 60) {
+      return cached.label;
+    }
+    String? label;
+    final root = drive.toNativeUtf16();
+    final buffer = calloc<Uint16>(_maxLabelChars).cast<Utf16>();
+    try {
+      final result = GetVolumeInformation(
+        PCWSTR(root),
+        PWSTR(buffer),
+        _maxLabelChars,
+        null,
+        null,
+        null,
+        null,
+        0,
+      );
+      if (result.value) label = buffer.toDartString();
+    } catch (_) {
+      label = null;
+    } finally {
+      calloc.free(root);
+      calloc.free(buffer);
+    }
+    _labels[drive] = (label: label, at: now);
+    return label;
+  }
+
+  static const int _maxLabelChars = 261;
 
   /// כוננים שהסריקה מדלגת עליהם, עם הסיבה (`E:\ (errno 21)`), ל-`/diagnostics`.
   /// כונן ריק כזה הוא שהפיל את הגילוי עד 0.5.1.

@@ -246,50 +246,6 @@
     );
   }
 
-  /**
-   * שורה אחת בתחביר של בר אילן מעל השדות: מי שמכיר את התחביר כותב כאן,
-   * והשורה מתפרקת לשדות שלמטה; שינוי בשדות כותב אותה מחדש. מה שאין לו
-   * מקום בשדות — הסבר, ו"ניסוח בעצמי" מחפש אותו כמו שהוא.
-   */
-  function lineEditor(state, actions) {
-    const line = state.line;
-    const input = el('input', {
-      class: 'line-input',
-      type: 'text',
-      dir: 'rtl',
-      maxlength: String(Advanced.MAX_QUERY_LENGTH),
-      placeholder: t('למשל: #נר [1:4] (שבת/חנוכה)'),
-      'aria-label': t('שורת החיפוש בתחביר של בר אילן'),
-      'aria-describedby': 'adv-line-hint',
-      spellcheck: 'false',
-      autocomplete: 'off',
-      dataset: { focusKey: 'adv-line' },
-    });
-    input.value = line ? line.text : Advanced.buildQuery(state.query);
-    input.addEventListener('input', () => actions.advancedLine(input.value));
-    onEnter(input, () => actions.runAdvanced());
-    const error = line && line.error;
-    return el(
-      'div',
-      { class: 'line-editor' + (error ? ' is-error' : '') },
-      input,
-      el(
-        'p',
-        { class: 'advanced-hint', id: 'adv-line-hint', 'data-role': 'adv-line-hint' },
-        // `[1:N]` במשפט מימין לשמאל מתהפך בלי בידוד (`displayQuery`).
-        error
-          ? Advanced.displayQuery(t('השורה לא עודכנה בשדות: {reason}', { reason: error }))
-          : t('מי שמכיר את התחביר של בר אילן כותב כאן, והשורה מתפרקת לשדות שלמטה. שינוי בשדות מעדכן אותה.'),
-      ),
-      error
-        ? button('text', t('חיפוש כמו שנכתב'), () => actions.advancedLineAsIs(input.value), {
-            icon: 'code_24_regular',
-            key: 'adv-line-as-is',
-          })
-        : null,
-    );
-  }
-
   function builder(state, actions) {
     const query = state.query;
     const chain = query.span === Advanced.Span.chain;
@@ -299,7 +255,15 @@
       items.push(termCard(state, actions, term, index));
     });
     return [
-      lineEditor(state, actions),
+      // למעלה, לא בסוף הטבלה: מי שמכיר את התחביר מחפש את הכפתור קודם.
+      el(
+        'div',
+        { class: 'builder-actions builder-top' },
+        button('tonal', t('כתיבה בתחביר של בר אילן'), () => actions.advancedMode(Advanced.Mode.manual), {
+          icon: 'code_24_regular',
+          key: 'adv-to-manual',
+        }),
+      ),
       examples(Advanced.EXAMPLES, actions, 4),
       el('ol', { class: 'term-list' }, items),
       el(
@@ -309,10 +273,6 @@
           icon: 'add_24_regular',
           key: 'adv-add-term',
           disabled: query.terms.length >= Advanced.MAX_TERMS,
-        }),
-        button('text', t('כתיבה בתחביר של בר אילן'), () => actions.advancedMode(Advanced.Mode.manual), {
-          icon: 'code_24_regular',
-          key: 'adv-to-manual',
         }),
       ),
       query.terms.length > 1 ? spanSection(state, actions) : null,
@@ -705,6 +665,7 @@
    */
   function otzariaSection(model, actions) {
     const granted = Domain.canOpenSearchTab(model.permissions);
+    const first = Domain.canSearchOtzariaFirst(model.permissions);
     const known = Array.isArray(model.permissions);
     return el(
       'section',
@@ -724,6 +685,19 @@
           disabled: known && !granted,
           onToggle: (value) => actions.setSetting('alsoOtzaria', value),
           key: 'adv-also-otzaria',
+        }),
+        switchRow({
+          iconName: 'search_24_regular',
+          title: t('חיפוש באוצריא קודם'),
+          subtitle: t('חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" רץ קודם באוצריא. אם נמצאו תוצאות הן נפתחות שם, ובבר אילן מחפשים רק כשלא נמצא דבר.'),
+          note:
+            first || !known
+              ? null
+              : t('כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "חיפוש טקסט מלא" ו"פתיחת ספרים וניהול כרטיסיות".'),
+          checked: model.settings.otzariaFirstSearch,
+          disabled: known && !first,
+          onToggle: (value) => actions.setSetting('otzariaFirstSearch', value),
+          key: 'adv-otzaria-first',
         }),
       ),
     );

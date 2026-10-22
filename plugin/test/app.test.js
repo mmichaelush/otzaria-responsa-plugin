@@ -1052,7 +1052,7 @@ async function bootAdvanced(routes, stored) {
   const context = setup(Object.assign({ '/health': advancedHealth, '/status': reply(200, ready) }, routes));
   // ברירת המחדל של הגשר המדומה היא `true` לכל מפתח; הסיכום כבוי, כמו אצל משתמש חדש.
   const values = Object.assign(
-    { responsa_show_summary: null, responsa_otzaria_first: null, responsa_also_otzaria: null },
+    { responsa_show_summary: null, responsa_otzaria_first: null, responsa_also_otzaria: null, responsa_otzaria_first_search: null },
     stored,
   );
   context.bridge.methods['storage.get'] = ({ key }) => (key in values ? values[key] : true);
@@ -1060,49 +1060,19 @@ async function bootAdvanced(routes, stored) {
   return context;
 }
 
-test('שורת החיפוש: מתפרקת לשדות, ושינוי בשדות כותב אותה מחדש', async () => {
-  const { app, bridge, view } = await bootAdvanced({
-    '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }),
-  });
-  app.actions.selectTab('text');
-  app.advancedMode('builder');
-  app.advancedLine('#נר [1:4] שבת');
-  const query = app.model.advanced.query;
-  assert.deepEqual(query.terms.map((term) => [term.words[0], term.form]), [['נר', 'prefixes'], ['שבת', 'exact']]);
-  assert.deepEqual(query.gaps, [{ kind: 'after', distance: 4 }]);
-  // שינוי בשדה: השורה נכתבת מהשדות.
-  app.advancedWord(1, 0, 'חנוכה');
-  assert.equal(app.model.advanced.line, null);
-  assert.equal(view.inputs['adv-line'], '#נר [1:4] חנוכה');
-  await app.runAdvanced();
-  assert.equal(requests(bridge, '/text/search')[0].body.q, '#נר [1:4] חנוכה');
-  app.suspend();
-});
-
-test('שורת החיפוש: מה שלא התפרק עוצר את החיפוש, ו"כמו שנכתב" מחפש אותו', async () => {
-  const { app, bridge } = await bootAdvanced({
-    '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }),
-  });
-  app.actions.selectTab('text');
-  app.advancedMode('builder');
-  app.advancedLine('נר [2:5] שבת');
-  assert.match(app.model.advanced.line.error, /2:5/);
-  await app.runAdvanced();
-  assert.equal(requests(bridge, '/text/search').length, 0);
-  assert.equal(app.model.advanced.problem.line, true);
-  await app.advancedLineAsIs('נר [2:5] שבת');
-  assert.equal(app.model.advanced.query.mode, 'manual');
-  assert.equal(requests(bridge, '/text/search')[0].body.q, 'נר [2:5] שבת');
-  app.suspend();
-});
-
 test('חיפוש גם באוצריא: כרטיסיית חיפוש, בלי שורות התוסף, ובלי ההגדרות כשהן נדחות', async () => {
   const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
   const { app, bridge } = await bootAdvanced(found, { responsa_also_otzaria: true });
   app._setPermissions(['network.localhost', 'reader.open']);
   app.actions.selectTab('text');
   app.advancedMode('builder');
-  app.advancedLine('#נר [1:4] שבת');
+  app.advancedSet({
+    terms: [
+      { words: ['נר'], form: 'prefixes', exclude: false },
+      { words: ['שבת'], form: 'exact', exclude: false },
+    ],
+    gaps: [{ kind: 'after', distance: 4 }],
+  });
   let first = true;
   bridge.methods['reader.openSearchTab'] = (payload) => {
     if (first && payload.settings) {
@@ -1148,6 +1118,84 @@ test('חיפוש גם באוצריא מדיאלוג החיפוש: הבקשה ש�
     { query: 'נר שבת', autoSearch: true, selectItems: [], settings: { mode: 'advanced', distance: 2 } },
   ]);
   assert.equal(requests(bridge, '/text/search').length, 1);
+  app.suspend();
+});
+
+/** `search.query` מזרים: הקריאה מחזירה איטרטור אסינכרוני, ולא תשובה. */
+function streamSearch(bridge, chunks) {
+  const calls = [];
+  const original = bridge.call.bind(bridge);
+  bridge.call = (method, payload) => {
+    if (method !== 'search.query') return original(method, payload);
+    calls.push(payload);
+    const outcome = typeof chunks === 'function' ? chunks(payload) : chunks;
+    return (async function* () {
+      if (outcome instanceof Error) throw outcome;
+      yield outcome;
+    })();
+  };
+  return calls;
+}
+
+const OTZARIA_FIRST = ['network.localhost', 'reader.open', 'search.fulltext.read'];
+
+test('חיפוש באוצריא קודם: אוצריא מצאה — נפתח אצלה, ובבר אילן לא מחפשים', async () => {
+  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
+  const { app, bridge } = await bootAdvanced(found, { responsa_otzaria_first_search: true });
+  app._setPermissions(OTZARIA_FIRST);
+  const calls = streamSearch(bridge, { sequence: 0, results: [{}], total: 812 });
+  await app.searchRequested({ request: { query: 'נר שבת', mode: 'advanced', distance: 2, limit: 100, offset: 40 } });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].limit, 1);
+  assert.equal(calls[0].offset, 0);
+  const opened = bridge.calls.filter((c) => c.method === 'reader.openSearchTab').map((c) => c.payload);
+  assert.equal(opened.length, 1);
+  assert.deepEqual(opened[0].selectItems, []);
+  assert.equal(requests(bridge, '/text/search').length, 0);
+  assert.match(app.model.advanced.status.text, /אוצריא מצאה/);
+  app.suspend();
+});
+
+test('חיפוש באוצריא קודם: אוצריא לא מצאה — החיפוש עובר לבר אילן, עם הסבר', async () => {
+  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
+  const { app, bridge } = await bootAdvanced(found, { responsa_otzaria_first_search: true, responsa_also_otzaria: true });
+  app._setPermissions(OTZARIA_FIRST);
+  streamSearch(bridge, { sequence: 0, results: [], total: 0 });
+  await app.searchRequested({ request: { query: 'נר שבת' } });
+  assert.equal(bridge.calls.some((c) => c.method === 'reader.openSearchTab'), false);
+  assert.equal(requests(bridge, '/text/search').length, 1);
+  assert.match(app.model.advanced.status.text, /אוצריא לא מצאה תוצאות/);
+  app.suspend();
+});
+
+test('חיפוש באוצריא קודם: אי אפשר לדעת (שגיאה, או בלי ההרשאה) — כמו בלי ההגדרה', async () => {
+  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
+  for (const [permissions, chunks] of [
+    [OTZARIA_FIRST, Object.assign(new Error('boom'), { code: 'error.timeout' })],
+    [['network.localhost', 'reader.open'], { total: 5, results: [] }],
+  ]) {
+    const { app, bridge } = await bootAdvanced(found, { responsa_otzaria_first_search: true });
+    app._setPermissions(permissions);
+    const calls = streamSearch(bridge, chunks);
+    await app.searchRequested({ request: { query: 'נר שבת' } });
+    assert.equal(calls.length, permissions.includes('search.fulltext.read') ? 1 : 0);
+    assert.equal(requests(bridge, '/text/search').length, 1);
+    assert.equal(bridge.calls.some((c) => c.method === 'reader.openSearchTab'), false);
+    app.suspend();
+  }
+});
+
+test('חיפוש באוצריא קודם: אוצריא 0.9.98 דוחה anyOrder — הספירה חוזרת בלעדיו', async () => {
+  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
+  const { app, bridge } = await bootAdvanced(found, { responsa_otzaria_first_search: true });
+  app._setPermissions(OTZARIA_FIRST);
+  const calls = streamSearch(bridge, (payload) =>
+    'anyOrder' in payload ? Object.assign(new Error('anyOrder'), { code: 'error.invalid_params' }) : { total: 2, results: [{}] },
+  );
+  await app.searchRequested({ request: { query: 'נר שבת', mode: 'advanced', distance: 2, anyOrder: true } });
+  assert.equal(calls.length, 2);
+  assert.equal('anyOrder' in calls[1], false);
+  assert.equal(requests(bridge, '/text/search').length, 0);
   app.suspend();
 });
 
@@ -1635,6 +1683,19 @@ test('"איתור המקום בבר אילן" עם טקסט מסומן שבר א
   assert.deepEqual(
     requests(bridge, '/reference/open').map((r) => r.body.ref),
     ['ויאמר לא', 'בראשית פרק ב'],
+  );
+  assert.equal(app.model.locate.status.kind, 'success');
+  app.suspend();
+});
+
+test('"איתור המקום בבר אילן" עם טקסט מסומן שאינו נראה כמקום: נשלח הוא קודם, ורק אם לא נמצא — המקום שפתוח', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/reference/open': (params) => (JSON.parse(params.body).ref === 'חזון איש חושן משפט' ? located('חזון איש חושן משפט') : notFound),
+  });
+  await app.contextMenuClicked({ ...fromReader('בראשית', 'בראשית, פרק ב'), selectedText: 'חזון איש חושן משפט' });
+  assert.deepEqual(
+    requests(bridge, '/reference/open').map((r) => r.body.ref),
+    ['חזון איש חושן משפט'],
   );
   assert.equal(app.model.locate.status.kind, 'success');
   app.suspend();

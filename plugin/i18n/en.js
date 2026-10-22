@@ -837,24 +837,22 @@
     'הוספת שמות המחברים בוטלה': 'Adding the author names was cancelled',
 
     // ---- 0.6.3: שורת החיפוש בתחביר של בר אילן, וחיפוש גם באוצריא
-    'למשל: #נר [1:4] (שבת/חנוכה)': 'For example: #נר [1:4] (שבת/חנוכה)',
-    'שורת החיפוש בתחביר של בר אילן': 'Search line in Bar-Ilan syntax',
-    'השורה לא עודכנה בשדות: {reason}': 'The line did not update the fields: {reason}',
-    'מי שמכיר את התחביר של בר אילן כותב כאן, והשורה מתפרקת לשדות שלמטה. שינוי בשדות מעדכן אותה.':
-      'If you know the Bar-Ilan syntax, write here and the line is split into the fields below. Changing the fields updates it.',
-    'חיפוש כמו שנכתב': 'Search as written',
     'חיפוש גם באוצריא': 'Also search in Otzaria',
     'אותן מילים נפתחות גם בחיפוש של אוצריא, בכרטיסייה משלו, כולל מה שהחיפוש שם כולל. גם חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" ירוץ אז גם באוצריא.':
       'The same words also open in Otzaria search, in a tab of their own, including whatever that search covers. A search from the Otzaria search dialog with "Search in Bar-Ilan" will then also run in Otzaria.',
     'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".':
       'To use this, turn on the permission "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
     'חיפוש בבר אילן ובאוצריא': 'Search in Bar-Ilan and Otzaria',
-    'חסר סוגר: "}}" או "]".': 'A closing "}}" or "]" is missing.',
-    'למרחק "{gap}" אין שדה מתאים. בטבלה: [1:N] או [-N:N].': 'The distance "{gap}" has no matching field. The fields take [1:N] or [-N:N].',
-    'בחיפוש בטווח (משפט, פסקה, מסמך או "N:") אין מרחקים בין המילים.':
-      'A search within a span (sentence, paragraph, document or "N:") has no distances between the words.',
-    'מרחק צריך לבוא בין שתי מילים.': 'A distance must come between two words.',
-    '"{word}" אינה מילה שהטבלה מכירה.': '"{word}" is not a word the fields can hold.',
-    'בטבלה יש מקום ל-{max} מילים.': 'The fields have room for {max} words.',
+
+    // ---- 0.6.4: חיפוש באוצריא קודם, ואיתור מקום
+    'חיפוש באוצריא קודם': 'Search in Otzaria first',
+    'חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" רץ קודם באוצריא. אם נמצאו תוצאות הן נפתחות שם, ובבר אילן מחפשים רק כשלא נמצא דבר.':
+      'A search from the Otzaria search dialog with "Search in Bar-Ilan" runs in Otzaria first. If results are found they open there, and Bar-Ilan is searched only when nothing was found.',
+    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "חיפוש טקסט מלא" ו"פתיחת ספרים וניהול כרטיסיות".':
+      'To use this, turn on the permissions "חיפוש טקסט מלא" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
+    'בודק אם אוצריא מוצאת תוצאות…': 'Checking whether Otzaria finds results…',
+    'אוצריא לא מצאה תוצאות, ולכן החיפוש הועבר לבר אילן.': 'Otzaria found no results, so the search was passed to Bar-Ilan.',
+    'אוצריא מצאה תוצאות, והן נפתחו בכרטיסיית חיפוש שלה, ולכן החיפוש לא הועבר לבר אילן. כדי לחפש גם בבר אילן, לוחצים "חיפוש בבר אילן".':
+      'Otzaria found results and they opened in a search tab of its own, so the search was not passed to Bar-Ilan. To search Bar-Ilan too, press "Search in Bar-Ilan".',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

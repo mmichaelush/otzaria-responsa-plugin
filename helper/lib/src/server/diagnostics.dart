@@ -10,6 +10,7 @@ import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
 import 'package:responsa_helper/src/native/responsa_edition_probe.dart';
 import 'package:responsa_helper/src/native/responsa_installation.dart';
+import 'package:responsa_helper/src/native/responsa_integrity.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
 
 /// `GET /diagnostics`: מה שצריך כדי למצוא את שורש התקלה ממחשב שאין לנו גישה
@@ -61,7 +62,9 @@ class HelperDiagnostics {
       'service $serverVersion, '
           '${Platform.operatingSystemVersion.replaceAll(RegExp('[\u200e\u200f"]'), '')}, '
           'up ${uptime.inHours}h${minutes}m'
-          '${sessionId == null ? '' : ', session $sessionId'}',
+          '${sessionId == null ? '' : ', session $sessionId'}'
+          ', user ${Platform.environment['USERNAME'] ?? '?'}'
+          ', ${ResponsaIntegrity.describe(ResponsaIntegrity.own)}',
       if (logFilePath != null)
         r'log: %LOCALAPPDATA%\OtzariaResponsa\helper.log',
       ...installations,
@@ -105,7 +108,9 @@ class HelperDiagnostics {
         ))
           instance.usable
               ? '${instance.pid} "${instance.title}" '
-                    '(${instance.openWindows} book windows)'
+                    '(${instance.openWindows} book windows, '
+                    '${ResponsaIntegrity.describe(ResponsaIntegrity.ofProcess(instance.pid))}'
+                    '${ResponsaIntegrity.blocks(instance.pid) ? ' — BLOCKS the service' : ''})'
               : '${instance.pid} (parked)',
       ];
       lines.add(
