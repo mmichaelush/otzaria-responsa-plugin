@@ -35,9 +35,21 @@ class ResponsaBookRow {
     for (final node in chain.sublist(0, chain.length - 1)) node.name,
   ].join(ResponsaTreeReader.pathSeparator);
 
-  ({List<String> nameNodes, List<String> categoryNodes, int workOffset})?
+  ({
+    List<String> nameNodes,
+    List<String> categoryNodes,
+    List<String> classificationNodes,
+    int workOffset,
+    int workIndex,
+  })?
   _parts;
-  ({List<String> nameNodes, List<String> categoryNodes, int workOffset})
+  ({
+    List<String> nameNodes,
+    List<String> categoryNodes,
+    List<String> classificationNodes,
+    int workOffset,
+    int workIndex,
+  })
   get _resolved => _parts ??= ResponsaStructure.decompose(chain)!;
 
   /// השם שהמשתמש רואה ומחפש לפיו — `מהרש"א חידושי הלכות בבא בתרא`.
@@ -51,18 +63,14 @@ class ResponsaBookRow {
 
   /// של צומת החיבור ולא של הספר: רק שם הבית הנמוך הוא מזהה החיבור, ביחידות
   /// שתחתיו הוא מספר סידורי ומחבר שנקרא לפיו שייך לחיבור אחר.
-  int get workParam =>
-      chain[chain.length - _resolved.nameNodes.length + workOffset].param;
+  int get workParam => chain[_resolved.workIndex].param;
 
   /// רכיבי הקטגוריה, מהשורש ועד לרכיב שמעל השם.
   List<String> get categoryNodes => _resolved.categoryNodes;
 
   /// כולל את מה שמעל החיבור: הוא גם חלק מהשם (`משנה אבות`) וגם מדף, ובלעדיו
   /// כל המשנה והתוספתא נופלות ל`ספרות חז"ל` בלבד.
-  List<String> get classificationNodes => [
-    ..._resolved.categoryNodes,
-    ..._resolved.nameNodes.sublist(0, workOffset),
-  ];
+  List<String> get classificationNodes => _resolved.classificationNodes;
 
   /// רק שמות ברמת החיבור: שם היחידה (`בראשית` של `רש"י בראשית`) מייחס
   /// מהדורה של ספר אחר, וזה גרוע מהיעדר מהדורה.
@@ -149,6 +157,11 @@ class ResponsaCatalogBuilder {
 
   static const int _leafSectionPlane = 0x1000;
 
+  /// חיבור בלי ילדים בעץ: שני הסיביות העליונות של מילת הסוג דלוקות. ערך שרק
+  /// הראשונה בו דלוקה (`0x100`) הוא הפניה לחיבור שיושב במקום אחר (נמדד על
+  /// CD25: 79 חיבורים כאלה, 60 הפניות).
+  static bool isLeafWork(int param) => ((param >> 24) & 0x3) == 0x3;
+
   static bool isSection(String name, int param) =>
       ((param >> 16) & _sectionPlaneBits) != 0 ||
       _sectionName.hasMatch(_withoutNote(name));
@@ -157,24 +170,36 @@ class ResponsaCatalogBuilder {
   /// קטגוריות כמו `שולחן ערוך` נראות כספרים). כלל מבני, כי עומק הספר משתנה.
   static List<ResponsaBookRow> classify(Iterable<ResponsaTreeNode> nodes) {
     final found = <({int order, ResponsaBookRow row})>[];
-    final stack =
-        <
-          ({
-            ResponsaTreeNode node,
-            int order,
-            bool hasSectionChild,
-            String? anchor,
-          })
-        >[];
+    final stack = <_Frame>[];
     var scanned = 0;
 
-    void emit(
-      ({ResponsaTreeNode node, int order, bool hasSectionChild, String? anchor})
-      entry,
-    ) {
+    void emit(_Frame entry) {
       final node = entry.node;
-      if (node.level == 0 || !entry.hasSectionChild) return;
-      if (isSection(node.name, node.param)) return;
+      if (node.level == 0) return;
+      final byContent =
+          entry.hasSectionChild && !isSection(node.name, node.param);
+      // חיבור שלא נמצא תחתיו שום ספר הוא עצמו הספר: מקטעיו אינם במישור
+      // 0x1000 ושמם אינו מוכר (`פרשת בראשית`, `בראשית`), או שהחיבור עצמו
+      // במישור 0x2000 (`הלכות אבל`). בלי זה הם נעלמים מהקטלוג. חיבור בלי
+      // ילדים הוא הפניה (`- ראה ספרי מחשבה ומוסר`) ולא ספר.
+      final byWork =
+          !byContent &&
+          !entry.bookBelow &&
+          node.childCount > 0 &&
+          ResponsaStructure.kindOf(node.param) == ResponsaStructure.workKind;
+      // חיבור שכולו מסמך אחד (`אגרת השמד`, `הקדמה`): אין בו מקטעים בעץ, אבל
+      // הוא ספר בקטלוג של בר אילן. הערך בעץ הוא הפניה (`- ראה`) כשאינו כזה.
+      final byLeaf =
+          !byContent &&
+          node.childCount == 0 &&
+          isLeafWork(node.param) &&
+          !node.name.contains(' - ראה ') &&
+          stack.every(
+            (a) =>
+                ResponsaStructure.kindOf(a.node.param) !=
+                ResponsaStructure.workKind,
+          );
+      if (!byContent && !byWork && !byLeaf) return;
       final chain = <ResponsaChainNode>[
         for (final ancestor in stack)
           (
@@ -189,6 +214,9 @@ class ResponsaCatalogBuilder {
         order: entry.order,
         row: ResponsaBookRow(chain: chain, anchor: entry.anchor),
       ));
+      for (final ancestor in stack) {
+        ancestor.bookBelow = true;
+      }
     }
 
     void closeTo(int level) {
@@ -200,27 +228,24 @@ class ResponsaCatalogBuilder {
     for (final node in nodes) {
       closeTo(node.level);
       if (stack.isNotEmpty && isSection(node.name, node.param)) {
-        final last = stack.removeLast();
+        final last = stack.last;
         final candidate = _anchorOf(node.name);
         final keep =
             last.anchor != null &&
             (_positionName.hasMatch(last.anchor!) ||
                 !_positionName.hasMatch(candidate));
-        stack.add((
-          node: last.node,
-          order: last.order,
-          hasSectionChild: true,
-          anchor: keep || candidate.isEmpty ? last.anchor : candidate,
-        ));
+        last.hasSectionChild = true;
+        last.anchor = keep || candidate.isEmpty ? last.anchor : candidate;
       }
-      stack.add((
-        node: node,
-        order: scanned++,
-        // ספר שלא נפתח (הפיל את בר אילן): המקטעים שלו לא נקראו, אבל הוא ספר,
-        // ונפתח לפי שמו.
-        hasSectionChild: node.skipped,
-        anchor: null,
-      ));
+      stack.add(
+        _Frame(
+          node,
+          scanned++,
+          // ספר שלא נפתח (הפיל את בר אילן): המקטעים שלו לא נקראו, אבל הוא
+          // ספר, ונפתח לפי שמו.
+          hasSectionChild: node.skipped,
+        ),
+      );
     }
     closeTo(0);
 
@@ -437,4 +462,17 @@ class ResponsaCatalogBuilder {
     }
     return index;
   }
+}
+
+/// צומת בסריקת [ResponsaCatalogBuilder.classify] עד שנסגר.
+class _Frame {
+  final ResponsaTreeNode node;
+  final int order;
+  bool hasSectionChild;
+  String? anchor;
+
+  /// כבר נמצא ספר באחד מצאצאיו.
+  bool bookBelow = false;
+
+  _Frame(this.node, this.order, {required this.hasSectionChild});
 }

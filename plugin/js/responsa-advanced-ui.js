@@ -314,7 +314,7 @@
     const input = el('textarea', {
       class: 'manual-input',
       dir: 'rtl',
-      rows: '3',
+      rows: '1',
       maxlength: String(Advanced.MAX_QUERY_LENGTH),
       placeholder: t('למשל: נר [1:4] שבת'),
       'aria-label': t('השאילתה בתחביר של בר אילן'),
@@ -323,6 +323,7 @@
     });
     input.value = state.query.manualText;
     input.addEventListener('input', () => actions.advancedSet({ manualText: input.value }, { light: true }));
+    onEnter(input, () => actions.runAdvanced());
     return [
       input,
       el('p', { class: 'advanced-hint' }, t('הסימנים מוסברים למטה, ב"סימני החיפוש של בר אילן".')),
@@ -417,7 +418,7 @@
     const input = el('textarea', {
       class: 'manual-input',
       dir: 'rtl',
-      rows: '2',
+      rows: '1',
       maxlength: String(Advanced.MAX_QUERY_LENGTH),
       placeholder: t('למשל: האם מותר לנסוע באופניים בשבת'),
       'aria-label': t('שאלה או משפט לחיפוש בבר אילן'),

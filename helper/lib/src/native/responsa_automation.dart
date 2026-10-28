@@ -512,6 +512,13 @@ class ResponsaAutomation {
       selectedIsUniqueNamed: uniqueNamedResult(results, usedRef) == index,
     );
     if (failed.isNotEmpty) {
+      // בלי הרשימה שנבחרה אי אפשר לדעת אם נפתח ספר שגוי או שהאימות מחמיר.
+      logLine(
+        'ResponsaAutomation: אימות הפתיחה נכשל (${failed.join(', ')}): '
+        'חלון "$title", נבחר "$chosen" (${index + 1}/${results.length}), '
+        'הפניה "$usedRef", כותרת "$expectedTitle"; רשימה: '
+        '${results.take(8).join(' | ')}',
+      );
       throw ResponsaAutomationException(
         ResponsaFailure.openedWrongBook,
         'נפתח "$title" — אינו תואם ל${failed.join(', ')}',

@@ -2561,6 +2561,9 @@ span.breadcrumb {
   font-size: 1.1em;
   line-height: 1.6;
   resize: vertical;
+  /* שורה אחת, וגדל רק כשהטקסט מתארך: Enter מחפש ואין בו שורה חדשה. */
+  field-sizing: content;
+  max-height: 9em;
 }
 
 .term-input:focus,

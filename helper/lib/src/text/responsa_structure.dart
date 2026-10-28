@@ -48,9 +48,36 @@ class ResponsaStructure {
     return _labelLead.hasMatch(core) || _labelPart.hasMatch(core);
   }
 
+  /// כרך או חלק בלבד (`כרך א (א - אכסנאי)`): השם לבדו אינו מזהה ספר, ובר אילן
+  /// עצמו קורא לו `אנציקלופדיה תלמודית כרך א`.
+  static final RegExp _volumeName = RegExp(
+    r'''^(כרך|כרכים|חלק|חלקים|קובץ|גליון|מהדורה)(?=[\s"'׳״(]|$)''',
+  );
+
+  /// השם שבו בר אילן מכיר חיבור שהעץ קורא לו אחרת. `משנה תורה לרמב"ם הלכות
+  /// קרבן פסח` אינו מזוהה (0 תוצאות, ו-`הלכות קרבן פסח` לבדו פותח קודם את כל
+  /// המפרשים); `רמב"ם הלכות קרבן פסח` מזוהה והוא גם שמו בקטלוג הספרים.
+  static const Map<String, String> _spokenNames = {'משנה תורה לרמב"ם': 'רמב"ם'};
+
+  static String _spokenName(String name) =>
+      _spokenNames[ResponsaNames.coreOf(name)] ?? name;
+
+  static bool isVolumeName(String name) =>
+      _volumeName.hasMatch(ResponsaNames.coreOf(name));
+
   /// תווית מעל החיבור נשארת בקטגוריה, אחרת היא נכללת בשם המצופה ופוסלת פתיחה
   /// תקינה. `null` כשאין חיבור - צומת קטגוריה שסווג כספר.
-  static ({List<String> nameNodes, List<String> categoryNodes, int workOffset})?
+  ///
+  /// [workIndex] — מקום החיבור בשרשרת. הוא אינו נגזר מאורך השם: בכרך
+  /// (`isVolumeName`) מצטרף לשם החיבור שמעליו, ותוויות כמו `ערכים` שביניהם
+  /// נשארות מחוץ לשם.
+  static ({
+    List<String> nameNodes,
+    List<String> categoryNodes,
+    List<String> classificationNodes,
+    int workOffset,
+    int workIndex,
+  })?
   decompose(List<ResponsaChainNode> chain) {
     var work = -1;
     for (var i = 0; i < chain.length; i++) {
@@ -69,10 +96,45 @@ class ResponsaStructure {
       start--;
     }
 
+    final categories = [for (final node in chain.sublist(0, start)) node.name];
+    final names = [
+      for (final node in chain.sublist(start)) _spokenName(node.name),
+    ];
+
+    // כרך: שמות הקטגוריות שמעליו עד השורש, בלי התוויות הגנריות (`ערכים`) —
+    // `אנציקלופדיה תלמודית הערות כרך א`, כמו בקטלוג של בר אילן. תווית מיון
+    // (`ספרי מחשבה ומוסר - אחרונים`, גם כשהיא השורש) עוצרת את העלייה.
+    // הקטגוריה נשארת כולה לשיוך באוצריא.
+    if (isVolumeName(chain[work].name)) {
+      final above = <String>[];
+      for (var i = start - 1; i >= 0; i--) {
+        final name = chain[i].name;
+        final core = ResponsaNames.coreOf(name);
+        if (core.isEmpty || _genericLabels.contains(core)) continue;
+        // אנציקלופדיה שורשית היא שם חיבור, ולא תווית מיון.
+        final isWork = core.startsWith('אנציקלופד');
+        if (!isWork && isCategoryLabel(name, chain[i].level)) break;
+        above.insert(0, name);
+        if (chain[i].level == 0) break;
+      }
+      if (above.isNotEmpty) {
+        return (
+          nameNodes: [...above, ...names],
+          categoryNodes: categories,
+          classificationNodes: categories,
+          workOffset: above.length + work - start,
+          workIndex: work,
+        );
+      }
+    }
+
+    final offset = work - start;
     return (
-      nameNodes: [for (final node in chain.sublist(start)) node.name],
-      categoryNodes: [for (final node in chain.sublist(0, start)) node.name],
-      workOffset: work - start,
+      nameNodes: names,
+      categoryNodes: categories,
+      classificationNodes: [...categories, ...names.sublist(0, offset)],
+      workOffset: offset,
+      workIndex: work,
     );
   }
 }

@@ -308,8 +308,15 @@ class ResponsaHebrew {
   /// הסתייגות שיש בה ספרה היא מיקום (`(עמ' 108-126)`), לא מהדורה.
   static final RegExp _digit = RegExp(r'\d');
 
+  /// `כרך א (א - אכסנאי)`: ההסתייגות שאחרי כרך או חלק היא התוכן שלו, ובחלון
+  /// הוא נכתב אחרת (`כרך א, א (אות)`). לא מהדורה.
+  static final RegExp _volumeRange = RegExp(
+    r'((?:חלק|כרך)\s+[א-ת]{1,4})\s*\([^)]*\)',
+  );
+
   static Set<String> _editionsOf(String? text) {
     if (text == null) return const {};
+    text = text.replaceAllMapped(_volumeRange, (match) => match.group(1)!);
     return {
       for (final match in _parenthetical.allMatches(text))
         if (match.group(1) case final inner? when !_digit.hasMatch(inner))
