@@ -22,6 +22,7 @@ const scenarios = [
   'scenario=ready&page=text',
   'scenario=ready&page=text&adv=simple&run=1',
   'scenario=ready&page=text&adv=words',
+  'scenario=ready&page=text&adv=words&forms=0,click',
   'scenario=ready&page=text&adv=scope',
   'scenario=ready&page=text&adv=manual&run=1',
   'scenario=ready&page=text&adv=free&run=1',

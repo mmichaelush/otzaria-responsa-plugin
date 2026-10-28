@@ -344,6 +344,18 @@ class ResponsaCatalogBuilder {
       ],
     ];
 
+    // שם חיבור שהעץ כותב ארוך מהשם שבר אילן מכיר (שם מלא של המחבר) — האחרונות
+    // מכולן, כי הקיצור הגס מתאים ליותר מספר אחד.
+    final shortened = [
+      for (final name in ResponsaNames.withoutInnerWords(
+        ResponsaNames.coreOf(work.first),
+      )) ...[
+        if (unit != null)
+          ResponsaNames.referenceOf([name, ResponsaNames.coreOf(unit)]),
+        if (bareWork) name,
+      ],
+    ];
+
     final seen = <String>{openRef};
     return [
       for (final candidate in candidates)
@@ -354,6 +366,7 @@ class ResponsaCatalogBuilder {
         ResponsaNames.withoutQualifier(openRef),
         ResponsaNames.withoutQualifier(ResponsaNames.referenceOf(work)),
         ...scoped,
+        ...shortened,
       ])
         if (reference.isNotEmpty && seen.add(reference)) reference,
     ];

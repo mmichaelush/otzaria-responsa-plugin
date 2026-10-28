@@ -1,5 +1,5 @@
-// הכפתור "בבר אילן" בשדות החיפוש של אוצריא (0.9.99). כבוי עד שאוצריא 0.9.99
-// יוצאת; הבדיקה האחרונה שומרת שהמניפסט והמתג יודלקו יחד.
+// הכפתור "בבר אילן" בשדות החיפוש של אוצריא (0.9.98.1): מה שהמניפסט מצהיר,
+// ומה שהלחיצה מעבירה ללשונית.
 'use strict';
 
 const test = require('node:test');
@@ -29,26 +29,20 @@ test('requestFor: טקסט מסומן בשדה — רק הוא', () => {
   assert.equal(FieldActions.requestFor(event({ text: ' נר שבת ', selectionStart: 2, selectionEnd: 2 })).text, 'נר שבת');
 });
 
-test('register: כבוי — לא נרשם לאירוע', () => {
-  const subscribed = [];
-  const registered = FieldActions.register((name) => subscribed.push(name), {});
-  assert.equal(registered, FieldActions.ENABLED);
-  assert.deepEqual(subscribed, FieldActions.ENABLED ? ['search.fieldAction.invoked'] : []);
+test('register: האירוע של הלחיצה מגיע לבקר', () => {
+  const subscribed = {};
+  FieldActions.register((name, handler) => (subscribed[name] = handler), { fieldActionInvoked: (e) => e });
+  assert.deepEqual(Object.keys(subscribed), ['search.fieldAction.invoked']);
+  const click = event({ text: 'נר' });
+  assert.equal(subscribed['search.fieldAction.invoked'](click), click);
 });
 
-test('המתג והמניפסט יחד (TODO(otzaria-0.9.99))', () => {
-  const declared = ((manifest.contributes || {}).startup || {}).searchFieldActions;
-  const permission = (manifest.permissions || []).includes(FieldActions.PERMISSION);
-  if (!FieldActions.ENABLED) {
-    // עד 0.9.99: משתמשי 0.9.98 לא היו יכולים להתקין גרסה עם התכונה.
-    assert.equal(declared, undefined, 'searchFieldActions במניפסט לפני 0.9.99');
-    assert.equal(permission, false, `${FieldActions.PERMISSION} במניפסט לפני 0.9.99`);
-    return;
-  }
-  const parts = (value) => String(value).split('.').map(Number);
-  const [a, b, c] = parts(manifest.minAppVersion);
-  const [x, y, z] = parts(FieldActions.MIN_APP_VERSION);
-  assert.ok(a > x || (a === x && (b > y || (b === y && c >= z))), 'minAppVersion חייב להיות 0.9.99 לפחות');
-  assert.ok(permission, `חסרה ההרשאה ${FieldActions.PERMISSION}`);
+test('המניפסט מצהיר על הכפתור ועל ההרשאה שלו, ובגרסה שמכירה אותו', () => {
+  const declared = manifest.contributes.startup.searchFieldActions;
   assert.deepEqual(declared, [FieldActions.CONTRIBUTION]);
+  assert.ok(manifest.permissions.includes(FieldActions.PERMISSION), `חסרה ההרשאה ${FieldActions.PERMISSION}`);
+  // אוצריא 0.9.98 קוראת את 0.9.98.1 כ-0.9.98 ואינה מכירה את הכפתור.
+  assert.equal(FieldActions.MIN_APP_VERSION, '0.9.98.1');
+  // אין מנוע רקע: הלחיצה פותחת את הדף ומוסרת אליו את האירוע.
+  assert.ok(!manifest.permissions.includes('app.run_on_startup'));
 });

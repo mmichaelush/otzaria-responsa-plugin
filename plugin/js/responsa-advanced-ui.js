@@ -74,18 +74,63 @@
     return node;
   }
 
-  /** הצורות לפי הקבוצות שלהן, כמו המאפיינים בחלון של בר אילן. */
-  function formOptions() {
+  /**
+   * איך לחפש את המילה: אפשרויות בקבוצות, כמו המאפיינים בחלון של בר אילן.
+   * אפשר לסמן כמה מהן, וכל אחת מספיקה ([Advanced.formTokens]).
+   */
+  function formOptions(state, term, index, actions) {
     const groups = [];
     for (const form of Advanced.FORMS) {
       let group = groups.find((entry) => entry.key === form.group);
       if (!group) {
-        group = { key: form.group, group: t(form.group), options: [] };
+        group = { key: form.group, forms: [] };
         groups.push(group);
       }
-      group.options.push({ value: form.id, label: t(form.label) });
+      group.forms.push(form);
     }
-    return groups;
+    const chip = (form) => {
+      const checked = term.forms.includes(form.id);
+      const input = el('input', {
+        class: 'checkbox',
+        type: 'checkbox',
+        checked,
+        dataset: { focusKey: 'adv-form-' + index + '-' + form.id },
+      });
+      input.addEventListener('change', () => actions.advancedToggleForm(index, form.id, input.checked));
+      return el(
+        'label',
+        { class: 'form-chip' + (checked ? ' is-on' : '') },
+        input,
+        el('span', { class: 'form-chip-label' }, t(form.label)),
+        form.example ? el('span', { class: 'form-chip-example' }, '(' + form.example + ')') : null,
+      );
+    };
+    // סגור כברירת מחדל: מה שנבחר מופיע בכותרת, וחמש הקבוצות לא תופסות כל כרטיס.
+    const chosen = term.forms.length
+      ? term.forms.map((id) => t(Advanced.FORM_BY_ID[id].label)).join(', ')
+      : t('בדיוק כפי שנכתבה');
+    const node = el(
+      'details',
+      { class: 'form-options', open: Boolean(state.formsOpen[index]) },
+      el(
+        'summary',
+        { class: 'form-options-summary', dataset: { focusKey: 'adv-forms-' + index } },
+        el('span', { class: 'field-label' }, t('איך לחפש את המילה')),
+        el('span', { class: 'form-options-value' }, chosen),
+        el('span', { class: 'form-options-chevron', 'aria-hidden': 'true' }, icon('chevron_down_24_regular')),
+      ),
+      el('p', { class: 'form-options-hint' }, t('אפשר לסמן כמה, ומספיקה אחת מהן.')),
+      groups.map((group) =>
+        el(
+          'div',
+          { class: 'form-group', role: 'group', 'aria-label': t(group.key) },
+          el('span', { class: 'form-group-label' }, t(group.key)),
+          el('div', { class: 'form-chips' }, group.forms.map(chip)),
+        ),
+      ),
+    );
+    node.addEventListener('toggle', () => actions.advancedFormsOpen(index, node.open));
+    return node;
   }
 
   function checkbox(label, checked, onToggle, key, hint) {
@@ -151,7 +196,7 @@
           : null,
       ),
     ]);
-    const single = (Advanced.FORM_BY_ID[term.form] || {}).single;
+    const single = term.forms.some((id) => Advanced.FORM_BY_ID[id].single);
     return el(
       'li',
       { class: 'term-card' + (invalid ? ' is-error' : '') + (term.exclude ? ' is-excluded' : '') },
@@ -176,15 +221,10 @@
             })
           : null,
       ),
+      formOptions(state, term, index, actions),
       el(
         'div',
         { class: 'term-options' },
-        el(
-          'label',
-          { class: 'field' },
-          el('span', { class: 'field-label' }, t('איך לחפש את המילה')),
-          select(t('איך לחפש את המילה'), formOptions(), term.form, (form) => actions.advancedTerm(index, { form }), 'adv-form-' + index),
-        ),
         checkbox(
           t('בלי המילה הזו'),
           term.exclude,

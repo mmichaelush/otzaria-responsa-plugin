@@ -1,24 +1,15 @@
 // כפתור "בבר אילן" בתוך שדות החיפוש של אוצריא (`searchFieldActions`, מאוצריא
-// 0.9.99): מה שהוקלד בשדה עובר לבר אילן — חיפוש בטקסט, איתור מקום, או ספר.
+// 0.9.98.1): מה שהוקלד בשדה עובר לבר אילן — חיפוש בטקסט, איתור מקום, או ספר.
 //
-// TODO(otzaria-0.9.99): כבוי עד שתצא אוצריא 0.9.99 (לא Preview). להפעלה:
-//   1. ENABLED = true כאן.
-//   2. במניפסט: "minAppVersion": "0.9.99", ההרשאה PERMISSION, ובתוך
-//      contributes.startup — "searchFieldActions": [CONTRIBUTION].
-//   3. בדיקת התאימות ב-test/field-actions.test.js תיכשל עד ששלושתם יתאימו.
-//   4. משתמשי 0.9.98 לא יוכלו להתקין את הגרסה הזו, ולכן רק אחרי שרוב
-//      המשתמשים עברו. הפרטים ב-docs/ARCHITECTURE.md ("אחרי אוצריא 0.9.99").
-//
-// התיעוד: docs/plugin-sdk/API_REFERENCE.md של אוצריא (ענף dev), "כפתורים
-// בשדות החיפוש". לחיצה פותחת את הלשונית (אין לתוסף מנוע רקע) ומוסרת אליה
+// התיעוד: docs/plugin-sdk/API_REFERENCE.md של אוצריא, "כפתורים בשדות החיפוש".
+// הכפתור נבנה מהמניפסט ואינו מפעיל את התוסף. בלי מנוע רקע (אין
+// `app.run_on_startup`), לחיצה פותחת את הלשונית ומוסרת אליה
 // `search.fieldAction.invoked`; התוסף אינו כותב לשדה, ולכן הסשן נסגר מיד.
 (function (root) {
   'use strict';
 
-  /** TODO(otzaria-0.9.99): להדליק אחרי שאוצריא 0.9.99 יוצאת. */
-  const ENABLED = false;
-
-  const MIN_APP_VERSION = '0.9.99';
+  /** `minAppVersion` שהמניפסט חייב להצהיר כדי להשתמש בו. */
+  const MIN_APP_VERSION = '0.9.98.1';
   const PERMISSION = 'search.field_actions';
   const ACTION_ID = 'bar-ilan';
 
@@ -50,14 +41,12 @@
     return { tab, text: (selected.trim() ? selected : full).trim(), sessionId: event.sessionId || null };
   }
 
-  /** מחבר את האירוע ל-[app]. `false` כשהתכונה כבויה (עד 0.9.99). */
+  /** מחבר את האירוע ל-[app]. */
   function register(on, app) {
-    if (!ENABLED) return false;
     on('search.fieldAction.invoked', (event) => app.fieldActionInvoked(event));
-    return true;
   }
 
-  const api = { ENABLED, MIN_APP_VERSION, PERMISSION, ACTION_ID, CONTRIBUTION, requestFor, register };
+  const api = { MIN_APP_VERSION, PERMISSION, ACTION_ID, CONTRIBUTION, requestFor, register };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ResponsaFieldActions = api;
 })(typeof self !== 'undefined' ? self : globalThis);

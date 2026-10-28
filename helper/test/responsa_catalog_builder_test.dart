@@ -1,5 +1,6 @@
 import 'package:responsa_helper/src/native/responsa_catalog_builder.dart';
 import 'package:responsa_helper/src/native/responsa_tree_reader.dart';
+import 'package:responsa_helper/src/text/responsa_names.dart';
 import 'package:test/test.dart';
 
 /// צמתים מהעץ של בר אילן 25, עם ה-param האמיתי (מדאמפ העץ).
@@ -324,6 +325,52 @@ void main() {
       final rows = ResponsaCatalogBuilder.classify(_ginatVradim);
 
       expect(rows, hasLength(2));
+    });
+  });
+
+  group('שם חיבור שהעץ כותב ארוך מזה שבר אילן מכיר', () {
+    // דיווח משתמש 28.10.2026 (CD31), ונמדד גם ב-CD25: `חדושי ר' שמעון שקופ
+    // יבמות` מזוהה, ואילו `חדושי ר' שמעון יהודא הכהן שקופ יבמות` לא, כי
+    // `יהודא הכהן` אינן בכותרת.
+    final rows = ResponsaCatalogBuilder.classify(
+      _tree([
+        (0, 65542, 'מפרשים ופוסקים על הבבלי והירושלמי'),
+        (1, 131089, 'אחרונים על הבבלי'),
+        (2, 298757, "חדושי ר' שמעון יהודא הכהן שקופ"),
+        (3, 393217, 'יבמות'),
+        (4, 302579713, 'פרק א'),
+      ]),
+    );
+
+    test('הסולם מקצר את שם המחבר מהמדויק לגס, אחרי כל החוליות הרגילות', () {
+      final row = rows.single;
+      final openRef = ResponsaCatalogBuilder.buildOpenRefs([row]).single;
+      final ladder = ResponsaCatalogBuilder.alternativeRefs(row, openRef);
+
+      expect(openRef, "חדושי ר' שמעון יהודא הכהן שקופ יבמות");
+      expect(
+        ladder,
+        containsAllInOrder([
+          "חדושי ר' שמעון שקופ יבמות",
+          "חדושי ר' שמעון יהודא שקופ יבמות",
+          'חדושי שקופ יבמות',
+        ]),
+      );
+      // החוליה הרגילה האחרונה קודמת לקיצורים.
+      expect(
+        ladder.indexOf("חדושי ר' שמעון יהודא הכהן שקופ"),
+        lessThan(ladder.indexOf("חדושי ר' שמעון שקופ יבמות")),
+      );
+    });
+
+    test('שם קצר מארבע מילים אינו מקוצר', () {
+      expect(ResponsaNames.withoutInnerWords('חידושי הגר"ח'), isEmpty);
+      expect(ResponsaNames.withoutInnerWords("חדושי ר' שקופ"), isEmpty);
+      // ארבע מילים: בלי אחת מהאמצע, או ראש וסוף בלבד.
+      expect(ResponsaNames.withoutInnerWords("חדושי ר' שמעון שקופ"), [
+        "חדושי ר' שקופ",
+        'חדושי שקופ',
+      ]);
     });
   });
 

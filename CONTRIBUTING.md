@@ -121,7 +121,7 @@
 - **ההבהרה על רישיון בר אילן** מוצגת ראשונה במסך הפתיחה, וגם ב"אודות". כך נקבע בפורום אוצריא ([הודעה 40010](https://otzaria.org/forum/post/40010)). לא מסירים אותה, לא מקצרים ולא מזיזים למטה.
 - **אין העתקת תוכן מבר אילן.** רק קטלוג, ופתיחה או חיפוש בתוכנה המקורית.
 - **התוסף עובד בלי אינטרנט.** כל תקשורת היא ל-`127.0.0.1`. קישור חיצוני בודק את `model.online` ומסביר כשאין חיבור.
-- **`minAppVersion` 0.9.98:** חיפוש הספרייה (`library.books.provide`, Otzaria#1655) והפעולות `localService` של אוצריא (Otzaria#1762). עד שגרסה רשמית של אוצריא כוללת את שניהם הגרסה ממתינה בענף שלה, ושער הפרסום מפרסם אותה ([docs/RELEASING.md](docs/RELEASING.md)). בלי ההרשאה לספרייה, הממשק מסתיר כל מה שקשור אליה.
+- **`minAppVersion` 0.9.98.1** (מ-0.7.0; החנות אינה מגישה את התוסף לאוצריא 0.9.98): הכפתור בשדות החיפוש וההקשרים במפרשים ו-PDF. עד אז 0.9.98: חיפוש הספרייה (`library.books.provide`, Otzaria#1655) והפעולות `localService` של אוצריא (Otzaria#1762). עד שגרסה רשמית של אוצריא כוללת את שניהם הגרסה ממתינה בענף שלה, ושער הפרסום מפרסם אותה ([docs/RELEASING.md](docs/RELEASING.md)). בלי ההרשאה לספרייה, הממשק מסתיר כל מה שקשור אליה.
 
 ### גרסאות ופרוטוקול
 - **`plugin/manifest.json` ו-`HelperService.serverVersion` זהים תמיד.** `test/manifest.test.js` ו-`build.ps1` בודקים.
@@ -193,7 +193,7 @@ dart test
 cd ..
 
 # הוולידטור הרשמי (אותה בדיקה שהחנות מריצה)
-node build/validator/src/cli.js plugin --app-version 0.9.98 --fail-on-warnings --publish false
+node build/validator/src/cli.js plugin --app-version 0.9.98.2 --fail-on-warnings --publish false
 
 git diff --check
 ```

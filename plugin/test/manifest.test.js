@@ -119,7 +119,42 @@ test('ספק חיפוש הספרייה מתאים לקוד, ופותח דרך ה
   assertServiceAction(provider, '/book/open');
   assert.deepEqual(provider.openAction.args.body.key, { $book: 'id' });
   assert.ok(manifest.permissions.includes(Domain.LIBRARY_PERMISSION));
-  assert.equal(manifest.minAppVersion, '0.9.98');
+});
+
+const versionParts = (value) => String(value).split('.').map(Number);
+function atLeast(actual, wanted) {
+  const a = versionParts(actual);
+  const b = versionParts(wanted);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  }
+  return true;
+}
+
+// `minAppVersion` הוא הגרסה שבה נוסף ה-API החדש ביותר שבמניפסט: אוצריא דוחה
+// התקנה מלמעלה ואריזה מלמטה (docs/plugin-sdk/README.md).
+test('minAppVersion: 0.9.98.1, מה שהקשרי המפרשים והכפתור בשדות דורשים', () => {
+  assert.equal(manifest.minAppVersion, '0.9.98.1');
+  assert.ok(atLeast(manifest.minAppVersion, '0.9.98'), 'ספק הספרייה ו-$storage (0.9.98)');
+  const FieldActions = require('../js/responsa-field-actions.js');
+  assert.ok(atLeast(manifest.minAppVersion, FieldActions.MIN_APP_VERSION));
+});
+
+test('פריטי התפריט מופיעים גם במפרשים ובעמודי PDF, כשיש טקסט מסומן', () => {
+  const SELECTION = ['reader-selection', 'reader-page-shape-selection', 'reader-commentary-selection', 'reader-pdf-selection'];
+  for (const item of startup.contextMenuItems) {
+    assert.ok(Array.isArray(item.contexts), item.id + ' בלי contexts מופיע רק בטקסט הראשי');
+    for (const context of SELECTION) assert.ok(item.contexts.includes(context), item.id + ' ' + context);
+    assert.equal(new Set(item.contexts).size, item.contexts.length, 'ערכים ייחודיים');
+  }
+  // רק האיתור פועל גם בלי סימון (`reader-book`): החיפוש צריך טקסט.
+  const withoutSelection = startup.contextMenuItems.filter((item) => item.contexts.includes('reader-book')).map((item) => item.id);
+  assert.deepEqual(withoutSelection, [Domain.LOCATE_MENU_ITEM]);
+});
+
+test('שדה שאוצריא ביטלה לא נשאר במניפסט', () => {
+  // Otzaria/otzaria#2460: תוסף מופיע תמיד אחרי הכלים המובנים; השדה מתעלמים ממנו.
+  assert.equal('allowOrderBeforeBuiltIns' in manifest.contributes.toolTab, false);
 });
 
 test('בלי מנוע רקע: לא מוצהר, ואין בקשה להפעלה ברקע', () => {

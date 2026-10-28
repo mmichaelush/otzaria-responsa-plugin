@@ -26,29 +26,36 @@
   const N = (text) => text;
 
   /**
-   * איך לחפש מילה. רק צירופים שבר אילן מקבל: הכפתורים שלו מחליפים כל
-   * מאפיין אחר ב-`+ $ % ^`, ו-`!` מתחבר רק לאותיות שימוש (`#!`; `!#` נדחה).
+   * איך לחפש מילה: אפשרויות שאפשר לסמן כמה מהן יחד, וכל אחת מספיקה. בר אילן
+   * מקבל סימן אחד בלבד לכל מילה: הכפתורים שלו מחליפים כל מאפיין אחר ב-`+ $ % ^`,
+   * ו-`!` מתחבר רק לאותיות שימוש (`#!`; `!#` נדחה). לכן כמה אפשרויות הן
+   * חלופות (`(#נר/^נר)`), חוץ ממה שבר אילן מחבר בסימן אחד ([formTokens]).
+   * `single` — רשימה של המשתמש בבר אילן: אינה מתחברת לדבר.
    */
   const FORMS = Object.freeze([
-    { id: 'exact', group: N('המילה עצמה'), label: N('בדיוק כפי שנכתבה'), before: '', after: '' },
-    { id: 'prefixes', group: N('תוספות דקדוקיות'), label: N('עם אותיות שימוש לפניה (הנר, ובנר)'), before: '#', after: '' },
-    { id: 'suffixes', group: N('תוספות דקדוקיות'), label: N('עם סיומות (נרות, נרו)'), before: '', after: '#' },
-    { id: 'affixes', group: N('תוספות דקדוקיות'), label: N('עם אותיות שימוש וסיומות (והנרות)'), before: '#', after: '#' },
+    { id: 'prefixes', group: N('תוספות דקדוקיות'), label: N('אותיות שימוש לפניה'), example: 'הנר, ובנר', before: '#', after: '' },
+    { id: 'suffixes', group: N('תוספות דקדוקיות'), label: N('סיומות'), example: 'נרות, נרו', before: '', after: '#' },
     { id: 'startsWith', group: N('כל אות'), label: N('מילה שמתחילה כך'), before: '', after: '*' },
     { id: 'endsWith', group: N('כל אות'), label: N('מילה שמסתיימת כך'), before: '*', after: '' },
     { id: 'contains', group: N('כל אות'), label: N('מילה שמכילה את האותיות'), before: '*', after: '*' },
-    { id: 'prefixesAny', group: N('כל אות'), label: N('אותיות שימוש לפניה, וכל סיומת'), before: '#', after: '*' },
-    { id: 'spelling', group: N('כתיב'), label: N('בכתיב מלא או חסר (אהרון, אהרן)'), before: '!', after: '' },
-    { id: 'spellingPrefixes', group: N('כתיב'), label: N('כתיב מלא או חסר, עם אותיות שימוש'), before: '#!', after: '' },
-    { id: 'quotes', group: N('כתיב'), label: N('עם או בלי גרשיים (רמב"ם, רמבם)'), before: '+', after: '' },
-    { id: 'entry', group: N('צורות'), label: N('כל צורות הערך המילוני (מדרגה, ממדרגתו)'), before: '$', after: '' },
-    { id: 'root', group: N('צורות'), label: N('כל המילים מאותו שורש (שומר, שמירה)'), before: '%', after: '' },
-    { id: 'aramaic', group: N('צורות'), label: N('כולל התרגום לארמית'), before: '^', after: '' },
+    { id: 'spelling', group: N('כתיב'), label: N('כתיב מלא או חסר'), example: 'אהרון, אהרן', before: '!', after: '' },
+    { id: 'quotes', group: N('כתיב'), label: N('עם או בלי גרשיים'), example: 'רמב"ם, רמבם', before: '+', after: '' },
+    { id: 'entry', group: N('צורות'), label: N('כל צורות הערך המילוני'), example: 'מדרגה, ממדרגתו', before: '$', after: '' },
+    { id: 'root', group: N('צורות'), label: N('כל המילים מאותו שורש'), example: 'שומר, שמירה', before: '%', after: '' },
+    { id: 'aramaic', group: N('צורות'), label: N('התרגום לארמית'), before: '^', after: '' },
     { id: 'family', group: N('רשימות שלי בבר אילן'), label: N('משפחת מילים שהגדרתי'), before: '<', after: '>', single: true },
     { id: 'saved', group: N('רשימות שלי בבר אילן'), label: N('חיפוש שמור'), before: '{', after: '}', single: true },
   ]);
 
   const FORM_BY_ID = Object.freeze(Object.fromEntries(FORMS.map((form) => [form.id, form])));
+
+  /** הצורה היחידה (`form`) של מודל שנשמר לפני 0.7.0 ← האפשרויות שלה. */
+  const LEGACY_FORMS = Object.freeze({
+    exact: [],
+    affixes: ['prefixes', 'suffixes'],
+    prefixesAny: ['prefixes', 'startsWith'],
+    spellingPrefixes: ['prefixes', 'spelling'],
+  });
 
   /** המרחק בין מילה לזו שאחריה. */
   const GAPS = Object.freeze(['adjacent', 'after', 'around']);
@@ -99,7 +106,22 @@
   const PUNCTUATION = /([.,;:?!()])/;
 
   function newTerm(word) {
-    return { words: [word || ''], form: 'exact', exclude: false };
+    return { words: [word || ''], forms: [], exclude: false };
+  }
+
+  /**
+   * האפשרויות שנשמרו ← רשימה תקינה, בסדר של [FORMS]. רשימה של המשתמש
+   * (`single`) היא היחידה שנשארת; מודל שנשמר לפני 0.7.0 החזיק `form` אחד.
+   */
+  function normalizeForms(source) {
+    const raw = Array.isArray(source.forms)
+      ? source.forms
+      : typeof source.form === 'string'
+        ? (Object.hasOwn(LEGACY_FORMS, source.form) ? LEGACY_FORMS[source.form] : [source.form])
+        : [];
+    const chosen = FORMS.filter((form) => raw.includes(form.id));
+    const single = chosen.find((form) => form.single);
+    return (single ? [single] : chosen).map((form) => form.id);
   }
 
   function newGap() {
@@ -150,7 +172,7 @@
           .map((word) => text(word, MAX_WORD_LENGTH));
         return {
           words: words.length ? words : [''],
-          form: FORM_BY_ID[source.form] ? source.form : 'exact',
+          forms: normalizeForms(source),
           exclude: source.exclude === true,
         };
       });
@@ -233,13 +255,72 @@
     return isPhrase(value) ? '{{' + value + '}}' : value;
   }
 
-  /** מילה אחת כפי שתישלח: שלילה, ואז הסימנים לפני המילה, החלופות ואחריה. */
+  /**
+   * הסימנים שבר אילן מקבל לאפשרויות שנבחרו (`{ before, after }`), אחד לכל
+   * אפשרות, חוץ ממה שהוא מחבר בסימן אחד: `#נר#` (אותיות שימוש וסיומות),
+   * `#נר*` (אותיות שימוש ומתחילה כך), `#!נר` (אותיות שימוש וכתיב), ו-`*נר*`
+   * שבולע כל מה שנוגע לאותיות. `*נר` בולע את אותיות השימוש, ו-`נר*` את
+   * הסיומות. בלי אפשרות — המילה עצמה.
+   */
+  function formTokens(forms) {
+    const chosen = new Set(forms);
+    const special = FORMS.find((form) => form.single && chosen.has(form.id));
+    if (special) return [special];
+    const tokens = [];
+    const add = (before, after) => {
+      if (!tokens.some((token) => token.before === before && token.after === after)) tokens.push({ before, after });
+    };
+    let prefixes = chosen.has('prefixes');
+    let suffixes = chosen.has('suffixes');
+    let startsWith = chosen.has('startsWith');
+    let endsWith = chosen.has('endsWith');
+    let spelling = chosen.has('spelling');
+    if (chosen.has('contains')) {
+      add('*', '*');
+      prefixes = suffixes = startsWith = endsWith = false;
+    }
+    if (endsWith) prefixes = false;
+    if (startsWith) suffixes = false;
+    if (prefixes && startsWith) {
+      add('#', '*');
+      prefixes = startsWith = false;
+    } else if (prefixes && suffixes) {
+      add('#', '#');
+      prefixes = suffixes = false;
+    }
+    if (prefixes) {
+      if (spelling) {
+        add('#!', '');
+        spelling = false;
+      } else add('#', '');
+    }
+    if (suffixes) add('', '#');
+    if (startsWith) add('', '*');
+    if (endsWith) add('*', '');
+    if (spelling) add('!', '');
+    for (const id of ['quotes', 'entry', 'root', 'aramaic']) {
+      if (chosen.has(id)) add(FORM_BY_ID[id].before, '');
+    }
+    if (!tokens.length) add('', '');
+    return tokens;
+  }
+
+  /**
+   * מילה אחת כפי שתישלח: שלילה, ואז הסימנים לפני המילה, החלופות ואחריה.
+   * סימן אחד עוטף את החלופות (`*(א/ב)*`); כמה סימנים אינם נכנסים במילה אחת,
+   * ולכן כל מילה בכל סימן, בחלופות שטוחות (`(#א/^א/#ב/^ב)`).
+   */
   function termText(term) {
     const words = wordsOf(term).map(wordText);
     if (!words.length) return '';
-    const form = FORM_BY_ID[term.form] || FORM_BY_ID.exact;
-    const core = words.length > 1 ? '(' + words.join('/') + ')' : words[0];
-    return (term.exclude ? '-' : '') + form.before + core + form.after;
+    const tokens = formTokens(term.forms);
+    const sign = term.exclude ? '-' : '';
+    if (tokens.length === 1) {
+      const core = words.length > 1 ? '(' + words.join('/') + ')' : words[0];
+      return sign + tokens[0].before + core + tokens[0].after;
+    }
+    const alternatives = words.flatMap((word) => tokens.map((token) => token.before + word + token.after));
+    return sign + '(' + alternatives.join('/') + ')';
   }
 
   function gapText(gap) {
@@ -307,21 +388,20 @@
   });
 
   /**
-   * הצורה לפי מה שמותר לפני המילה ואחריה: '' כלום, `gram` אותיות שימוש או
-   * סיומות דקדוקיות (`#`), `any` כל אות (`*`).
+   * האפשרות של אוצריא ← האפשרות כאן. "קידומות" של אוצריא הן אותיות לפני המילה
+   * (`*נר`) ו"סיומות" אחריה (`נר*`); "קידומות דקדוקיות" ו"סיומות דקדוקיות" הן
+   * `#`. "קידומות", "סיומות" ו"חלק ממילה" מוגבלות באוצריא בכמה אותיות, ו-`*`
+   * אינו מוגבל: הן עוברות, רחבות יותר, ולכן נרשמות ב-`missing`.
    */
-  const AFFIX_FORMS = Object.freeze({
-    '|': 'exact',
-    'gram|': 'prefixes',
-    '|gram': 'suffixes',
-    'gram|gram': 'affixes',
-    'any|': 'endsWith',
-    '|any': 'startsWith',
-    'any|any': 'contains',
-    'gram|any': 'prefixesAny',
-    // `*נר#` לא נמדד בבר אילן; "מכילה" רחבה ממנו.
-    'any|gram': 'contains',
-  });
+  const FROM_OTZARIA = Object.freeze([
+    [OTZARIA.gramPrefixes, 'prefixes', false],
+    [OTZARIA.gramSuffixes, 'suffixes', false],
+    [OTZARIA.suffixes, 'startsWith', true],
+    [OTZARIA.prefixes, 'endsWith', true],
+    [OTZARIA.partial, 'contains', true],
+    [OTZARIA.spelling, 'spelling', false],
+    [OTZARIA.translation, 'aramaic', false],
+  ]);
 
   const unique = (values) => [...new Set(values)];
 
@@ -333,39 +413,27 @@
   }
 
   /**
-   * אפשרויות של מילה אחת ← צורה כאן, ו-`missing`: שמות האפשרויות שלא עברו
-   * במדויק. בר אילן אינו מצרף סימנים (רק `#!`), ולכן מצירוף נשארת צורה אחת.
-   * "קידומות", "סיומות" ו"חלק ממילה" של אוצריא מוגבלות בכמה אותיות, ו-`*`
-   * אינו מוגבל: הן עוברות, רחבות יותר.
+   * אפשרויות של מילה אחת ← האפשרויות כאן (`forms`), ו-`missing`: שמות
+   * האפשרויות שלא עברו במדויק. כל האפשרויות של אוצריא מצטרפות (כל אחת
+   * מספיקה), וגם כאן ([formTokens]).
    */
   function otzariaTerm(words, options) {
     const on = (name) => options[name] === true;
     const missing = [];
-    const before = on(OTZARIA.partial) || on(OTZARIA.prefixes) ? 'any' : on(OTZARIA.gramPrefixes) ? 'gram' : '';
-    const after = on(OTZARIA.partial) || on(OTZARIA.suffixes) ? 'any' : on(OTZARIA.gramSuffixes) ? 'gram' : '';
-    let form = AFFIX_FORMS[before + '|' + after];
-    missing.push(...[OTZARIA.partial, OTZARIA.prefixes, OTZARIA.suffixes].filter(on));
-    if (on(OTZARIA.spelling)) {
-      if (form === 'exact') form = 'spelling';
-      else if (form === 'prefixes') form = 'spellingPrefixes';
-      else missing.push(OTZARIA.spelling);
+    const forms = [];
+    for (const [name, form, wider] of FROM_OTZARIA) {
+      if (!on(name)) continue;
+      forms.push(form);
+      if (wider) missing.push(name);
     }
-    let result = words;
-    // בלי גרש או גרשיים במילה, "התעלם מגרשיים" אינו משנה דבר.
-    if (on(OTZARIA.quotes) && words.some((word) => /["']/.test(word))) {
-      if (form === 'exact' && !on(OTZARIA.translation)) {
-        form = 'quotes';
-        result = unique(words.map((word) => word.replace(/["']/g, ''))).filter((word) => LETTER.test(word));
-      } else missing.push(OTZARIA.quotes);
-    }
-    if (on(OTZARIA.translation)) {
-      if (form === 'exact') form = 'aramaic';
-      else missing.push(OTZARIA.translation);
-    }
+    // בלי גרש או גרשיים במילה, "התעלם מגרשיים" אינו משנה דבר. הגרשיים נשארים
+    // במילה: `+` מתעלם מהם בעצמו, וסימן אחר איתו (`#רמב"ם`) זקוק להם (נמדד:
+    // `#רמב"ם` 5267 תוצאות, `#רמבם` אפס).
+    if (on(OTZARIA.quotes) && words.some((word) => /["']/.test(word))) forms.push('quotes');
     // אין מקבילה: שגיאות כתיב, קידומות וסיומות ארמיות, ניקוד, טעמים.
     const known = new Set(Object.values(OTZARIA));
     missing.push(...Object.keys(options).filter((name) => on(name) && !known.has(name)));
-    return { words: result, form, missing, acronyms: on(OTZARIA.acronyms) };
+    return { words, forms: normalizeForms({ forms }), missing, acronyms: on(OTZARIA.acronyms) };
   }
 
   /**
@@ -475,7 +543,7 @@
           } else if (!words.includes(alternative)) words.push(alternative);
         }
         const mapped = otzariaTerm(words, positions.options[i] || {});
-        terms[i] = { words: mapped.words, form: mapped.form, exclude: false };
+        terms[i] = { words: mapped.words, forms: mapped.forms, exclude: false };
         originals[i] = words;
         missing.push(...mapped.missing);
         if (mapped.acronyms) acronyms += 1;
@@ -486,7 +554,7 @@
 
     const base = normalize(query);
     const options = acronyms ? { ...base.options, abbreviations: true } : base.options;
-    const shaped = terms.some((term) => term.form !== 'exact' || term.words.length > 1);
+    const shaped = terms.some((term) => term.forms.length || term.words.length > 1);
     const builder = (fields) => fit({ ...base, options, mode: Mode.builder, span: Span.chain, ...fields }, missing);
     const result = (built, approximate) => {
       const names = unique(missing).slice(0, 8);
@@ -494,13 +562,14 @@
     };
 
     if (found.length > 1 && match === 'anyWord' && found.length <= MAX_ALTERNATIVES) {
-      // צורה אחת לכל הקבוצה: כשהצורות שונות, המילים כפי שנשלחו.
-      const forms = unique(terms.map((term) => term.form));
-      const group = forms.length === 1 ? terms : originals.map((words) => ({ words }));
+      // אפשרויות אחת לכל הקבוצה: כשהן שונות, המילים כפי שנשלחו.
+      const signatures = unique(terms.map((term) => term.forms.join('+')));
+      const same = signatures.length === 1;
+      const group = same ? terms : originals.map((words) => ({ words }));
       const words = unique([...group.map((term) => term.words[0]), ...group.flatMap((term) => term.words.slice(1))]);
       words.slice(MAX_ALTERNATIVES).forEach((word) => missing.push('"' + word + '"'));
-      const merged = { words: words.slice(0, MAX_ALTERNATIVES), form: forms.length === 1 ? forms[0] : 'exact', exclude: false };
-      return result(builder({ terms: [merged], gaps: [] }), lost || forms.length > 1);
+      const merged = { words: words.slice(0, MAX_ALTERNATIVES), forms: same ? terms[0].forms : [], exclude: false };
+      return result(builder({ terms: [merged], gaps: [] }), lost || !same);
     }
     if (found.length > 1 && match === 'all' && scope !== 'wordDistance') {
       const paragraph = scope === 'sameParagraph';
@@ -529,20 +598,13 @@
 
   // ------------------------------------------------------ גם באוצריא
 
-  /** הצורה של בר אילן ← אפשרויות המילה של אוצריא (ההפך של `otzariaTerm`). */
-  const OTZARIA_FORMS = Object.freeze({
-    prefixes: [OTZARIA.gramPrefixes],
-    suffixes: [OTZARIA.gramSuffixes],
-    affixes: [OTZARIA.gramPrefixes, OTZARIA.gramSuffixes],
-    startsWith: [OTZARIA.suffixes],
-    endsWith: [OTZARIA.prefixes],
-    contains: [OTZARIA.partial],
-    prefixesAny: [OTZARIA.gramPrefixes, OTZARIA.suffixes],
-    spelling: [OTZARIA.spelling],
-    spellingPrefixes: [OTZARIA.spelling, OTZARIA.gramPrefixes],
-    quotes: [OTZARIA.quotes],
-    aramaic: [OTZARIA.translation],
-  });
+  /** האפשרות כאן ← אפשרות המילה של אוצריא (ההפך של [FROM_OTZARIA]). */
+  const TO_OTZARIA = Object.freeze(Object.fromEntries(FROM_OTZARIA.map(([name, form]) => [form, name])));
+
+  /** האפשרויות של אוצריא לאפשרויות המילה כאן: כולן מצטרפות. אין מקבילה לערך ולשורש. */
+  function otzariaOptionsOf(forms) {
+    return unique(forms.map((form) => TO_OTZARIA[form] || (form === 'quotes' ? OTZARIA.quotes : null)).filter(Boolean));
+  }
 
   /**
    * אותו חיפוש באוצריא (`reader.openSearchTab`): `{ query, settings? }`, או
@@ -572,7 +634,7 @@
         const gap = query.gaps[i - 1];
         distances.push(gap && gap.kind !== 'adjacent' ? Math.max(0, clampInt(gap.distance, 1, MAX_DISTANCE, 3) - 1) : 0);
       }
-      const options = OTZARIA_FORMS[term.form] || [];
+      const options = otzariaOptionsOf(term.forms);
       for (const word of parts) {
         if (options.length) {
           wordOptions[word + '_' + words.length] = Object.fromEntries(options.map((name) => [name, true]));
@@ -583,13 +645,16 @@
     if (!words.length) return null;
     const settings = {};
     const span = query.span !== Span.chain && words.length > 1;
-    const distance = span && query.span === Span.words ? Math.max(0, query.within - 1) : Math.max(0, ...distances);
+    const anyOrder = span && query.span === Span.words;
+    const distance = anyOrder ? Math.max(0, query.within - 1) : Math.max(0, ...distances);
     if (span && query.span !== Span.words) {
       settings.mode = 'advanced';
       settings.proximityScope = query.span === Span.document ? 'sameSection' : 'sameParagraph';
-    } else if (distance > 0 || Object.keys(wordOptions).length || query.options.abbreviations) {
+    } else if (distance > 0 || anyOrder || Object.keys(wordOptions).length || query.options.abbreviations) {
       settings.mode = 'advanced';
       settings.distance = distance;
+      // מאוצריא 0.9.98.1: אותו מרווח, והמילים בכל סדר.
+      if (anyOrder) settings.anyOrder = true;
     } else {
       settings.mode = 'exact';
     }
@@ -600,8 +665,8 @@
 
   /**
    * בקשה שהגיעה מדיאלוג החיפוש של אוצריא ← אותו חיפוש באוצריא, בהגדרות
-   * שנבחרו שם. רק השדות ש-`reader.openSearchTab` מקבל ב-`settings`; ההיקף
-   * והשלילה רק מ-0.9.99 (`ResponsaSearchHandoff.SCOPE_ENABLED`).
+   * שנבחרו שם: השדות ש-`reader.openSearchTab` מקבל ב-`settings`, וההיקף
+   * והשלילה (`ResponsaSearchHandoff.scopeSettings`, מאוצריא 0.9.98.1).
    */
   function otzariaSearchFrom(request) {
     const source = request && typeof request === 'object' ? request : {};
@@ -611,8 +676,7 @@
     for (const key of ['mode', 'distance', 'proximityScope', 'wordMatchMode', 'wordMatchCount', 'options', 'wordOptions']) {
       if (source[key] !== undefined && source[key] !== null) settings[key] = source[key];
     }
-    // TODO(otzaria-0.9.99): היקף ושלילה (Otzaria/otzaria#3067), כבוי עד שיצא.
-    Object.assign(settings, (root.ResponsaSearchHandoff || { scopeSettings: () => ({}) }).scopeSettings(source));
+    Object.assign(settings, root.ResponsaSearchHandoff.scopeSettings(source));
     return Object.keys(settings).length ? { query, settings } : { query };
   }
 
@@ -696,7 +760,7 @@
       for (let i = 0; i < query.terms.length; i++) {
         const term = query.terms[i];
         const words = wordsOf(term);
-        const form = FORM_BY_ID[term.form] || FORM_BY_ID.exact;
+        const single = term.forms.some((id) => FORM_BY_ID[id].single);
         for (const word of words) {
           for (const part of word.split(/\s+/)) {
             if (!WORD.test(part) || !LETTER.test(part)) {
@@ -707,11 +771,11 @@
             }
           }
         }
-        if (form.single && words.length > 1) {
+        if (single && words.length > 1) {
           return { message: t('משפחה וחיפוש שמור הם שם אחד, בלי מילים חלופיות.'), term: i };
         }
         // בר אילן מחפש ביטוי כמו שהוא; סימן לפניו או אחריו לא נמדד.
-        if (words.some(isPhrase) && (term.form !== 'exact' || form.single)) {
+        if (words.some(isPhrase) && term.forms.length) {
           return {
             message: t('ביטוי של כמה מילים מחופש כמו שנכתב. לחיפוש בצורות אחרות — מילה בכל שדה.'),
             term: i,
@@ -781,24 +845,34 @@
 
   // ------------------------------------------------------ הסבר במילים
 
-  /** איך כל צורה נקראת בתוך משפט ההסבר. */
+  /** איך אפשרות אחת נקראת בתוך משפט ההסבר, אחרי המילה. */
   const FORM_PHRASES = Object.freeze({
-    exact: '',
     prefixes: N('עם אותיות שימוש'),
     suffixes: N('עם סיומות'),
-    affixes: N('עם אותיות שימוש וסיומות'),
     startsWith: N('או מילה שמתחילה כך'),
     endsWith: N('או מילה שמסתיימת כך'),
     contains: N('או מילה שמכילה את האותיות'),
-    prefixesAny: N('עם אותיות שימוש וכל סיומת'),
     spelling: N('בכתיב מלא או חסר'),
-    spellingPrefixes: N('בכתיב מלא או חסר, עם אותיות שימוש'),
     quotes: N('עם או בלי גרשיים'),
     entry: N('בכל צורות הערך'),
     root: N('וכל המילים מהשורש'),
     aramaic: N('כולל התרגום לארמית'),
     family: N('(משפחת מילים)'),
     saved: N('(חיפוש שמור)'),
+  });
+
+  /** שם האפשרות כשיש כמה: `אותיות שימוש לפניה, סיומות או התרגום לארמית`. */
+  const FORM_NAMES = Object.freeze({
+    prefixes: N('אותיות שימוש לפניה'),
+    suffixes: N('סיומות'),
+    startsWith: N('מילה שמתחילה כך'),
+    endsWith: N('מילה שמסתיימת כך'),
+    contains: N('מילה שמכילה את האותיות'),
+    spelling: N('כתיב מלא או חסר'),
+    quotes: N('עם או בלי גרשיים'),
+    entry: N('כל צורות הערך'),
+    root: N('כל המילים מהשורש'),
+    aramaic: N('התרגום לארמית'),
   });
 
   /** פתיחת ההסבר כשהמילים בטווח, לפי [Span]. */
@@ -849,7 +923,12 @@
   function termPhrase(term) {
     const words = wordsOf(term).map((word) => '"' + word + '"');
     const joined = words.length > 1 ? words.slice(0, -1).join(', ') + ' ' + t('או') + ' ' + words[words.length - 1] : words[0];
-    const form = FORM_PHRASES[term.form];
+    if (term.forms.length > 1) {
+      const names = term.forms.map((form) => t(FORM_NAMES[form]));
+      const list = names.slice(0, -1).join(', ') + ' ' + t('או') + ' ' + names[names.length - 1];
+      return joined + ' ' + t('בכל אחת מהצורות האלה: {forms}', { forms: list });
+    }
+    const form = FORM_PHRASES[term.forms[0]];
     return form ? joined + ' ' + t(form) : joined;
   }
 
@@ -1005,6 +1084,21 @@
     return updateTerm(query, index, { words: term.words.filter((_, i) => i !== alternative) });
   }
 
+  /**
+   * סימון או ביטול של אפשרות בדרך לחפש מילה. רשימה של המשתמש בבר אילן
+   * (`single`) מחליפה את כל השאר, וכל אפשרות אחרת מחליפה אותה.
+   */
+  function toggleForm(query, index, id, on) {
+    const term = query.terms[index];
+    const form = FORM_BY_ID[id];
+    if (!term || !form) return query;
+    const has = term.forms.includes(id);
+    const wanted = typeof on === 'boolean' ? on : !has;
+    if (wanted === has) return query;
+    const rest = term.forms.filter((other) => other !== id && !form.single && !FORM_BY_ID[other].single);
+    return updateTerm(query, index, { forms: normalizeForms({ forms: wanted ? [...rest, id] : rest }) });
+  }
+
   function updateGap(query, index, patch) {
     const gaps = query.gaps.map((gap, i) =>
       i === index
@@ -1045,8 +1139,8 @@
 
   // ------------------------------------------------------ דוגמאות
 
-  function term(words, form, exclude) {
-    return { words: Array.isArray(words) ? words : [words], form: form || 'exact', exclude: Boolean(exclude) };
+  function term(words, forms, exclude) {
+    return { words: Array.isArray(words) ? words : [words], forms: forms || [], exclude: Boolean(exclude) };
   }
 
   /**
@@ -1089,12 +1183,12 @@
     {
       id: 'sentence',
       label: N('שליח ציבור וטעות, באותו משפט'),
-      query: { terms: [term('שליח', 'prefixes'), term('ציבור'), term('טעה', 'root')], span: Span.sentence },
+      query: { terms: [term('שליח', ['prefixes']), term('ציבור'), term('טעה', ['root'])], span: Span.sentence },
     },
     {
       id: 'paragraph',
       label: N('מעלית ושבת, באותה פסקה'),
-      query: { terms: [term('מעלית', 'affixes'), term('שבת', 'prefixes')], span: Span.paragraph },
+      query: { terms: [term('מעלית', ['prefixes', 'suffixes']), term('שבת', ['prefixes'])], span: Span.paragraph },
     },
     {
       id: 'phrase',
@@ -1112,7 +1206,12 @@
     {
       id: 'spelling',
       label: N('אהרון הכהן, בכתיב מלא או חסר ועם אותיות שימוש'),
-      query: { terms: [term('אהרון', 'spellingPrefixes'), term('הכהן')], gaps: [{ kind: 'adjacent' }] },
+      query: { terms: [term('אהרון', ['prefixes', 'spelling']), term('הכהן')], gaps: [{ kind: 'adjacent' }] },
+    },
+    {
+      id: 'several-forms',
+      label: N('נר ליד חנוכה: עם אותיות שימוש, וגם בארמית'),
+      query: { terms: [term('נר', ['prefixes', 'aramaic']), term('חנוכה')], gaps: [{ kind: 'after', distance: 3 }] },
     },
     {
       id: 'wildcards',
@@ -1122,7 +1221,7 @@
     {
       id: 'exclude',
       label: N('ישראל, בלי "בני ישראל"'),
-      query: { terms: [term('בני', 'exact', true), term('ישראל')], gaps: [{ kind: 'adjacent' }] },
+      query: { terms: [term('בני', [], true), term('ישראל')], gaps: [{ kind: 'adjacent' }] },
     },
   ]);
 
@@ -1205,6 +1304,8 @@
     addTerm,
     removeTerm,
     updateTerm,
+    toggleForm,
+    formTokens,
     setWord,
     addAlternative,
     removeAlternative,

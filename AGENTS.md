@@ -28,7 +28,7 @@
 - **כל אפשרויות החיפוש של בר אילן זמינות בתוסף**, וממופות בטבלה "כל אפשרויות החיפוש של בר אילן, ואיפה הן בתוסף" ב-`docs/USER_GUIDE.md`. אפשרות חדשה, או כזו שנשארת בבר אילן (היום: חיפוש לפי ניקוד ועריכת משפחות, חיפושים שמורים ושאילתות קודמות), נכנסת לטבלה. כל סוג חיפוש מסביר מתי הוא מתאים ומציע "נסו:" עם דוגמאות שנבדקו חי.
 - **"אודות ודיווח":** הדיווח על בעיה מיד אחרי ההבהרה ולפני הקישורים (בקשת בעל הפרויקט, 10.2026).
 - **ההבהרה על רישיון בר אילן היא כלל מוצר, לא עיצוב.** כך נקבע בפורום אוצריא (`Domain.Links.forum`): בפתיחה הראשונה מזהירים שהתוסף נועד למי שרכש רישיון כדין. היא ראשונה במסך הפתיחה (`Panels.welcomeDialog`) ומופיעה גם ב"אודות". אין להסיר, לקצר, להזיז למטה או להסתיר אותה מאחורי לחיצה.
-- **אוצריא 0.9.98:** מגרסה 0.5.0 המניפסט משתמש ב-`libraryBooks` (Otzaria/otzaria#1655) וב-`localService.post` עם `$storage` ו-`$book` (Otzaria/otzaria#1738). באוצריא בלי אחד מהם הפריט והספק נדחים ברישום, ולכן `minAppVersion` הוא 0.9.98. אוצריא 0.9.98 (5.10.2026) כוללת את שניהם. המתקין אינו מציע את התוסף לאוצריא ישנה מ-`minAppVersion`, והשירות החדש עובד גם עם התוסף 0.4.
+- **אוצריא 0.9.98.1:** `minAppVersion` מ-0.7.0, בגלל `searchFieldActions` והקשרי המפרשים וה-PDF (ראו `docs/ARCHITECTURE.md`, "מאוצריא 0.9.98.1"). `resultsAction` דורש 0.9.99 בוולידטור של אוצריא ולכן אינו במניפסט. `allowOrderBeforeBuiltIns` בוטל באוצריא ואינו במניפסט. **אוצריא 0.9.98:** מגרסה 0.5.0 המניפסט משתמש ב-`libraryBooks` (Otzaria/otzaria#1655) וב-`localService.post` עם `$storage` ו-`$book` (Otzaria/otzaria#1738). באוצריא בלי אחד מהם הפריט והספק נדחים ברישום, ולכן `minAppVersion` הוא 0.9.98. אוצריא 0.9.98 (5.10.2026) כוללת את שניהם. המתקין אינו מציע את התוסף לאוצריא ישנה מ-`minAppVersion`, והשירות החדש עובד גם עם התוסף 0.4.
 - **`$storage` דורש את `plugin.storage.read` במניפסט** (Otzaria/otzaria#1762, הקומיט של המתחזק): אף שזו הרשאת בסיס, אוצריא דוחה פעולה עם `$storage` בלי ההצהרה. הוולידטור (v1.19.1) ממליץ להסיר אותה, ולכן ה-CI ו-`build.ps1` מתירים רק אזהרות על הרשאות בסיס מוצהרות (`tools/validator-warnings.js`).
 - **פעולות `localService.post` במניפסט** פונות ל-`$storage: responsa_service_port`, שהלשונית שומרת (`Engine.savePort`), ומוצגות רק כש-`responsa_welcome_seen` (ההבהרה) והפורט קיימים. הנתיבים בהן חייבים להיות ב-`http_api.dart`, ו-`notify: true` בגוף: `manifest.test.js` בודק את שניהם.
 - **סמל התוסף** (`plugin/icon/icon.png`, `installer/icon.ico`) הוא הסמל של בר אילן (ספר פתוח וזכוכית מגדלת), מצויר מחדש בסגנון ובצבעי הזהב של אוצריא, לבקשת בעל הפרויקט. הוא ב-`tools/icon/icon.html`, עם ציור נפרד ל-32, 24 ו-16 פיקסלים (`SLOTS` ב-`build_app_icon.mjs` חייב להתאים לעמוד): `node tools/icon/build_app_icon.mjs`. השירות נבנה בלי אייקון, ולכן המתקין מתקין את `icon.ico` ל-`{app}` בשביל "אפליקציות מותקנות".
@@ -45,7 +45,7 @@
   - `node --check` לכל קובץ ב-`plugin/js/` וב-`plugin/i18n/`;
   - `node --test plugin/test/*.test.js`;
   - `node tools/preview/smoke.mjs` (כל מסך בדפדפן אמיתי; נכשל על שגיאת קונסול);
-  - הוולידטור הרשמי: `node build/validator/src/cli.js plugin --app-version 0.9.98 --fail-on-warnings --publish false`, או `installer/build.ps1`.
+  - הוולידטור הרשמי: `node build/validator/src/cli.js plugin --app-version 0.9.98.2 --fail-on-warnings --publish false`, או `installer/build.ps1`.
 
 ## מלכודות Win32 (מבר אילן)
 

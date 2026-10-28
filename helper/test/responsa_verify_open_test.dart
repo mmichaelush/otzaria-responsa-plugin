@@ -19,6 +19,61 @@ void main() {
     selectedIsUniqueExact: selectedIsUniqueExact,
   );
 
+  group('קיצור של שם המחבר בסולם', () {
+    const expected = "חדושי ר' שמעון יהודא הכהן שקופ יבמות";
+
+    test('החלון של הספר הנכון (נמדד חי ב-CD25) עובר', () {
+      expect(
+        verify(
+          window: "חידושי ר' שמעון שקופ יבמות תוכן העניינים",
+          selectedResult: "חידושי ר' שמעון שקופ יבמות תוכן העניינים",
+          usedRef: "חדושי ר' שמעון שקופ יבמות",
+          expectedTitle: expected,
+        ),
+        isEmpty,
+      );
+      expect(
+        verify(
+          window: "חידושי ר' שמעון שקופ יבמות תוכן העניינים",
+          selectedResult: "חידושי ר' שמעון שקופ יבמות תוכן העניינים",
+          usedRef: 'חדושי שקופ יבמות',
+          expectedTitle: expected,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('ספר אחר שמכיל את מילות הקיצור נפסל', () {
+      // ראש וסוף הכותרת בלבד: `coversTitle` לבדו היה מקבל אותו.
+      expect(
+        verify(
+          window: 'חידושי רבי עקיבא איגר יבמות',
+          selectedResult: 'חידושי רבי עקיבא איגר יבמות',
+          usedRef: 'חדושי יבמות',
+          expectedTitle: expected,
+        ),
+        contains('expectedTitle'),
+      );
+      expect(
+        verify(
+          window: 'חידושי רבי עקיבא איגר שקופ יבמות',
+          selectedResult: 'חידושי רבי עקיבא איגר שקופ יבמות',
+          usedRef: 'חדושי שקופ יבמות',
+          expectedTitle: expected,
+        ),
+        contains('expectedTitle'),
+      );
+      expect(
+        ResponsaAutomation.hasPlausibleResult(
+          ['חידושי רבי עקיבא איגר שקופ יבמות'],
+          'חדושי שקופ יבמות',
+          expected,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('פתיחה תקינה עוברת', () {
     test('יחידה בתוך ספר, דרך מקום בתוכה (`גינת ורדים כללים`)', () {
       expect(

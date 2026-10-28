@@ -17,10 +17,8 @@
   const Panels = root.ResponsaPanels;
   const Log = root.ResponsaLog;
   const Icons = root.ResponsaIcons || {};
-  // TODO(otzaria-0.9.99): הכפתור בשדות החיפוש (responsa-field-actions.js).
-  const FieldActions = root.ResponsaFieldActions || { requestFor: () => null };
-  // TODO(otzaria-0.9.99): העברת חיפוש מאוצריא (responsa-search-handoff.js).
-  const Handoff = root.ResponsaSearchHandoff || { RESULTS_ACTION_ENABLED: false };
+  const FieldActions = root.ResponsaFieldActions;
+  const Handoff = root.ResponsaSearchHandoff;
   const Screen = Domain.Screen;
   const t = (text, vars) => I18n.t(text, vars);
 
@@ -101,6 +99,8 @@
         advanced: {
           query: Advanced.emptyQuery(),
           picker: { path: '', level: null, loading: false, error: null },
+          /** המילים שרשימת האפשרויות שלהן פתוחה (מקום המילה ← כן). רק תצוגה. */
+          formsOpen: {},
           running: false,
           problem: null,
           status: null,
@@ -289,11 +289,16 @@
       await this.locateFromReader(payload.currentBook, headings || payload.currentRef, selected);
     }
 
-    /** הכותרות של השורה שסומנה (`Locate.headingsAt`), או `null`. */
+    /**
+     * הכותרות של השורה שסומנה (`Locate.headingsAt`), או `null`. בעמוד PDF
+     * המספר הוא של עמוד (מבוסס־1) ולא של שורה, ולכן אין כאן כותרות: נשארת
+     * הכתובת שאוצריא שולחת (מתוכן העניינים של ה-PDF).
+     */
     async _readerHeadings(payload) {
       const index = payload.currentIndex;
       if (!Number.isInteger(index) || index < 0) return null;
       const selection = payload.selection || {};
+      if (Number.isInteger(selection.pageNumber)) return null;
       const toc = await this.runtime.callSoft('library.getBookToc', {
         bookId: payload.currentBookId || payload.currentBook,
         ...(payload.id !== undefined ? { id: payload.id } : {}),
@@ -333,8 +338,7 @@
 
     /**
      * `search.fieldAction.invoked`: הכפתור "בבר אילן" בשדה חיפוש של אוצריא
-     * (מאוצריא 0.9.99). מה שהוקלד עובר ללשונית של אותו שדה ורץ בה.
-     * TODO(otzaria-0.9.99): מחובר רק כש-`ResponsaFieldActions.ENABLED`.
+     * (מאוצריא 0.9.98.1). מה שהוקלד עובר ללשונית של אותו שדה ורץ בה.
      */
     async fieldActionInvoked(event) {
       const request = FieldActions.requestFor(event);
@@ -344,6 +348,12 @@
         await this.runtime.callSoft('search.endFieldSession', { sessionId: request.sessionId });
       }
       await this.ready;
+      // ההבהרה על הרישיון קודמת לכל פעולה (כמו `when` של פריטי התפריט): עד
+      // שנקראה, הלשונית נפתחת עם ההבהרה בלבד.
+      if (!this.model.settings.welcomeSeen) {
+        this.log.info('כפתור בשדה החיפוש של אוצריא: ההבהרה על הרישיון עוד לא נקראה');
+        return;
+      }
       this.log.info('כפתור בשדה החיפוש של אוצריא: ' + request.tab);
       if (!request.text) {
         this.selectTab(request.tab);
@@ -922,6 +932,16 @@
       this._editAdvanced(Advanced.updateTerm(this.model.advanced.query, index, patch));
     }
 
+    /** הרשימה של מילה נפתחה או נסגרה. בלי ציור: הדפדפן כבר הציג אותה. */
+    advancedFormsOpen(index, open) {
+      this.model.advanced.formsOpen = { ...this.model.advanced.formsOpen, [index]: open };
+    }
+
+    /** סימון או ביטול של אפשרות בדרך לחפש מילה; הפוקוס נשאר עליה. */
+    advancedToggleForm(index, id, on) {
+      this._editAdvanced(Advanced.toggleForm(this.model.advanced.query, index, id, on));
+    }
+
     advancedAddTerm() {
       const query = Advanced.addTerm(this.model.advanced.query);
       this._editAdvanced(query);
@@ -929,6 +949,8 @@
     }
 
     advancedRemoveTerm(index) {
+      // המקומות זזים: רשימה שהייתה פתוחה אצל מילה אחרת אינה צריכה להישאר פתוחה.
+      this.model.advanced.formsOpen = {};
       this._editAdvanced(Advanced.removeTerm(this.model.advanced.query, index));
       this.view.focusInSheet('adv-word-' + Math.max(0, index - 1) + '-0');
     }
@@ -1092,14 +1114,7 @@
       };
       let chunk;
       try {
-        try {
-          chunk = await attempt(base);
-        } catch (error) {
-          // אוצריא 0.9.98 אינה מכירה `anyOrder` (מ-0.9.99).
-          if (!(error && error.code === 'error.invalid_params' && 'anyOrder' in base)) throw error;
-          const { anyOrder, ...without } = base;
-          chunk = await attempt(without);
-        }
+        chunk = await attempt(base);
       } catch (error) {
         this.log.warn('ספירת התוצאות באוצריא נכשלה', error);
         return null;
@@ -1810,6 +1825,8 @@
         advancedSet: (patch, options) => this.advancedSet(patch, options),
         advancedWord: (index, alternative, value) => this.advancedWord(index, alternative, value),
         advancedTerm: (index, patch) => this.advancedTerm(index, patch),
+        advancedToggleForm: (index, id, on) => this.advancedToggleForm(index, id, on),
+        advancedFormsOpen: (index, open) => this.advancedFormsOpen(index, open),
         advancedAddTerm: () => this.advancedAddTerm(),
         advancedRemoveTerm: (index) => this.advancedRemoveTerm(index),
         advancedAddAlternative: (index) => this.advancedAddAlternative(index),

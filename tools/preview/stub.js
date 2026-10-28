@@ -260,31 +260,31 @@
     },
     span: {
       terms: [
-        { words: ['מעלית'], form: 'affixes', exclude: false },
-        { words: ['שבת'], form: 'prefixes', exclude: false },
+        { words: ['מעלית'], forms: ['prefixes', 'suffixes'], exclude: false },
+        { words: ['שבת'], forms: ['prefixes'], exclude: false },
       ],
       gaps: [{ kind: 'adjacent', distance: 3 }],
       span: 'paragraph',
     },
     phrase: {
       terms: [
-        { words: ['צער בעלי חיים', 'צעב"ח'], form: 'exact', exclude: false },
-        { words: ['אסור', 'מותר'], form: 'prefixes', exclude: false },
+        { words: ['צער בעלי חיים', 'צעב"ח'], forms: [], exclude: false },
+        { words: ['אסור', 'מותר'], forms: ['prefixes'], exclude: false },
       ],
       gaps: [{ kind: 'adjacent', distance: 3 }],
       span: 'sentence',
     },
     words: {
       terms: [
-        { words: ['קוצץ', 'עוקר', 'משחית'], form: 'exact', exclude: false },
-        { words: ['אילן'], form: 'prefixes', exclude: false },
-        { words: ['פירות'], form: 'spelling', exclude: false },
+        { words: ['קוצץ', 'עוקר', 'משחית'], forms: [], exclude: false },
+        { words: ['אילן'], forms: ['prefixes', 'aramaic'], exclude: false },
+        { words: ['פירות'], forms: ['spelling'], exclude: false },
       ],
       gaps: [{ kind: 'after', distance: 3 }, { kind: 'around', distance: 5 }],
       options: { abbreviations: true, showForms: false },
     },
     scope: {
-      terms: [{ words: ['נר'], form: 'exact', exclude: false }, { words: ['שבת'], form: 'exact', exclude: false }],
+      terms: [{ words: ['נר'], forms: [], exclude: false }, { words: ['שבת'], forms: [], exclude: false }],
       gaps: [{ kind: 'after', distance: 4 }],
       scope: {
         mode: 'pick',
@@ -434,6 +434,28 @@
           }
         }, 600);
       }, 300);
+    }
+    // `forms=<מילה>`: הרשימה של "איך לחפש את המילה" פתוחה. `forms=<מילה>,click`:
+    // וגם מסמנים בה "התרגום לארמית", ובודקים שהרשימה נשארה פתוחה והכותרת
+    // שלה הראתה את הבחירה (הציור מחדש אחרי כל סימון).
+    const forms = params.get('forms');
+    if (forms) {
+      setTimeout(() => {
+        const [index, click] = forms.split(',');
+        document.querySelector('[data-focus-key="adv-forms-' + index + '"]').click();
+        if (!click) return;
+        setTimeout(() => {
+          document.querySelector('[data-focus-key="adv-form-' + index + '-aramaic"]').click();
+          setTimeout(() => {
+            const summary = document.querySelector('[data-focus-key="adv-forms-' + index + '"]');
+            const label = window.ResponsaI18n.t('התרגום לארמית');
+            if (!summary || !summary.textContent.includes(label)) {
+              console.error('Error: the options summary did not show the choice: "' + (summary && summary.textContent) + '"');
+            }
+            if (!summary.parentElement.open) console.error('Error: the options list closed after a tick');
+          }, 300);
+        }, 200);
+      }, 600);
     }
     if (params.get('guide')) {
       setTimeout(() => {

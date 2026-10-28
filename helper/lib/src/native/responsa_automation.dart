@@ -553,7 +553,11 @@ class ResponsaAutomation {
         ? reference
         : ResponsaNames.withoutQualifier(expectedTitle);
     if (wanted.trim().isEmpty) return true;
-    if (results.any((result) => ResponsaHebrew.coversTitle(wanted, result))) {
+    if (results.any(
+      (result) =>
+          ResponsaHebrew.coversTitle(wanted, result) &&
+          !tooLooseShortening(reference, wanted, result),
+    )) {
       return true;
     }
     // כמו ב-[verifyOpened]: תוצאה יחידה שהיא בדיוק ההפניה שנשלחה, כשאינה
@@ -569,6 +573,24 @@ class ResponsaAutomation {
           wanted,
         ).startsWith(ResponsaHebrew.normalize(reference)) &&
         uniqueExactResult(results, reference) != null;
+  }
+
+  /// קיצור של שם המחבר ([ResponsaNames.isInnerShortening]) מתאים לכל ספר
+  /// שמכיל את מילותיו, ו-[ResponsaHebrew.coversTitle] בודק רק את ראש הכותרת
+  /// וסופה, שהם בדיוק המילים שנשלחו. לכן חלון חייב לשתף לפחות 60% ממילות
+  /// הכותרת המצופה (`חדושי ר' שמעון שקופ יבמות` מול `חדושי ר' שמעון יהודא
+  /// הכהן שקופ יבמות`: 5 מ-7).
+  static bool tooLooseShortening(
+    String reference,
+    String expectedTitle,
+    String window,
+  ) {
+    if (!ResponsaNames.isInnerShortening(reference, expectedTitle)) {
+      return false;
+    }
+    final total = ResponsaHebrew.markedTokens(expectedTitle).length;
+    return ResponsaHebrew.sharedTokenCount(expectedTitle, window) * 10 <
+        total * 6;
   }
 
   /// [reference] הוא שם הספר עצמו, בסוף הכותרת שבקטלוג, אחרי שם שמעליו
@@ -675,6 +697,8 @@ class ResponsaAutomation {
       if (!exactRequest &&
           !ownName &&
           !ResponsaHebrew.coversTitle(expected, window)) {
+        failed.add('expectedTitle');
+      } else if (tooLooseShortening(usedRef, expected, window)) {
         failed.add('expectedTitle');
       }
     }

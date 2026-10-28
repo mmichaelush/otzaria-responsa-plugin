@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "com.otzaria-responsa",
   "name": "בר אילן",
-  "version": "0.6.6",
+  "version": "0.7.0",
   "description": "ספרי בר אילן המותקן במחשב: חיפוש ספרים ופתיחתם בבר אילן, חיפוש בטקסט בכל אפשרויות החיפוש של בר אילן, איתור מקום, וחיפוש בלחיצה ימנית.",
   "author": "מיכאלוש",
   "homepage": "https://github.com/mmichaelush/otzaria-responsa-plugin",
   "stability": "beta",
   "entrypoint": "index.html",
   "icon": "icon/icon.png",
-  "minAppVersion": "0.9.98",
+  "minAppVersion": "0.9.98.1",
   "sdkVersion": "1.x",
   "permissions": [
     "network.localhost",
@@ -19,6 +19,7 @@
     "app.shortcuts",
     "reader.context_menu",
     "search.dialog",
+    "search.field_actions",
     "library.books.provide",
     "library.content.read",
     "library.books.read",
@@ -39,7 +40,6 @@
     "toolTab": {
       "title": "בר אילן",
       "order": 100,
-      "allowOrderBeforeBuiltIns": true,
       "defaultPinned": true,
       "iconName": "book_open_medium_search_24_regular"
     },
@@ -49,6 +49,12 @@
           "id": "responsa-search",
           "title": "חיפוש בבר אילן",
           "icon": "search_24_regular",
+          "contexts": [
+            "reader-selection",
+            "reader-page-shape-selection",
+            "reader-commentary-selection",
+            "reader-pdf-selection"
+          ],
           "when": {
             "all": [
               { "storage": { "key": "responsa_context_menu", "notEquals": false } },
@@ -79,6 +85,13 @@
           "title": "איתור המקום בבר אילן",
           "icon": "document_search_24_regular",
           "openPlugin": true,
+          "contexts": [
+            "reader-selection",
+            "reader-page-shape-selection",
+            "reader-commentary-selection",
+            "reader-pdf-selection",
+            "reader-book"
+          ],
           "when": {
             "all": [
               { "storage": { "key": "responsa_context_menu", "notEquals": false } },
@@ -131,6 +144,14 @@
               "timeoutMs": 120000
             }
           }
+        }
+      ],
+      "searchFieldActions": [
+        {
+          "id": "bar-ilan",
+          "title": "בבר אילן",
+          "icon": "book_open_medium_search_24_regular",
+          "fields": ["fullText", "findRef", "library"]
         }
       ],
       "shortcuts": [

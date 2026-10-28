@@ -71,6 +71,7 @@ const shots = [
   ['no-authors', 'scenario=ready&noauthors=1&query=' + encodeURIComponent('זזזז')],
   ['authors-fillable', 'scenario=ready&authorsfill=1'],
   ['advanced', 'scenario=ready&page=text&adv=words', '1000,1500'],
+  ['advanced-forms', 'scenario=ready&page=text&adv=words&forms=0,click', '1000,1500'],
   ['advanced-scope', 'scenario=ready&page=text&adv=scope', '1000,1600'],
   ['advanced-manual', 'scenario=ready&page=text&adv=manual&run=1', '1000,1000'],
   ['text-free', 'scenario=ready&page=text&adv=free&run=1', '1000,900'],

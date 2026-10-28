@@ -141,4 +141,46 @@ class ResponsaNames {
     }
     return candidates;
   }
+
+  // ------------------------------------------ שם חיבור ארוך מדי למנתח
+
+  /// העץ כותב את שם המחבר במלואו (`חדושי ר' שמעון יהודא הכהן שקופ`), ובר
+  /// אילן מכיר את הספר מקוצר (`חדושי ר' שמעון שקופ`). המנתח דורש שכל מילה
+  /// בהפניה תופיע בכותרת, ולכן מילה אחת של השם המלא פוסלת את כולה, ולעומת
+  /// זאת קיצור שמשמיט אותה מזהה (`חדושי שקופ יבמות` פותח את אותו ספר).
+  ///
+  /// הקיצורים מהמדויק לגס: בלי שתי המילים שלפני האחרונה, בלי אחת, ומילה
+  /// ראשונה ואחרונה בלבד. הסדר חשוב כי כל חוליה כושלת עולה כמה שניות, וגס
+  /// מתאים ליותר מספר אחד. ריק לשם קצר מארבע מילים: אין בו מה לקצר בלי
+  /// להפוך אותו לשם גנרי.
+  static List<String> withoutInnerWords(String workName) {
+    final words = workName.trim().split(RegExp(r'\s+'));
+    if (words.length < 4) return const [];
+    final last = words.last;
+    final candidates = <String>[
+      if (words.length >= 5)
+        [...words.sublist(0, words.length - 3), last].join(' '),
+      [...words.sublist(0, words.length - 2), last].join(' '),
+      '${words.first} $last',
+    ];
+    return candidates.toSet().toList();
+  }
+
+  /// [reference] הוא אחד מקיצורי [withoutInnerWords] של [expectedTitle]: שם
+  /// החיבור, ואחריו יחידה של עד שלוש מילים. קיצור כזה מתאים לכל ספר שמכיל את
+  /// מילותיו, ולכן הכותרת שנפתחה נבדקת נגדו בחומרה ([ResponsaAutomation]).
+  static bool isInnerShortening(String reference, String expectedTitle) {
+    final words = withoutQualifier(expectedTitle).split(RegExp(r'\s+'));
+    final wanted = ResponsaHebrew.normalize(reference);
+    for (var unit = 0; unit <= 3; unit++) {
+      final length = words.length - unit;
+      if (length < 4) break;
+      final name = words.take(length).join(' ');
+      final tail = words.skip(length).join(' ');
+      for (final shortened in withoutInnerWords(name)) {
+        if (ResponsaHebrew.normalize('$shortened $tail') == wanted) return true;
+      }
+    }
+    return false;
+  }
 }

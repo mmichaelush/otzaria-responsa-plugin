@@ -1,26 +1,24 @@
-// העברת חיפוש בין אוצריא לתוסף, בשני שינויים באוצריא שעדיין לא יצאו:
-// - Otzaria/otzaria#3067: `reader.openSearchTab` מקבל ב-`settings` גם היקף
-//   (`facets`...) ושלילה, ולכן החיפוש שחוזר לאוצריא לא מאבד אותם;
-// - Otzaria/otzaria#3068: `resultsAction` בשורת `searchDialogItems` מציג בטאב
-//   החיפוש של אוצריא כפתור שמעביר את אותו חיפוש לתוסף, אחרי שהמשתמש ראה את
-//   התוצאות — במקום לחפש פעמיים כדי לספור.
-// שניהם כבויים, ומיועדים לאוצריא 0.9.99 (`minAppVersion`).
+// העברת חיפוש בין אוצריא לתוסף, בשני שינויים של אוצריא (Otzaria/otzaria#2583):
+// - #3067, מאוצריא 0.9.98.1: `reader.openSearchTab` מקבל ב-`settings` גם היקף
+//   (`facets`...), שלילה ו-`anyOrder`, ולכן חיפוש שחוזר לאוצריא אינו מאבד אותם
+//   ([scopeSettings]);
+// - #3068: `resultsAction` בשורת `searchDialogItems` מציג בטאב החיפוש של
+//   אוצריא כפתור שמעביר את אותו חיפוש לתוסף, אחרי שהמשתמש ראה את התוצאות,
+//   במקום לחפש פעמיים כדי לספור. כבוי: אוצריא 0.9.98.2 מריצה אותו, אבל
+//   הוולידטור שלה (`_searchResultsActionMinVersion`) דורש מהמניפסט
+//   `minAppVersion` 0.9.99, ואוצריא 0.9.99 עוד לא יצאה (ושדה במניפסט בלי
+//   `minAppVersion` כזה נדחה בבדיקת החנות).
 //
-// TODO(otzaria-0.9.99): כשהשינויים מתמזגים ויוצאים בגרסה רגילה (לא Preview):
-//   1. SCOPE_ENABLED = true כאן.
-//   2. RESULTS_ACTION_ENABLED = true כאן, ובמניפסט: "minAppVersion": "0.9.99"
+// TODO(otzaria-0.9.99): כשאוצריא 0.9.99 יוצאת בגרסה רגילה:
+//   1. RESULTS_ACTION_ENABLED = true כאן, ובמניפסט: "minAppVersion": "0.9.99"
 //      ו-`resultsAction` בשורה `responsa-search-dialog` (RESULTS_ACTION_TITLE).
-//   3. הבדיקות ב-test/search-handoff.test.js נכשלות עד שהמתג והמניפסט תואמים.
-//   4. לבדוק בחיפוש חי: מה מגיע ב-`search.requested` מהכפתור, ואם אפשר להבדיל
+//   2. הבדיקות ב-test/search-handoff.test.js נכשלות עד שהמתג והמניפסט תואמים.
+//   3. לבדוק בחיפוש חי: מה מגיע ב-`search.requested` מהכפתור, ואם אפשר להבדיל
 //      אותו משליחה עם השורה מסומנת (ראו `app.searchFromOtzaria`).
-//   5. אם #3068 שונה בביקורת — להתאים את השם והתנאים כאן. משתמשי 0.9.98 לא
-//      יוכלו להתקין, ולכן רק אחרי שרוב המשתמשים עברו.
+//   4. משתמשי 0.9.98.x לא יוכלו להתקין, ולכן רק אחרי שרוב המשתמשים עברו.
 // הפרטים ב-docs/ARCHITECTURE.md ("אחרי אוצריא 0.9.99").
 (function (root) {
   'use strict';
-
-  /** TODO(otzaria-0.9.99): #3067 — ההיקף והשלילה נשלחים ל-`reader.openSearchTab`. */
-  const SCOPE_ENABLED = false;
 
   /** TODO(otzaria-0.9.99): #3068 — כפתור בתוצאות של אוצריא במקום "קודם באוצריא". */
   const RESULTS_ACTION_ENABLED = false;
@@ -46,11 +44,11 @@
 
   /**
    * מה מהבקשה של אוצריא (`search.requested`, בחוזה של `search.query`) נשלח
-   * שוב ל-`reader.openSearchTab`: ההיקף והשלילה. `{}` כשהתכונה כבויה, או
-   * כשהבקשה היא על כל הספרייה ובלי שלילה. [enabled] לבדיקות.
+   * שוב ל-`reader.openSearchTab`: ההיקף, השלילה והמילים בכל סדר. `{}` כשהבקשה
+   * היא על כל הספרייה, בלי שלילה ובלי סדר חופשי.
    */
-  function scopeSettings(request, enabled = SCOPE_ENABLED) {
-    if (!enabled || !request || typeof request !== 'object') return {};
+  function scopeSettings(request) {
+    if (!request || typeof request !== 'object') return {};
     const settings = {};
     for (const key of SCOPE_LISTS) {
       const value = request[key];
@@ -60,6 +58,7 @@
       settings[key] = value;
     }
     if (request.baseBooksOnly === true) settings.baseBooksOnly = true;
+    if (request.anyOrder === true) settings.anyOrder = true;
     if (typeof request.negativeQuery === 'string' && LETTER.test(request.negativeQuery)) {
       settings.negativeQuery = request.negativeQuery;
       for (const key of NEGATIVE_MAPS) if (filledObject(request[key])) settings[key] = request[key];
@@ -75,7 +74,6 @@
   }
 
   const api = {
-    SCOPE_ENABLED,
     RESULTS_ACTION_ENABLED,
     MIN_APP_VERSION,
     SEARCH_DIALOG_ITEM_ID,

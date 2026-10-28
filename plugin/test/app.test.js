@@ -1185,16 +1185,14 @@ test('חיפוש באוצריא קודם: אי אפשר לדעת (שגיאה, א
   }
 });
 
-test('חיפוש באוצריא קודם: אוצריא 0.9.98 דוחה anyOrder — הספירה חוזרת בלעדיו', async () => {
+test('חיפוש באוצריא קודם: anyOrder (מאוצריא 0.9.98.1) נשלח לספירה כמו שהוא', async () => {
   const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
   const { app, bridge } = await bootAdvanced(found, { responsa_otzaria_first_search: true });
   app._setPermissions(OTZARIA_FIRST);
-  const calls = streamSearch(bridge, (payload) =>
-    'anyOrder' in payload ? Object.assign(new Error('anyOrder'), { code: 'error.invalid_params' }) : { total: 2, results: [{}] },
-  );
+  const calls = streamSearch(bridge, () => ({ total: 2, results: [{}] }));
   await app.searchRequested({ request: { query: 'נר שבת', mode: 'advanced', distance: 2, anyOrder: true } });
-  assert.equal(calls.length, 2);
-  assert.equal('anyOrder' in calls[1], false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].anyOrder, true);
   assert.equal(requests(bridge, '/text/search').length, 0);
   app.suspend();
 });
@@ -1897,7 +1895,7 @@ test('חיפוש מדיאלוג החיפוש: מרווח הופך לבונה; מ
   app.suspend();
 });
 
-test('כפתור בשדה החיפוש (0.9.99): הטקסט עובר לחיפוש בטקסט, והסשן נסגר', async () => {
+test('כפתור בשדה החיפוש (0.9.98.1): הטקסט עובר לחיפוש בטקסט, והסשן נסגר', async () => {
   const { app, bridge, view } = await bootAdvanced({
     '/text/search': reply(200, { ok: true, outcome: 'found', count: 4, query: 'נר שבת', advanced: true }),
   });
@@ -1914,7 +1912,19 @@ test('כפתור בשדה החיפוש (0.9.99): הטקסט עובר לחיפו�
   app.suspend();
 });
 
-test('כפתור בשדה איתור המקור (0.9.99): איתור מקום בבר אילן', async () => {
+test('כפתור בשדה החיפוש: לפני ההבהרה על הרישיון הוא לא מחפש, והסשן נסגר', async () => {
+  const { app, bridge } = await bootAdvanced(
+    { '/text/search': reply(200, { ok: true, outcome: 'found', count: 4, query: 'נר שבת', advanced: true }) },
+    { responsa_welcome_seen: false },
+  );
+  assert.equal(app.model.sheet, 'welcome');
+  await app.fieldActionInvoked({ actionId: 'bar-ilan', sessionId: 's9', field: 'fullText', text: 'נר שבת' });
+  assert.equal(requests(bridge, '/text/search').length, 0);
+  assert.deepEqual(bridge.calls.filter((c) => c.method === 'search.endFieldSession').map((c) => c.payload.sessionId), ['s9']);
+  app.suspend();
+});
+
+test('כפתור בשדה איתור המקור (0.9.98.1): איתור מקום בבר אילן', async () => {
   const { app, bridge } = await bootAdvanced({ '/reference/open': located('בראשית ב ג') });
   await app.fieldActionInvoked({ actionId: 'bar-ilan', sessionId: 's2', field: 'findRef', text: 'בראשית ב ג' });
   assert.equal(app.model.tab, 'locate');

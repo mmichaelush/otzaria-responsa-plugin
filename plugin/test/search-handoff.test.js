@@ -1,5 +1,5 @@
-// העברת חיפוש בין אוצריא לתוסף (Otzaria/otzaria#3067, #3068, אוצריא 0.9.99).
-// כבוי עד שהשינויים יוצאים; הבדיקה האחרונה שומרת שהמניפסט והמתג יודלקו יחד.
+// העברת חיפוש בין אוצריא לתוסף (Otzaria/otzaria#3067 מאוצריא 0.9.98.1: היקף
+// ושלילה, פעיל; #3068 מאוצריא 0.9.99: כפתור בתוצאות, כבוי עד שהיא יוצאת).
 'use strict';
 
 const test = require('node:test');
@@ -24,13 +24,8 @@ const request = {
   grouping: 'book',
 };
 
-test('scopeSettings: כבוי — לא נשלח כלום', () => {
-  assert.deepEqual(Handoff.scopeSettings(request, false), {});
-  assert.deepEqual(Handoff.scopeSettings(request), Handoff.SCOPE_ENABLED ? Handoff.scopeSettings(request, true) : {});
-});
-
 test('scopeSettings: היקף ושלילה, בלי order, limit ו-grouping', () => {
-  assert.deepEqual(Handoff.scopeSettings(request, true), {
+  assert.deepEqual(Handoff.scopeSettings(request), {
     facets: ['/הלכה'],
     baseBooksOnly: true,
     negativeQuery: 'גוי',
@@ -41,18 +36,21 @@ test('scopeSettings: היקף ושלילה, בלי order, limit ו-grouping', ()
 });
 
 test('scopeSettings: כל הספרייה ובלי שלילה — כלום; אפשרויות שלילה בלי שאילתה — לא', () => {
-  assert.deepEqual(Handoff.scopeSettings({ query: 'שבת', facets: ['/'], categories: [], negativeQuery: '' }, true), {});
-  assert.deepEqual(
-    Handoff.scopeSettings({ query: 'שבת', negativeQuery: ' ', negativeOptions: { a: true } }, true),
-    {},
-  );
-  assert.deepEqual(Handoff.scopeSettings(null, true), {});
+  assert.deepEqual(Handoff.scopeSettings({ query: 'שבת', facets: ['/'], categories: [], negativeQuery: '' }), {});
+  assert.deepEqual(Handoff.scopeSettings({ query: 'שבת', negativeQuery: ' ', negativeOptions: { a: true } }), {});
+  assert.deepEqual(Handoff.scopeSettings(null), {});
 });
 
-test('otzariaSearchFrom מוסיף את ההיקף רק כשהמתג דלוק', () => {
+test('scopeSettings: מילים בכל סדר (anyOrder, מאוצריא 0.9.98.1)', () => {
+  assert.deepEqual(Handoff.scopeSettings({ query: 'נר שבת', anyOrder: true }), { anyOrder: true });
+  assert.deepEqual(Handoff.scopeSettings({ query: 'נר שבת', anyOrder: false }), {});
+});
+
+test('otzariaSearchFrom מוסיף את ההיקף והשלילה', () => {
   const { Advanced } = require('./helpers/load.js').loadPlugin();
-  const target = Advanced.otzariaSearchFrom({ query: 'שבת', mode: 'advanced', facets: ['/הלכה'] });
-  assert.deepEqual(target.settings.facets, Handoff.SCOPE_ENABLED ? ['/הלכה'] : undefined);
+  const target = Advanced.otzariaSearchFrom({ query: 'שבת', mode: 'advanced', facets: ['/הלכה'], negativeQuery: 'גוי' });
+  assert.deepEqual(target.settings.facets, ['/הלכה']);
+  assert.equal(target.settings.negativeQuery, 'גוי');
   assert.equal(target.settings.mode, 'advanced');
 });
 
@@ -63,11 +61,11 @@ test('searchDialogItem: resultsAction רק כשהמתג דלוק', () => {
   assert.ok(Handoff.RESULTS_ACTION_TITLE.length <= 120);
 });
 
-test('המתג והמניפסט יחד (TODO(otzaria-0.9.99))', () => {
+test('המתג והמניפסט יחד (resultsAction, TODO(otzaria-0.9.99))', () => {
   const item = manifest.contributes.startup.searchDialogItems.find((entry) => entry.id === Handoff.SEARCH_DIALOG_ITEM_ID);
   assert.ok(item, 'שורת הדיאלוג חסרה');
   if (!Handoff.RESULTS_ACTION_ENABLED) {
-    // עד 0.9.99: אוצריא 0.9.98 דוחה שדה לא מוכר, ומשתמשיה לא יוכלו להתקין.
+    // הוולידטור של אוצריא דוחה resultsAction במניפסט עם minAppVersion מתחת ל-0.9.99.
     assert.equal(item.resultsAction, undefined, 'resultsAction במניפסט לפני 0.9.99');
     return;
   }

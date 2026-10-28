@@ -9,9 +9,9 @@ const { loadPlugin } = require('./helpers/load');
 const { Advanced } = loadPlugin();
 const { buildQuery, validate, toRequest, normalize, emptyQuery } = Advanced;
 
-const term = (words, form, exclude) => ({
+const term = (words, forms, exclude) => ({
   words: Array.isArray(words) ? words : [words],
-  form: form || 'exact',
+  forms: [].concat(forms || []),
   exclude: Boolean(exclude),
 });
 /** בונה (ולא חיפוש רגיל), אלא אם נאמר אחרת. */
@@ -82,18 +82,14 @@ test('חלופות, ומאפיין מחוץ לסוגריים', () => {
   assert.equal(buildQuery(q), '(קוצץ/עוקר/משחית) [1:3] *(פקדון/אבידה)*');
 });
 
-test('כל צורה בסימנים שבר אילן עצמו בונה', () => {
+test('כל אפשרות בסימנים שבר אילן עצמו בונה', () => {
   const expected = {
-    exact: 'אהרון',
     prefixes: '#אהרון',
     suffixes: 'אהרון#',
-    affixes: '#אהרון#',
     startsWith: 'אהרון*',
     endsWith: '*אהרון',
     contains: '*אהרון*',
-    prefixesAny: '#אהרון*',
     spelling: '!אהרון',
-    spellingPrefixes: '#!אהרון',
     quotes: '+אהרון',
     entry: '$אהרון',
     root: '%אהרון',
@@ -103,10 +99,93 @@ test('כל צורה בסימנים שבר אילן עצמו בונה', () => {
   };
   assert.deepEqual(Object.keys(expected).sort(), Advanced.FORMS.map((f) => f.id).sort());
   for (const [form, text] of Object.entries(expected)) {
-    assert.equal(Advanced.termText(term('אהרון', form)), text, form);
+    assert.equal(Advanced.termText(term('אהרון', [form])), text, form);
   }
+  assert.equal(Advanced.termText(term('אהרון')), 'אהרון');
   // שלילה לפני כל סימן אחר (כך בר אילן בונה: `-#אהרון`).
-  assert.equal(Advanced.termText(term('אהרון', 'prefixes', true)), '-#אהרון');
+  assert.equal(Advanced.termText(term('אהרון', ['prefixes'], true)), '-#אהרון');
+});
+
+// בר אילן מקבל סימן אחד למילה, ולכן כמה אפשרויות הן חלופות, חוץ ממה שהוא
+// מחבר בסימן אחד: `#נר#`, `#נר*`, `#!נר`, ו-`*נר*` שבולע את כל מה שנוגע
+// לאותיות. חלופות עם סימנים נמדדו חי (בר אילן 25, 28.10.2026, כל המאגרים) והן
+// איחוד: `#נר [1:3] חנוכה` 16,328, `^נר [1:3] חנוכה` 10,507, ושתיהן בחלופות
+// `(#נר/^נר) [1:3] חנוכה` 16,329; `(נר#/*נר)` 18,672 (12,837 ו-16,341);
+// `(!אהרון/+אהרון) הכהן` 1,703 (1,703 ו-31); `($נר/%נר/^נר)` 19,380; וסימן
+// מחוץ לסוגריים שווה לסימן בתוכם: `#(נר/אור)` = `(#נר/#אור)` = 16,523.
+test('כמה אפשרויות למילה: סימן אחד כשבר אילן מחבר, ואחרת חלופות', () => {
+  const text = (forms, words = 'אהרון') => Advanced.termText(term(words, forms));
+  assert.equal(text(['prefixes', 'suffixes']), '#אהרון#');
+  assert.equal(text(['prefixes', 'startsWith']), '#אהרון*');
+  assert.equal(text(['prefixes', 'suffixes', 'startsWith']), '#אהרון*');
+  assert.equal(text(['prefixes', 'spelling']), '#!אהרון');
+  assert.equal(text(['contains', 'prefixes', 'suffixes', 'startsWith', 'endsWith']), '*אהרון*');
+  // `*נר` כולל אותיות שימוש, ו-`נר*` כולל סיומות.
+  assert.equal(text(['prefixes', 'endsWith']), '*אהרון');
+  assert.equal(text(['suffixes', 'startsWith']), 'אהרון*');
+  // מה שאין לו סימן משותף: חלופות, בסדר קבוע.
+  assert.equal(text(['prefixes', 'aramaic']), '(#אהרון/^אהרון)');
+  assert.equal(text(['aramaic', 'prefixes']), '(#אהרון/^אהרון)');
+  assert.equal(text(['startsWith', 'endsWith']), '(אהרון*/*אהרון)');
+  assert.equal(text(['spelling', 'quotes']), '(!אהרון/+אהרון)');
+  assert.equal(text(['entry', 'root', 'aramaic']), '($אהרון/%אהרון/^אהרון)');
+  assert.equal(text(['suffixes', 'endsWith']), '(אהרון#/*אהרון)');
+  // כמה מילים וכמה סימנים: כל מילה בכל סימן.
+  assert.equal(text(['prefixes', 'aramaic'], ['נר', 'אור']), '(#נר/^נר/#אור/^אור)');
+  assert.equal(Advanced.termText(term('אהרון', ['prefixes', 'aramaic'], true)), '-(#אהרון/^אהרון)');
+  // רשימה של המשתמש אינה מתחברת: האחרון שנבחר, ובלי השאר.
+  assert.deepEqual(Advanced.normalize({ terms: [{ words: ['א'], forms: ['prefixes', 'family', 'saved'] }] }).terms[0].forms, ['family']);
+  assert.deepEqual(Advanced.normalize({ terms: [{ words: ['א'], forms: ['aramaic', 'prefixes', 'nope', 'prefixes'] }] }).terms[0].forms, ['prefixes', 'aramaic']);
+  // ושאילתה עם כמה אפשרויות נשלחת כמו שהיא, ובמילה אחת.
+  const q = query({ terms: [term('אמר', ['prefixes', 'aramaic']), term('רבי')], gaps: [{ kind: 'after', distance: 3 }] });
+  assert.equal(buildQuery(q), '(#אמר/^אמר) [1:3] רבי');
+  assert.equal(validate(q), null);
+});
+
+test('מודל שנשמר לפני 0.7.0 (צורה אחת) נקרא באותן אפשרויות ובאותה שאילתה', () => {
+  const legacy = {
+    exact: ['אהרון', []],
+    prefixes: ['#אהרון', ['prefixes']],
+    suffixes: ['אהרון#', ['suffixes']],
+    affixes: ['#אהרון#', ['prefixes', 'suffixes']],
+    startsWith: ['אהרון*', ['startsWith']],
+    endsWith: ['*אהרון', ['endsWith']],
+    contains: ['*אהרון*', ['contains']],
+    prefixesAny: ['#אהרון*', ['prefixes', 'startsWith']],
+    spelling: ['!אהרון', ['spelling']],
+    spellingPrefixes: ['#!אהרון', ['prefixes', 'spelling']],
+    quotes: ['+אהרון', ['quotes']],
+    entry: ['$אהרון', ['entry']],
+    root: ['%אהרון', ['root']],
+    aramaic: ['^אהרון', ['aramaic']],
+    family: ['<אהרון>', ['family']],
+    saved: ['{אהרון}', ['saved']],
+  };
+  for (const [form, [text, forms]] of Object.entries(legacy)) {
+    const saved = normalize({ terms: [{ words: ['אהרון'], form, exclude: false }] });
+    assert.deepEqual(saved.terms[0].forms, forms, form);
+    assert.equal(Advanced.termText(saved.terms[0]), text, form);
+    assert.equal('form' in saved.terms[0], false, 'השדה הישן נעלם');
+  }
+});
+
+test('toggleForm: סימון וביטול, ורשימה של המשתמש מחליפה את כל השאר', () => {
+  let q = query({ terms: [term('נר'), term('שבת')] });
+  q = Advanced.toggleForm(q, 0, 'aramaic');
+  q = Advanced.toggleForm(q, 0, 'prefixes');
+  assert.deepEqual(q.terms[0].forms, ['prefixes', 'aramaic']);
+  assert.deepEqual(q.terms[1].forms, []);
+  assert.equal(Advanced.toggleForm(q, 0, 'prefixes', true), q, 'סימון של מה שמסומן אינו משנה');
+  q = Advanced.toggleForm(q, 0, 'aramaic', false);
+  assert.deepEqual(q.terms[0].forms, ['prefixes']);
+  q = Advanced.toggleForm(q, 0, 'family');
+  assert.deepEqual(q.terms[0].forms, ['family']);
+  q = Advanced.toggleForm(q, 0, 'root');
+  assert.deepEqual(q.terms[0].forms, ['root']);
+  q = Advanced.toggleForm(q, 0, 'root');
+  assert.deepEqual(q.terms[0].forms, []);
+  assert.equal(Advanced.toggleForm(q, 7, 'root'), q);
+  assert.equal(Advanced.toggleForm(q, 0, 'nope'), q);
 });
 
 test('מילה ריקה מדולגת עם המרחק שלפניה', () => {
@@ -119,7 +198,7 @@ test('מילה ריקה מדולגת עם המרחק שלפניה', () => {
 
 test('בדיקה: מה חסר או שגוי, ובאיזו מילה', () => {
   assert.match(validate(query({ terms: [term('')] })).message, /לפחות מילה אחת/);
-  assert.match(validate(query({ terms: [term('בני', 'exact', true)] })).message, /שאינה מסומנת/);
+  assert.match(validate(query({ terms: [term('בני', [], true)] })).message, /שאינה מסומנת/);
   assert.equal(validate(query({ terms: [term('shabbat')] })).term, 0);
   // כל מילה בביטוי נבדקת.
   const phrase = validate(query({ terms: [term('נר'), term('צער abc')] }));
@@ -198,13 +277,13 @@ test('עריכה: הוספה והסרה של מילים, חלופות ומרחק
 
 test('מודל שנשמר פגום חוזר לברירות המחדל', () => {
   const q = normalize({
-    terms: [{ words: ['נר', 5], form: 'nope', exclude: 'yes' }, null],
+    terms: [{ words: ['נר', 5], forms: 'nope', exclude: 'yes' }, null],
     gaps: [{ kind: 'far', distance: -4 }],
     within: 'x',
     scope: { mode: 'pick', items: [{ type: 'category' }, { type: 'book', key: '1', name: 'x' }] },
     options: { abbreviations: 'yes' },
   });
-  assert.deepEqual(q.terms[0], { words: ['נר', ''], form: 'exact', exclude: false });
+  assert.deepEqual(q.terms[0], { words: ['נר', ''], forms: [], exclude: false });
   assert.deepEqual(q.gaps[0], { kind: 'adjacent', distance: 1 });
   assert.equal(q.within, 10);
   assert.equal(q.scope.items.length, 1);
@@ -212,13 +291,13 @@ test('מודל שנשמר פגום חוזר לברירות המחדל', () => {
 });
 
 test('toOtzariaSearch: אותן מילים באוצריא, בקירוב של ההגדרות', () => {
-  const word = (words, form = 'exact', exclude = false) => ({ words, form, exclude });
+  const word = (words, forms = [], exclude = false) => ({ words, forms: [].concat(forms), exclude });
   const builder = (terms, gaps, extra) =>
     Advanced.normalize({ mode: 'builder', terms, gaps: gaps || terms.slice(1).map(() => ({ kind: 'adjacent', distance: 1 })), ...extra });
   assert.deepEqual(Advanced.toOtzariaSearch(builder([word(['נר']), word(['שבת'])])), { query: 'נר שבת', settings: { mode: 'exact' } });
   // המרחק באוצריא הוא המילים *שבין* המילים; חלופות — הראשונה; "בלי" — לא נשלח.
   const spaced = builder(
-    [word(['נר'], 'prefixes'), word(['שבת', 'חנוכה']), word(['מוקצה'], 'exact', true)],
+    [word(['נר'], 'prefixes'), word(['שבת', 'חנוכה']), word(['מוקצה'], [], true)],
     [{ kind: 'after', distance: 4 }, { kind: 'adjacent', distance: 1 }],
   );
   assert.deepEqual(Advanced.toOtzariaSearch(spaced), {
@@ -272,6 +351,7 @@ test('כל דוגמה נבנית לשאילתה תקינה, באופן שלה', 
   assert.equal(buildQuery(loaded), 'פסקה: #מעלית# #שבת');
   assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'phrase')), '({{צער בעלי חיים}}/צעב"ח)');
   assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'spelling')), '#!אהרון הכהן');
+  assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'several-forms')), '(#נר/^נר) [1:3] חנוכה');
   assert.equal(buildQuery(Advanced.applyExample(emptyQuery(), 'exclude')), '-בני ישראל');
 });
 
@@ -324,7 +404,7 @@ test('הסבר במילים: מה יחופש, איפה ובאילו אפשרוי
     'בכל הספרים.',
   ]);
   const q = query({
-    terms: [term('נר', 'prefixes'), term(['שבת', 'חנוכה']), term('יום', 'exact', true)],
+    terms: [term('נר', 'prefixes'), term(['שבת', 'חנוכה']), term('יום', [], true)],
     gaps: [{ kind: 'after', distance: 4 }, { kind: 'adjacent' }],
     options: { abbreviations: true, showForms: true },
   });
@@ -483,8 +563,8 @@ test('fromOtzariaSearch: כל אות ("קידומות", "סיומות", "חלק 
     [{ 'סיומות': true }, 'נר* שבת', ['סיומות']],
     [{ 'חלק ממילה': true }, '*נר* שבת', ['חלק ממילה']],
     [{ 'קידומות דקדוקיות': true, 'סיומות': true }, '#נר* שבת', ['סיומות']],
-    // `*נר#` אינו מוכר: "מכילה".
-    [{ 'קידומות': true, 'סיומות דקדוקיות': true }, '*נר* שבת', ['קידומות']],
+    // `*נר#` לא נמדד: שתי חלופות.
+    [{ 'קידומות': true, 'סיומות דקדוקיות': true }, '(נר#/*נר) שבת', ['קידומות']],
   ];
   for (const [options, text, missing] of expected) {
     const mapped = fromOtzaria({ mode: 'advanced', wordOptions: { 'נר_0': options } });
@@ -502,26 +582,34 @@ test('fromOtzariaSearch: צירוף שבר אילן אינו מקבל, ואפש�
       'שבת_1': { 'ניקוד': true, 'קידומות ארמיות': true },
     },
   });
-  assert.equal(buildQuery(mapped.query), 'נר# שבת');
+  assert.equal(buildQuery(mapped.query), '(נר#/!נר) שבת');
   assert.equal(mapped.approximate, true);
-  assert.deepEqual(mapped.missing, ['כתיב מלא/חסר', 'שגיאות כתיב', 'ניקוד', 'קידומות ארמיות']);
+  assert.deepEqual(mapped.missing, ['שגיאות כתיב', 'ניקוד', 'קידומות ארמיות']);
 
-  // גרשיים ותרגום: רק כשהם האפשרות היחידה של המילה. `+` נמדד בלי הגרשיים.
+  // גרשיים ותרגום. הגרשיים נשארים במילה: `+` מתעלם מהם, וסימן אחר זקוק להם.
   const alone = fromOtzaria({
     query: 'רמב"ם אמר',
     mode: 'advanced',
     wordOptions: { 'רמב"ם_0': { 'התעלם מגרשיים': true }, 'אמר_1': { 'תרגום ארמי': true } },
   });
-  assert.equal(buildQuery(alone.query), '+רמבם ^אמר');
+  assert.equal(buildQuery(alone.query), '+רמב"ם ^אמר');
   assert.equal(alone.approximate, false);
   const together = fromOtzaria({
     query: 'רמב"ם אמר',
     mode: 'advanced',
     wordOptions: { 'רמב"ם_0': { 'התעלם מגרשיים': true, 'כתיב מלא/חסר': true }, 'אמר_1': { 'תרגום ארמי': true, 'קידומות דקדוקיות': true } },
   });
-  assert.equal(buildQuery(together.query), '!רמב"ם #אמר');
-  assert.deepEqual(together.missing, ['התעלם מגרשיים', 'תרגום ארמי']);
+  assert.equal(buildQuery(together.query), '(!רמב"ם/+רמב"ם) (#אמר/^אמר)');
+  assert.equal(together.approximate, false);
+  assert.deepEqual(together.missing, []);
   assert.equal(validate(together.query), null);
+  // נמדד חי: `#רמב"ם` 5267 תוצאות ו-`#רמבם` אפס, ולכן הצירוף נשמר עם הגרשיים.
+  const prefixed = fromOtzaria({
+    query: 'רמב"ם',
+    mode: 'advanced',
+    wordOptions: { 'רמב"ם_0': { 'התעלם מגרשיים': true, 'קידומות דקדוקיות': true } },
+  });
+  assert.equal(buildQuery(prefixed.query), '(#רמב"ם/+רמב"ם)');
   // בלי גרשיים במילה, "התעלם מגרשיים" אינו משנה דבר.
   const noQuotes = fromOtzaria({ wordOptions: { 'נר_0': { 'התעלם מגרשיים': true } } });
   assert.equal(noQuotes.query.mode, 'simple');
