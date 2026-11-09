@@ -3,17 +3,21 @@ import 'dart:io';
 
 import 'package:meta/meta.dart';
 
+import 'package:responsa_helper/src/catalog/responsa_catalog_repository.dart';
 import 'package:responsa_helper/src/catalog/responsa_failure.dart';
 import 'package:responsa_helper/src/log.dart';
 import 'package:responsa_helper/src/native/responsa_integrity.dart';
 import 'package:responsa_helper/src/native/responsa_controller.dart';
 import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/server/api_error.dart';
+import 'package:responsa_helper/src/biography/biography_store.dart';
+import 'package:responsa_helper/src/server/biography_service.dart';
 import 'package:responsa_helper/src/server/build_coordinator.dart';
 import 'package:responsa_helper/src/server/catalog_index.dart';
 import 'package:responsa_helper/src/server/catalog_store.dart';
 import 'package:responsa_helper/src/server/diagnostics.dart';
 import 'package:responsa_helper/src/server/helper_paths.dart';
+import 'package:responsa_helper/src/server/notes_service.dart';
 import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
 import 'package:responsa_helper/src/server/otzaria_plugin_remover.dart';
 import 'package:responsa_helper/src/server/peer_session.dart';
@@ -30,6 +34,8 @@ class HelperService {
     required this._backend,
     required this.paths,
     Map<String, String>? environment,
+    Duration biographyPace = const Duration(milliseconds: 1500),
+    Duration biographyBusyRetry = const Duration(seconds: 5),
   }) : store = CatalogStore(paths.catalog),
        _environment = environment ?? Platform.environment {
     builds = BuildCoordinator(
@@ -37,10 +43,46 @@ class HelperService {
       store: store,
       targetPath: paths.catalog,
     );
+    biography = BiographyService(
+      store: BiographyStore(paths.dataDir),
+      reader: _backend.biography,
+      exclusive: <T>(action) => _exclusive(_Automation.biography, action),
+      book: (key) async {
+        final book = (await _requireIndex()).byKey(key);
+        if (book == null) throw const ApiError.unknownBook();
+        return (
+          title: book.title,
+          context: book.contextPath
+              .split('/')
+              .where((part) => part.isNotEmpty)
+              .toList(),
+        );
+      },
+      installPath: store.repository.sourceInstallPath,
+      // ההתקנה שממנה נבנה הקטלוג והמהדורה שלה עצמה: לא המהדורה של החלון הרץ,
+      // שמשתנה לפי מה שפתוח ושכתב את הרשימה (וקריאה של 6.5 שניות) בלי סיבה.
+      installKey: () async {
+        final status = await _backend.status();
+        final path =
+            await store.repository.sourceInstallPath() ?? status.installPath;
+        final wanted = ResponsaCatalogInfo.comparablePath(path ?? '');
+        final own = status.installations.where(
+          (i) => ResponsaCatalogInfo.comparablePath(i.installPath) == wanted,
+        );
+        return '$path|${own.isEmpty ? status.version : own.first.version}';
+      },
+      rejectIfNotInstalled: _rejectIfNotInstalled,
+      pace: biographyPace,
+      busyRetry: biographyBusyRetry,
+    );
+    notes = NotesService(
+      installations: () async => (await _backend.status()).installations,
+      preferredInstallPath: store.repository.sourceInstallPath,
+    );
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.7.0';
+  static const String serverVersion = '0.8.0';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -62,6 +104,9 @@ class HelperService {
     'easyOptions',
     'summary',
     'authorsFill',
+    'notes',
+    'biography',
+    'biographyHarvest',
   ];
 
   static const int maxPageSize = 200;
@@ -82,6 +127,12 @@ class HelperService {
   final HelperPaths paths;
   final CatalogStore store;
   late final BuildCoordinator builds;
+
+  /// ההערות האישיות של המשתמש בבר אילן (`POST /notes/list`).
+  late final NotesService notes;
+
+  /// הביוגרפיה של ספר, מבר אילן (`POST /biography`).
+  late final BiographyService biography;
 
   /// פתיחה או חיפוש שרצים עכשיו. אחד בכל רגע, ולעולם לא בזמן בנייה: כולם
   /// מפעילים את אותו מופע, ופעולה שנייה משבשת את הראשונה.
@@ -273,6 +324,8 @@ class HelperService {
           'ספר נפתח כרגע בבר אילן. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
         _Automation.search =>
           'בר אילן מחפש כרגע. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
+        _Automation.biography =>
+          'ביוגרפיה נקראת כרגע מבר אילן. אפשר להתחיל את קריאת הרשימה בעוד רגע.',
       });
     }
     return builds.watchOrStart(authorsOnly: authorsOnly);
@@ -289,6 +342,9 @@ class HelperService {
         _Automation.search =>
           'בר אילן קורא כרגע את רשימת הספרים. אפשר לחפש בו כשהקריאה '
               'תסתיים.',
+        _Automation.biography =>
+          'בר אילן קורא כרגע את רשימת הספרים. אפשר לקרוא ביוגרפיה כשהקריאה '
+              'תסתיים.',
       });
     }
     if (_automation case final running?) {
@@ -301,6 +357,10 @@ class HelperService {
           'בר אילן מחפש כרגע. אפשר לפתוח את הספר כשהחיפוש יסתיים.',
         (_Automation.search, _Automation.search) =>
           'חיפוש אחר רץ כרגע בבר אילן. יש להמתין לסיומו ולנסות שוב.',
+        (_Automation.biography, _) =>
+          'ביוגרפיה נקראת כרגע מבר אילן. יש להמתין רגע ולנסות שוב.',
+        (_, _Automation.biography) =>
+          'בר אילן עסוק כרגע. אפשר לקרוא את הביוגרפיה כשהפעולה תסתיים.',
       });
     }
     _automation = kind;
@@ -327,8 +387,8 @@ class HelperService {
       throw const ApiError(
         'catalogUnreadable',
         500,
-        'לא ניתן לקרוא את רשימת הספרים. אפשר לבנות אותה מחדש: גלגל השיניים '
-            '← "בנייה מחדש".',
+        'לא ניתן לקרוא את רשימת הספרים. אפשר לקרוא אותה מחדש: בלשונית '
+            '"הגדרות" ← "קריאה מחדש".',
       );
     }
     throw const ApiError.catalogMissing();
@@ -981,7 +1041,7 @@ class HelperService {
   }
 }
 
-enum _Automation { open, search }
+enum _Automation { open, search, biography }
 
 /// סוג החלון ב-`/text/search` עם `options` ו-`scope`.
 enum _SearchKind { advanced, freeForm, easy }

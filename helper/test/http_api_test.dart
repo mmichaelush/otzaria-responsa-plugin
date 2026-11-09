@@ -12,6 +12,7 @@ import 'package:responsa_helper/src/server/helper_paths.dart';
 import 'package:responsa_helper/src/server/helper_service.dart';
 import 'package:responsa_helper/src/server/http_api.dart';
 import 'package:responsa_helper/src/server/otzaria_icon_font.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 import 'helpers/catalog_fixture.dart';
@@ -1507,6 +1508,74 @@ void main() {
         expect(errorCode(result.json), 'badRequest');
       }
       expect(backend.autoStartCalls, isEmpty);
+    });
+  });
+
+  group('הערות אישיות', () {
+    /// התקנה עם `DATA\annot_db` ליד התוכנה, כמו בהתקנה בלי `Responsa.env`.
+    void installWithNotes(List<String> comments) {
+      final root = Directory(p.join(dir.path, 'install'))..createSync();
+      Directory(p.join(root.path, 'DATA')).createSync();
+      final db = sqlite3.open(p.join(root.path, 'DATA', 'annot_db'))
+        ..execute('CREATE TABLE COMMENT (id INTEGER, cmnt TEXT, source TEXT)');
+      for (var i = 0; i < comments.length; i++) {
+        db.execute('INSERT INTO COMMENT VALUES (?, ?, ?)', [
+          i + 1,
+          comments[i],
+          'ברכות דף ב',
+        ]);
+      }
+      db.close();
+      backend.installPath = root.path;
+    }
+
+    test('היכולת מוצהרת ב-/health', () async {
+      await start();
+      final health = (await call('GET', '/health')).json as Map;
+      expect(health['capabilities'], contains('notes'));
+    });
+
+    test('מחזיר את ההערות, עם חיפוש ועמוד', () async {
+      installWithNotes(['ראשונה', 'שנייה', 'שלישית']);
+      await start(withCatalog: false);
+      final all =
+          (await call('POST', '/notes/list', body: {'limit': 2})).json as Map;
+      expect(all['available'], true);
+      expect(all['all'], 3);
+      expect(all['total'], 3);
+      expect((all['notes'] as List).length, 2);
+      final note = (all['notes'] as List).first as Map;
+      expect(note['text'], 'ראשונה');
+      expect(note['source'], 'ברכות דף ב');
+
+      // חלק ממילה מספיק: כך חיפוש מוצא תוך כדי הקלדה.
+      final prefix =
+          (await call('POST', '/notes/list', body: {'q': 'שליש'})).json as Map;
+      expect(prefix['total'], 1);
+      final none =
+          (await call('POST', '/notes/list', body: {'q': 'כלום'})).json as Map;
+      expect(none['total'], 0);
+    });
+
+    test('התקנה בלי קובץ הערות: available=false, לא שגיאה', () async {
+      await start(withCatalog: false);
+      final result = await call('POST', '/notes/list', body: {});
+      expect(result.status, 200);
+      expect((result.json as Map)['available'], false);
+    });
+
+    test('בלי בר אילן: notInstalled', () async {
+      backend.installed = false;
+      await start(withCatalog: false);
+      final result = await call('POST', '/notes/list', body: {});
+      expect(result.status, 409);
+      expect(((result.json as Map)['error'] as Map)['code'], 'notInstalled');
+    });
+
+    test('פרמטר שגוי: badRequest', () async {
+      await start(withCatalog: false);
+      final result = await call('POST', '/notes/list', body: {'limit': 9999});
+      expect(result.status, 400);
     });
   });
 

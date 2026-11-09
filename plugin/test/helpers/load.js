@@ -14,6 +14,7 @@ function loadPlugin() {
   globalThis.ResponsaDomain = require(js('responsa-domain.js'));
   globalThis.ResponsaAdvanced = require(js('responsa-advanced.js'));
   globalThis.ResponsaLocate = require(js('responsa-locate.js'));
+  globalThis.ResponsaNotes = require(js('responsa-notes.js'));
   globalThis.ResponsaTheme = require(js('responsa-theme.js'));
   globalThis.ResponsaLog = require(js('responsa-log.js'));
   // היומן המשותף לא כותב ל-console בבדיקות; הבדיקות קוראות אותו ישירות.
@@ -22,6 +23,8 @@ function loadPlugin() {
   globalThis.ResponsaSettings = require(js('responsa-settings.js'));
   globalThis.ResponsaService = require(js('responsa-service.js'));
   globalThis.ResponsaEngine = require(js('responsa-engine.js'));
+  globalThis.ResponsaNotesFlow = require(js('responsa-notes-flow.js'));
+  globalThis.ResponsaBiographyFlow = require(js('responsa-biography-flow.js'));
   globalThis.ResponsaIcons = { icon: () => null, names: [] };
   globalThis.ResponsaUi = { el: () => null, button: () => null, iconButton: () => null };
   globalThis.ResponsaPanels = require(js('responsa-panels.js'));
@@ -32,11 +35,14 @@ function loadPlugin() {
     Domain: globalThis.ResponsaDomain,
     Advanced: globalThis.ResponsaAdvanced,
     Locate: globalThis.ResponsaLocate,
+    Notes: globalThis.ResponsaNotes,
     Log: globalThis.ResponsaLog,
     Runtime: globalThis.ResponsaRuntime,
     Settings: globalThis.ResponsaSettings,
     Service: globalThis.ResponsaService,
     Engine: globalThis.ResponsaEngine,
+    NotesFlow: globalThis.ResponsaNotesFlow,
+    BiographyFlow: globalThis.ResponsaBiographyFlow,
     Panels: globalThis.ResponsaPanels,
     App: globalThis.ResponsaApp,
   };

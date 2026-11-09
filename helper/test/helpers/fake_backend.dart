@@ -8,6 +8,8 @@ import 'package:responsa_helper/src/native/responsa_profile.dart';
 import 'package:responsa_helper/src/native/responsa_search_automation.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
 
+import 'fake_biography.dart';
+
 /// מחליף את בר אילן בבדיקות. הבנייה נשלטת מבחוץ דרך [buildEvents], כדי
 /// שבדיקה תוכל לעצור אותה באמצע ולבדוק הצטרפות, ניתוק וביטול.
 class FakeBackend implements ResponsaBackend {
@@ -45,6 +47,9 @@ class FakeBackend implements ResponsaBackend {
   int showCalls = 0;
 
   Uint8List? iconBytes;
+
+  @override
+  final FakeBiographySource biography = FakeBiographySource();
 
   /// השהיה מלאכותית, כדי לבדוק מה קורה בין בקשה לתחילת הבנייה.
   Duration statusDelay = Duration.zero;

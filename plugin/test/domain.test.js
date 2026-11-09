@@ -503,3 +503,12 @@ test('serviceUpdateHint: במסך "השירות לא מגיב" — רק כשהש
   assert.equal(Domain.serviceUpdateHint({ serverVersion: '0.6.0' }, '0.5.2'), null);
   assert.equal(Domain.serviceUpdateHint(null, '0.5.2'), null);
 });
+
+test('screenFor: אוצריא עסוקה אינה "השירות חסר"', () => {
+  assert.equal(Domain.screenFor({ platform: 'windows', failure: { code: 'hostBusy' } }), Screen.loading);
+  // השירות כבר ענה פעם ל-/health: הוא קיים, ולכן שגיאה ולא טעינה.
+  assert.equal(
+    Domain.screenFor({ platform: 'windows', health: { service: Domain.SERVICE_ID, apiVersion: 1 }, failure: { code: 'hostBusy' } }),
+    Screen.serviceError,
+  );
+});

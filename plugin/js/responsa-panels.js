@@ -345,28 +345,52 @@
     });
   }
 
+  /** מה לכתוב מתחת לשורה בהגדרות של פריט בתפריט הלחיצה הימנית. */
+  function contextMenuNote(model, { blocked, allowed, withShortcut }) {
+    if (allowed) {
+      if (!withShortcut) return null;
+      return has(model, 'app.shortcuts')
+        ? t('קיצור מקלדת: {shortcut}. אפשר לשנות אותו בהגדרות אוצריא ← קיצורי מקשים.', {
+            shortcut: SEARCH_SHORTCUT,
+          })
+        : t('כדי שגם הקיצור {shortcut} יעבוד: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "קיצורי מקלדת".', {
+            shortcut: SEARCH_SHORTCUT,
+          });
+    }
+    return blocked
+      ? Domain.startupPermissionHint()
+      : t('כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "פריטים בתפריט הטקסט".');
+  }
+
+  /** "חיפוש בבר אילן" בתפריט הלחיצה הימנית (ובקיצור המקלדת שלו). */
   function contextMenuRow(model, actions) {
     const blocked = Domain.lacksStartupPermission(model.permissions);
     const allowed = has(model, 'reader.context_menu') && !blocked;
     return switchRow({
       iconName: 'search_24_regular',
-      title: t('בר אילן בלחיצה ימנית'),
-      subtitle: t('בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "חיפוש בבר אילן" מחפש את הטקסט המסומן, ו"איתור המקום בבר אילן" פותח בבר אילן את המקום של השורה המסומנת.'),
-      note: allowed
-        ? has(model, 'app.shortcuts')
-          ? t('קיצור מקלדת: {shortcut}. אפשר לשנות אותו בהגדרות אוצריא ← קיצורי מקשים.', {
-              shortcut: SEARCH_SHORTCUT,
-            })
-          : t('כדי שגם הקיצור {shortcut} יעבוד: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "קיצורי מקלדת".', {
-              shortcut: SEARCH_SHORTCUT,
-            })
-        : blocked
-          ? Domain.startupPermissionHint()
-          : t('כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "פריטים בתפריט הטקסט".'),
+      title: t('חיפוש בבר אילן בלחיצה ימנית'),
+      subtitle: t('בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "חיפוש בבר אילן" מחפש את הטקסט המסומן בבר אילן.'),
+      note: contextMenuNote(model, { blocked, allowed, withShortcut: true }),
       checked: allowed && model.settings.contextMenu,
       disabled: !allowed,
       key: 'setting-context-menu',
       onToggle: (value) => actions.setSetting('contextMenu', value),
+    });
+  }
+
+  /** "איתור המקום בבר אילן" בתפריט הלחיצה הימנית. */
+  function contextLocateRow(model, actions) {
+    const blocked = Domain.lacksStartupPermission(model.permissions);
+    const allowed = has(model, 'reader.context_menu') && !blocked;
+    return switchRow({
+      iconName: 'document_search_24_regular',
+      title: t('איתור מקום בלחיצה ימנית'),
+      subtitle: t('בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "איתור המקום בבר אילן" פותח בבר אילן את המקום של השורה המסומנת.'),
+      note: contextMenuNote(model, { blocked, allowed, withShortcut: false }),
+      checked: allowed && model.settings.contextLocate,
+      disabled: !allowed,
+      key: 'setting-context-locate',
+      onToggle: (value) => actions.setSetting('contextLocate', value),
     });
   }
 
@@ -376,7 +400,7 @@
     return switchRow({
       iconName: 'search_info_24_regular',
       title: t('בר אילן בדיאלוג החיפוש'),
-      subtitle: t('בדיאלוג החיפוש של אוצריא, תחת "אפשרויות נוספות", תופיע התיבה "חיפוש בבר אילן במקום באוצריא". כשהיא מסומנת, החיפוש נשלח לבר אילן במקום לאוצריא, ולשונית התוסף נפתחת.'),
+      subtitle: t('בדיאלוג החיפוש של אוצריא, תחת "אפשרויות נוספות", יופיע המתג "חיפוש בבר אילן במקום באוצריא". כשהוא דלוק, החיפוש נשלח לבר אילן במקום לאוצריא, ולשונית התוסף נפתחת. בנוסף, בתוצאות של כל חיפוש באוצריא (גם כשאין תוצאות) יופיע הכפתור "להמשיך בבר אילן", שמעביר אליו את אותו חיפוש.'),
       note: allowed
         ? null
         : blocked
@@ -386,6 +410,104 @@
       disabled: !allowed,
       key: 'setting-search-dialog',
       onToggle: (value) => actions.setSetting('searchDialog', value),
+    });
+  }
+
+  /**
+   * "ביוגרפיה" בפרטי ספר. כבוי: אין כפתור, והתוסף אינו פותח את חלון
+   * הביוגרפיות של בר אילן. בשירות ישן שאינו מכיר ביוגרפיות אין כפתור בכל מקרה.
+   */
+  function biographyRow(model, actions) {
+    const supported = Domain.serviceCan(model.health, 'biography');
+    return switchRow({
+      iconName: 'book_information_24_regular',
+      title: t('ביוגרפיות בפרטי ספר'),
+      subtitle: t('בפרטי ספר מופיע הכפתור "ביוגרפיה". לחיצה עליו פותחת את בר אילן ברקע, קוראת ממנה את המאמר על אותו חיבור ומציגה אותו כאן, מאמר אחד בכל פעם. כשהמתג כבוי, אין כפתור והתוסף אינו קורא ביוגרפיות.'),
+      note:
+        supported || !model.health
+          ? null
+          : t('שירות בר אילן שבמחשב ישן ואינו מכיר ביוגרפיות, ולכן הכפתור לא יופיע. כדאי להוריד את הגרסה החדשה.'),
+      checked: model.settings.biography,
+      disabled: Boolean(model.health) && !supported,
+      key: 'setting-biography',
+      onToggle: (value) => actions.setSetting('biography', value),
+    });
+  }
+
+  /**
+   * "קריאת כל הביוגרפיות מראש". ברירת המחדל: ביוגרפיה נקראת רק בלחיצה. כאן
+   * המשתמש מפעיל קריאה ברקע של כולן (לאט, בלי להפריע), ויכול לעצור ולהמשיך.
+   */
+  function biographyHarvestRow(model, actions) {
+    const state = model.biography;
+    const status = state.harvest;
+    const running = Boolean(status) && status.state === 'running';
+    const counts =
+      status && status.total
+        ? t('נשמרו {stored} מתוך {total}', { stored: status.stored, total: status.total })
+        : null;
+    const facts = [];
+    if (running) {
+      facts.push(t('קורא ברקע, לאט ובלי להפריע.'));
+      if (counts) facts.push(counts);
+      if (status.current) facts.push(t('עכשיו: {title}', { title: status.current }));
+    } else if (status && status.state === 'done') {
+      facts.push(t('כל הביוגרפיות שמורות במחשב.'));
+      if (counts) facts.push(counts);
+    } else if (status && status.state === 'stopped') {
+      facts.push(t('נעצר. אפשר להמשיך מאותו מקום.'));
+      if (counts) facts.push(counts);
+    } else if (status && status.state === 'failed') {
+      facts.push(status.message || t('הקריאה נעצרה.'));
+      if (counts) facts.push(counts);
+    } else {
+      facts.push(
+        t('ברירת המחדל: ביוגרפיה נקראת רק כשלוחצים על "ביוגרפיה". כאן אפשר לקרוא את כולן ברקע, כדי שיופיעו מיד. זה לוקח כחצי שעה, בלי להפריע, ואפשר לעצור ולהמשיך בכל רגע.'),
+      );
+      if (counts) facts.push(counts);
+    }
+    if (status && status.failed) facts.push(t('{count} לא נקראו.', { count: status.failed }));
+    if (state.harvestError) facts.push(state.harvestError.message || t('הבקשה נכשלה.'));
+    const complete = Boolean(status) && status.state === 'done';
+    return infoRow(
+      'book_information_24_regular',
+      t('קריאת כל הביוגרפיות מראש'),
+      facts.join(' '),
+      running
+        ? button('tonal', t('עצירה'), actions.stopBiographyHarvest, {
+            key: 'biography-harvest-stop',
+            disabled: state.harvestBusy,
+          })
+        : button('tonal', status && status.stored > 0 && !complete ? t('המשך') : t('התחלה'), actions.startBiographyHarvest, {
+            key: 'biography-harvest-start',
+            disabled: state.harvestBusy || model.buildActive || complete,
+          }),
+    );
+  }
+
+  /**
+   * הכפתורים בשדות החיפוש של אוצריא ("בבר אילן", "מקור הספרים"): אוצריא מציירת
+   * אותם מהמניפסט ואינה נותנת לתוסף להסתיר אותם לפי הגדרה, ולכן כאן רק ההסבר
+   * איך מסירים אותם. אין כאן מתג שלא עושה כלום.
+   */
+  function fieldButtonsRow(model) {
+    if (!has(model, 'search.field_actions')) return null;
+    return infoRow(
+      'search_info_24_regular',
+      t('כפתורים בשדות החיפוש'),
+      t('הכפתורים "בבר אילן" ו"מקור הספרים" בשדות החיפוש של אוצריא מוצגים תמיד, כי אוצריא לא מאפשרת לתוסף להסתיר אותם לפי הגדרה. כדי להסיר אותם: הגדרות אוצריא ← כלים ← בר אילן ← כבו את "כפתורים בשדות החיפוש".'),
+    );
+  }
+
+  /** הלשונית "הערות". כבוי: אין לשונית, ואין קריאה של הערות ואין כתיבה לאוצריא. */
+  function notesRow(model, actions) {
+    return switchRow({
+      iconName: 'note_24_regular',
+      title: t('הערות אישיות מבר אילן'),
+      subtitle: t('מוסיף את הלשונית "הערות": רשימת ההערות שכתבתם בבר אילן, ואפשרות להעביר אותן לאוצריא, עם סימון "יובא מבר אילן". שום דבר לא נכתב באוצריא בלי שתאשרו. כשהמתג כבוי, הלשונית נעלמת והתוסף אינו קורא את ההערות.'),
+      checked: model.settings.notes,
+      key: 'setting-notes',
+      onToggle: (value) => actions.setSetting('notes', value),
     });
   }
 
@@ -575,7 +697,18 @@
           t('דרכים להגיע לבר אילן מתוך אוצריא עצמה, גם כשהלשונית "בר אילן" סגורה.'),
           librarySearchRow(model, actions),
           contextMenuRow(model, actions),
+          contextLocateRow(model, actions),
           searchDialogRow(model, actions),
+          fieldButtonsRow(model),
+        ),
+        section(
+          t('תכנים מבר אילן'),
+          t('מידע מבר אילן שהתוסף מציג בתוך אוצריא. ביוגרפיה נקראת רק בלחיצה על הכפתור, והערות רק כשפותחים את הלשונית.'),
+          biographyRow(model, actions),
+          model.settings.biography && Domain.serviceCan(model.health, 'biographyHarvest')
+            ? biographyHarvestRow(model, actions)
+            : null,
+          notesRow(model, actions),
         ),
         section(t('בר אילן'), null, autoStartRow(model, actions), showFormsRow(model, actions), showSummaryRow(model, actions), otzariaFirstRow(model, actions)),
         section(t('תצוגה ושפה'), null, displayRows(model, actions)),
@@ -749,7 +882,7 @@
       el(
         'p',
         { class: 'clarification-text' },
-        t('התוסף נועד לסייע למי שרכש כדין רישיון לתוכנת פרויקט השו"ת של אוניברסיטת בר אילן. הוא עובד רק עם התוכנה שמותקנת אצלכם, ואינו מעתיק, שומר או שולח את תוכן הספרים: הוא רק מבקש מבר אילן לפתוח ספר או לחפש, כפי שהייתם עושים בעצמכם.'),
+        t('התוסף נועד לסייע למי שרכש כדין רישיון לתוכנת פרויקט השו"ת של אוניברסיטת בר אילן. הוא עובד רק עם התוכנה שמותקנת אצלכם, ואינו מעתיק, שומר או שולח את תוכן הספרים, חוץ מביוגרפיה שביקשתם (נשמרת רק במחשב שלכם) ומההערות האישיות שכתבתם בעצמכם (מועברות לאוצריא לפי בקשתכם). חוץ מזה הוא רק מבקש מבר אילן לפתוח ספר או לחפש, כפי שהייתם עושים בעצמכם.'),
       ),
       el(
         'p',
@@ -951,7 +1084,8 @@
       Domain.hostSupportsLibrary(model.permissions)
         ? [t('חיפוש הספרייה'), onOff(startup && model.settings.libraryBooks)]
         : null,
-      [t('לחיצה ימנית'), onOff(startup && model.settings.contextMenu)],
+      [t('חיפוש בלחיצה ימנית'), onOff(startup && model.settings.contextMenu)],
+      [t('איתור מקום בלחיצה ימנית'), onOff(startup && model.settings.contextLocate)],
       [t('דיאלוג החיפוש'), onOff(startup && model.settings.searchDialog)],
       [t('הפעלת בר אילן כשהוא סגור'), onOff(model.settings.autoStart)],
       [t('חלון ניהול הצורות בחיפוש מטקסט מסומן'), onOff(model.settings.showForms)],

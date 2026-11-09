@@ -12,7 +12,10 @@
     /** גודל התצוגה: מכפיל בטווח [SCALE]. */
     scale: 'responsa_scale',
     libraryBooks: 'responsa_library_books',
+    /** "חיפוש בבר אילן" בתפריט הלחיצה הימנית. */
     contextMenu: 'responsa_context_menu',
+    /** "איתור המקום בבר אילן" בתפריט הלחיצה הימנית. */
+    contextLocate: 'responsa_context_locate',
     /** השורה "חיפוש בבר אילן" בדיאלוג החיפוש של אוצריא. */
     searchDialog: 'responsa_search_dialog',
     /**
@@ -43,6 +46,10 @@
      * לא מצאה כלום (issue #6, mmichaelush/otzaria#2583).
      */
     otzariaFirstSearch: 'responsa_otzaria_first_search',
+    /** הכפתור "ביוגרפיה" בפרטי ספר. כבוי: התוסף אינו קורא ביוגרפיות מבר אילן. */
+    biography: 'responsa_biography',
+    /** הלשונית "הערות". כבוי: אין לשונית, ואין קריאה של הערות ואין כתיבה לאוצריא. */
+    notes: 'responsa_notes',
     /** מה נשלח לאחרונה לחיפוש הספרייה: `{ builtAt, count }`. */
     librarySync: 'responsa_library_sync',
     /** המשתמש סגר את ההערה על ההרשאה "הוספת רכיבים לתוכנה". */
@@ -65,7 +72,7 @@
   });
 
   /** הלשוניות של התוסף, לפי הסדר. */
-  const TABS = Object.freeze(['books', 'text', 'locate', 'settings', 'help', 'about']);
+  const TABS = Object.freeze(['books', 'text', 'locate', 'notes', 'settings', 'help', 'about']);
 
   /** כמה מקומות אחרונים נשמרים. */
   const MAX_LOCATE_HISTORY = 8;
@@ -106,7 +113,10 @@
     scale: 1,
     libraryBooks: true,
     contextMenu: true,
+    contextLocate: true,
     searchDialog: true,
+    biography: true,
+    notes: true,
     autoStart: true,
     showForms: false,
     showSummary: false,
@@ -132,8 +142,12 @@
         typeof value.libraryBooks === 'boolean' ? value.libraryBooks : DEFAULTS.libraryBooks,
       contextMenu:
         typeof value.contextMenu === 'boolean' ? value.contextMenu : DEFAULTS.contextMenu,
+      contextLocate:
+        typeof value.contextLocate === 'boolean' ? value.contextLocate : DEFAULTS.contextLocate,
       searchDialog:
         typeof value.searchDialog === 'boolean' ? value.searchDialog : DEFAULTS.searchDialog,
+      biography: typeof value.biography === 'boolean' ? value.biography : DEFAULTS.biography,
+      notes: typeof value.notes === 'boolean' ? value.notes : DEFAULTS.notes,
       autoStart: typeof value.autoStart === 'boolean' ? value.autoStart : DEFAULTS.autoStart,
       showForms: value.showForms === true,
       showSummary: value.showSummary === true,
@@ -177,7 +191,10 @@
         'scale',
         'libraryBooks',
         'contextMenu',
+        'contextLocate',
         'searchDialog',
+        'biography',
+        'notes',
         'autoStart',
         'showForms',
         'showSummary',
@@ -192,7 +209,18 @@
         'locateHistory',
       ];
       const values = await Promise.all(names.map((name) => read(KEYS[name])));
-      this.values = normalize(Object.fromEntries(names.map((name, i) => [name, values[i]])));
+      const raw = Object.fromEntries(names.map((name, i) => [name, values[i]]));
+      // עד 0.8.0 מתג אחד כיבה את שני פריטי התפריט. מי שכיבה אותו לא יראה פתאום
+      // את "איתור המקום": ההגדרה החדשה יורשת ממנו פעם אחת.
+      if (raw.contextMenu === false && (raw.contextLocate === null || raw.contextLocate === undefined)) {
+        raw.contextLocate = false;
+        try {
+          await this.runtime.call('storage.set', { key: KEYS.contextLocate, value: false });
+        } catch (_) {
+          // יישמר בפעם הבאה; בינתיים הערך בזיכרון נכון.
+        }
+      }
+      this.values = normalize(raw);
       return this.values;
     }
 

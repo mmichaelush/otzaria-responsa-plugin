@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "com.otzaria-responsa",
   "name": "בר אילן",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "ספרי בר אילן המותקן במחשב: חיפוש ספרים ופתיחתם בבר אילן, חיפוש בטקסט בכל אפשרויות החיפוש של בר אילן, איתור מקום, וחיפוש בלחיצה ימנית.",
   "author": "מיכאלוש",
   "homepage": "https://github.com/mmichaelush/otzaria-responsa-plugin",
   "stability": "beta",
   "entrypoint": "index.html",
   "icon": "icon/icon.png",
-  "minAppVersion": "0.9.98.1",
+  "minAppVersion": "0.9.98.3",
   "sdkVersion": "1.x",
   "permissions": [
     "network.localhost",
@@ -23,6 +23,8 @@
     "library.books.provide",
     "library.content.read",
     "library.books.read",
+    "notes.read",
+    "notes.write",
     "reader.open",
     "search.fulltext.read",
     "navigation.write",
@@ -94,7 +96,7 @@
           ],
           "when": {
             "all": [
-              { "storage": { "key": "responsa_context_menu", "notEquals": false } },
+              { "storage": { "key": "responsa_context_locate", "notEquals": false } },
               { "storage": { "key": "responsa_welcome_seen", "equals": true } }
             ]
           }
@@ -103,10 +105,11 @@
       "searchDialogItems": [
         {
           "id": "responsa-search-dialog",
-          "type": "checkbox",
+          "type": "switch",
           "title": "חיפוש בבר אילן במקום באוצריא",
           "defaultValue": false,
           "openPluginOnSubmit": true,
+          "resultsAction": "להמשיך בבר אילן",
           "visibleInModes": ["exact", "advanced"],
           "when": {
             "all": [
@@ -151,7 +154,15 @@
           "id": "bar-ilan",
           "title": "בבר אילן",
           "icon": "book_open_medium_search_24_regular",
-          "fields": ["fullText", "findRef", "library"]
+          "fields": ["fullText", "findRef"]
+        },
+        {
+          "id": "source-filter",
+          "title": "מקור הספרים",
+          "icon": "book_open_medium_search_24_regular",
+          "activeIcon": "book_open_medium_search_24_filled",
+          "libraryOnlyIcon": "book_24_regular",
+          "mode": "providerBooksFilter"
         }
       ],
       "shortcuts": [

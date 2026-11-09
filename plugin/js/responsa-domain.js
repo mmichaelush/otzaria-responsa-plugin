@@ -251,6 +251,9 @@
           return Screen.serviceMissing;
         case 'portTaken':
           return Screen.portTaken;
+        case 'hostBusy':
+          // אוצריא עסוקה, לא שירות חסר: טעינה, והמסך ינסה שוב (responsa-app.js).
+          return health ? Screen.serviceError : Screen.loading;
         default:
           // השירות ענה ל-/health ונכשל אחר כך: הוא קיים, רק לא מגיב כרגע.
           return health ? Screen.serviceError : Screen.serviceMissing;
@@ -365,7 +368,7 @@
       return {
         kind: 'outdated',
         action: 'rebuild',
-        text: t('רשימת הספרים נקראה בגרסה קודמת של התוסף. מומלץ לקרוא אותה מחדש.'),
+        text: t('רשימת הספרים נקראה בגרסה קודמת של התוסף, שהחמיצה כמה מאות ספרים (עד גרסה 0.6.5). אין חובה לקרוא מחדש: הרשימה הנוכחית ממשיכה לעבוד, ואין צורך שהנתיבים של בר אילן ישתנו. הקריאה לוקחת כמה דקות, ורק היא מוסיפה את הספרים שחסרו.'),
       };
     }
     if (authorsFillable(status, health)) {
@@ -720,6 +723,16 @@
     return has(permissions, 'search.fulltext.read') && canOpenSearchTab(permissions);
   }
 
+  /**
+   * העברת הערות מבר אילן לאוצריא: לפענח את מראה המקום (`library.resolveRef`),
+   * לקרוא הערות שכבר יובאו, ולכתוב הערה חדשה.
+   */
+  const NOTES_IMPORT_PERMISSIONS = Object.freeze(['library.books.read', 'notes.read', 'notes.write']);
+
+  function canImportNotes(permissions) {
+    return NOTES_IMPORT_PERMISSIONS.every((permission) => has(permissions, permission));
+  }
+
   function hostSupportsLibrary(permissions) {
     return has(permissions, LIBRARY_PERMISSION);
   }
@@ -975,6 +988,7 @@
     searchSucceeded,
     canOpenInOtzaria,
     canOpenSearchTab,
+    canImportNotes,
     canSearchOtzariaFirst,
     OTZARIA_FIRST_PERMISSIONS,
     hostSupportsLibrary,

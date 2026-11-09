@@ -97,6 +97,17 @@ class ResponsaInstallation {
     return upper == 'RESPONSAV$edition';
   }
 
+  /// קובץ ההערות האישיות (SQLite). בתיקיית הנתונים של המשתמש (`DATA`), ובהתקנה
+  /// בלי `Responsa.env` ליד התוכנה. `null` כשאין קובץ: משתמש שמעולם לא כתב
+  /// הערה אינו מקבל אותו.
+  String? get annotPath {
+    for (final base in [dataLocation, installPath].whereType<String>()) {
+      final file = path.join(base, 'DATA', 'annot_db');
+      if (File(file).existsSync()) return file;
+    }
+    return null;
+  }
+
   /// תיקיית נתוני המשתמש מ-`Responsa.env`; `null` כשהקובץ חסר - מצב חוקי.
   String? get dataLocation {
     for (final line in _readLines(path.join(installPath, 'Responsa.env'))) {

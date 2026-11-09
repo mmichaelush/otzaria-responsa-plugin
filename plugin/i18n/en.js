@@ -52,8 +52,8 @@
       'From a book open in Otzaria: select a word, right-click and choose "Find this place in Bar-Ilan" (איתור המקום בבר אילן). The place of the selected line is filled in here and opened in Bar-Ilan.',
     'בר אילן בדיאלוג החיפוש':
       'Bar-Ilan in the search dialog',
-    'בדיאלוג החיפוש של אוצריא, תחת "אפשרויות נוספות", תופיע התיבה "חיפוש בבר אילן במקום באוצריא". כשהיא מסומנת, החיפוש נשלח לבר אילן במקום לאוצריא, ולשונית התוסף נפתחת.':
-      'The Otzaria search dialog will show, under "More options" (אפשרויות נוספות), the box "Search in Bar-Ilan instead of Otzaria" (חיפוש בבר אילן במקום באוצריא). When it is checked, the search goes to Bar-Ilan instead of Otzaria, and the plugin tab opens.',
+    'בדיאלוג החיפוש של אוצריא, תחת "אפשרויות נוספות", יופיע המתג "חיפוש בבר אילן במקום באוצריא". כשהוא דלוק, החיפוש נשלח לבר אילן במקום לאוצריא, ולשונית התוסף נפתחת. בנוסף, בתוצאות של כל חיפוש באוצריא (גם כשאין תוצאות) יופיע הכפתור "להמשיך בבר אילן", שמעביר אליו את אותו חיפוש.':
+      'The Otzaria search dialog will show, under "More options" (אפשרויות נוספות), the switch "Search in Bar-Ilan instead of Otzaria" (חיפוש בבר אילן במקום באוצריא). When it is on, the search goes to Bar-Ilan instead of Otzaria, and the plugin tab opens. In addition, the results of every Otzaria search (even when there are none) show the button "Continue in Bar-Ilan" (להמשיך בבר אילן), which passes the same search to Bar-Ilan.',
     'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "רכיבים בחלון החיפוש".':
       'To turn it on: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → turn on "Search window components" (רכיבים בחלון החיפוש).',
     'הפעלת בר אילן כשהוא סגור':
@@ -78,8 +78,8 @@
     'הרשימה הקודמת נשארה בשימוש.': 'The previous list is still in use.',
     'רשימת הספרים נקראה מהתקנה אחרת של בר אילן, ולכן ייתכן שחלק מהספרים לא ייפתחו. מומלץ לקרוא אותה מחדש.':
       'The book list was read from a different Bar-Ilan installation, so some books may not open. Reading it again is recommended.',
-    'רשימת הספרים נקראה בגרסה קודמת של התוסף. מומלץ לקרוא אותה מחדש.':
-      'The book list was read by an older version of the plugin. Reading it again is recommended.',
+    'רשימת הספרים נקראה בגרסה קודמת של התוסף, שהחמיצה כמה מאות ספרים (עד גרסה 0.6.5). אין חובה לקרוא מחדש: הרשימה הנוכחית ממשיכה לעבוד, ואין צורך שהנתיבים של בר אילן ישתנו. הקריאה לוקחת כמה דקות, ורק היא מוסיפה את הספרים שחסרו.':
+      'The book list was read by an older version of the plugin, which missed a few hundred books (up to version 0.6.5). Reading it again is optional: the current list keeps working, and the Bar-Ilan paths do not need to change. Reading takes a few minutes, and only it adds the missing books.',
     'קורא את רשימת הספרים מבר אילן…': 'Reading the book list from Bar-Ilan…',
     'מסדר את הספרים לפי קטגוריות…': 'Sorting the books into categories…',
     'מכין את בר אילן…': 'Preparing Bar-Ilan…',
@@ -152,10 +152,14 @@
     'ספרי בר אילן בחיפוש הספרייה': 'Bar-Ilan books in library search',
     'ספרי בר אילן יופיעו בתוצאות "איתור ספר או מחבר" במסך הספרייה של אוצריא, ולחיצה עליהם תפתח אותם בבר אילן.':
       'Bar-Ilan books appear in the "Find a book or author" (איתור ספר או מחבר) results of the Otzaria library, and clicking one opens it in Bar-Ilan.',
-    'בר אילן בלחיצה ימנית':
-      'Bar-Ilan in the right-click menu',
-    'בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "חיפוש בבר אילן" מחפש את הטקסט המסומן, ו"איתור המקום בבר אילן" פותח בבר אילן את המקום של השורה המסומנת.':
-      'In an open book, select a word and right-click: "Search in Bar-Ilan" (חיפוש בבר אילן) searches for the selected text, and "Find this place in Bar-Ilan" (איתור המקום בבר אילן) opens the place of the selected line in Bar-Ilan.',
+    'חיפוש בבר אילן בלחיצה ימנית':
+      'Search in Bar-Ilan from the right-click menu',
+    'בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "חיפוש בבר אילן" מחפש את הטקסט המסומן בבר אילן.':
+      'In an open book, select a word and right-click: "Search in Bar-Ilan" (חיפוש בבר אילן) searches for the selected text in Bar-Ilan.',
+    'איתור מקום בלחיצה ימנית':
+      'Find a place from the right-click menu',
+    'בספר פתוח מסמנים מילה ולוחצים לחיצה ימנית: "איתור המקום בבר אילן" פותח בבר אילן את המקום של השורה המסומנת.':
+      'In an open book, select a word and right-click: "Find this place in Bar-Ilan" (איתור המקום בבר אילן) opens the place of the selected line in Bar-Ilan.',
     'קיצור מקלדת: {shortcut}. אפשר לשנות אותו בהגדרות אוצריא ← קיצורי מקשים.':
       'Keyboard shortcut: {shortcut}. You can change it in Otzaria settings → Keyboard shortcuts.',
     'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "פריטים בתפריט הטקסט".':
@@ -183,6 +187,30 @@
     'שילוב באוצריא': 'Otzaria integration',
     'דרכים להגיע לבר אילן מתוך אוצריא עצמה, גם כשהלשונית "בר אילן" סגורה.':
       'Ways to reach Bar-Ilan from Otzaria itself, even when the "Bar-Ilan" tab is closed.',
+    'לבטל את ההעברה של {count} הערות מאוצריא? הערות ששונו באוצריא יישארו.':
+      'Undo the transfer of {count} notes from Otzaria? Notes you edited in Otzaria stay.',
+    'כן, לבטל את ההעברה': 'Yes, undo the transfer',
+    'חזרה': 'Back',
+    '{count} הערות לא נבדקו או לא נמחקו, ונשארו ברשימת ההעברות. אפשר לנסות שוב.':
+      '{count} notes could not be checked or deleted and stay in the transfer record. You can try again.',
+    'רענון': 'Refresh',
+    'בדיקה מחדש': 'Check again',
+    'בדיקת ההערות נכשלה': 'Checking the notes failed',
+    'קריאת יומן הייבוא נכשלה': 'Reading the import record failed',
+    'הייבוא נעצר': 'The import stopped',
+    'ביטול הייבוא נכשל': 'Undoing the import failed',
+    'ההערות נמחקו, אך הרישום שלהן לא התעדכן.': 'The notes were deleted, but their record was not updated.',
+    'תכנים מבר אילן': 'Content from Bar-Ilan',
+    'מידע מבר אילן שהתוסף מציג בתוך אוצריא. ביוגרפיה נקראת רק בלחיצה על הכפתור, והערות רק כשפותחים את הלשונית.':
+      'Information from Bar-Ilan that the plugin shows inside Otzaria. A biography is read only when you press its button, and notes only when you open the tab.',
+    'ביוגרפיות בפרטי ספר': 'Biographies in book details',
+    'בפרטי ספר מופיע הכפתור "ביוגרפיה". לחיצה עליו פותחת את בר אילן ברקע, קוראת ממנה את המאמר על אותו חיבור ומציגה אותו כאן, מאמר אחד בכל פעם. כשהמתג כבוי, אין כפתור והתוסף אינו קורא ביוגרפיות.':
+      'Book details show a "Biography" button. Pressing it opens Bar-Ilan in the background, reads its article about that work and shows it here, one article at a time. When the switch is off there is no button and the plugin does not read biographies.',
+    'שירות בר אילן שבמחשב ישן ואינו מכיר ביוגרפיות, ולכן הכפתור לא יופיע. כדאי להוריד את הגרסה החדשה.':
+      'The Bar-Ilan service on this computer is old and does not support biographies, so the button will not appear. Download the new version.',
+    'הערות אישיות מבר אילן': 'Personal notes from Bar-Ilan',
+    'מוסיף את הלשונית "הערות": רשימת ההערות שכתבתם בבר אילן, ואפשרות להעביר אותן לאוצריא, עם סימון "יובא מבר אילן". שום דבר לא נכתב באוצריא בלי שתאשרו. כשהמתג כבוי, הלשונית נעלמת והתוסף אינו קורא את ההערות.':
+      'Adds the "Notes" tab: the notes you wrote in Bar-Ilan, with the option to move them to Otzaria marked "Imported from Bar-Ilan". Nothing is written to Otzaria without your approval. When the switch is off the tab disappears and the plugin does not read the notes.',
     'תצוגה ושפה': 'Display and language',
     'שפת התוסף': 'Plugin language',
     'גופן': 'Font',
@@ -261,7 +289,7 @@
     'בר אילן פתוח עכשיו': 'Bar-Ilan is open now',
     'עוד לא נקראה': 'Not read yet',
     'חיפוש הספרייה': 'Library search',
-    'לחיצה ימנית': 'Right-click',
+    'חיפוש בלחיצה ימנית': 'Right-click search',
     'העתקת הפרטים': 'Copy details',
     'בדיקה חוזרת': 'Check again',
     'בודק…': 'Checking…',
@@ -306,8 +334,8 @@
     'פתחו את הקובץ שירד, לחצו "הבא" ובסוף "סיום".': 'Open the downloaded file, click "Next" and finally "Finish".',
     'חזרו לכאן. המסך יתעדכן מעצמו.': 'Come back here. The screen updates by itself.',
     'הורדת המתקין': 'Download installer',
-    'כבר התקנתם? ייתכן שהשירות לא פועל כרגע. הפעלה מחדש של המחשב תפעיל אותו.':
-      'Already installed? The service may not be running right now. Restarting the computer starts it.',
+    'כבר התקנתם? אין צורך להתקין שוב. פותחים מתפריט התחל את "הפעלת שירות בר אילן לאוצריא", והמסך יתעדכן בעוד כמה שניות. השירות אמור לעלות מעצמו בכל כניסה ל-Windows.':
+      'Already installed? There is no need to install again. Open "הפעלת שירות בר אילן לאוצריא" (start the Bar-Ilan service for Otzaria) from the Start menu, and the screen updates in a few seconds. The service should start by itself every time you sign in to Windows.',
     'השירות לא מגיב כרגע': 'The service is not responding',
     'אם זה חוזר, הפעלה מחדש של המחשב בדרך כלל פותרת את זה.': 'If this keeps happening, restarting the computer usually fixes it.',
     'צריך לעדכן את התוסף': 'The plugin needs an update',
@@ -428,12 +456,16 @@
     'הדיווח נשלח למפתח דרך אוצריא, יחד עם פרטי המערכת, יומן הפעולות האחרונות (כולל חיפושים וספרים שנפתחו) ויומן השירות (מהדורות בר אילן שנמצאו ומיקומן). שם המשתמש מושמט מכל נתיב. לפני השליחה אוצריא מבקשת אישור.':
       'The report is sent to the developer through Otzaria, with the system details, the recent activity log (including searches and opened books) and the service log (the Bar-Ilan editions found and their locations). The user name is removed from every path. Otzaria asks for confirmation before sending.',
     'קוד לתמיכה: {code}': 'Support code: {code}',
+    'אם דף ההורדה נפתח עם שגיאה, ייתכן שסינון אינטרנט חוסם אותה. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}':
+      'If the download page opens with an error, an internet filter may be blocking it. You can download the installer on another computer and bring it over on a USB drive. The download address is: {url}',
+    'גם באוצריא ניידת (על דיסק און קי) מתקינים את השירות במחשב עצמו, פעם אחת בכל מחשב שעובדים בו.':
+      'With a portable Otzaria (on a USB drive) too, the service is installed on the computer itself, once on each computer you work on.',
     'אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}':
       'There is no internet connection right now. You can download the installer on another computer and bring it over on a USB drive. The download address is: {url}',
     'פרטי הספר': 'Book details',
     // ---- הבהרה: רישיון
     'הבהרה חשובה': 'Important notice',
-    'התוסף נועד לסייע למי שרכש כדין רישיון לתוכנת פרויקט השו"ת של אוניברסיטת בר אילן. הוא עובד רק עם התוכנה שמותקנת אצלכם, ואינו מעתיק, שומר או שולח את תוכן הספרים: הוא רק מבקש מבר אילן לפתוח ספר או לחפש, כפי שהייתם עושים בעצמכם.': 'This plugin is meant to help those who have lawfully purchased a license for the Bar-Ilan University Responsa Project. It works only with the program installed on your computer, and does not copy, store or send the content of the books: it only asks Bar-Ilan to open a book or to search, as you would yourself.',
+    'התוסף נועד לסייע למי שרכש כדין רישיון לתוכנת פרויקט השו"ת של אוניברסיטת בר אילן. הוא עובד רק עם התוכנה שמותקנת אצלכם, ואינו מעתיק, שומר או שולח את תוכן הספרים, חוץ מביוגרפיה שביקשתם (נשמרת רק במחשב שלכם) ומההערות האישיות שכתבתם בעצמכם (מועברות לאוצריא לפי בקשתכם). חוץ מזה הוא רק מבקש מבר אילן לפתוח ספר או לחפש, כפי שהייתם עושים בעצמכם.': 'This plugin is meant to help those who have lawfully purchased a license for the Bar-Ilan University Responsa Project. It works only with the program installed on your computer, and does not copy, store or send the content of the books, except for a biography you asked for (saved only on your computer) and the personal notes you wrote yourself (transferred to Otzaria at your request). Otherwise it only asks Bar-Ilan to open a book or to search, as you would yourself.',
     'אין להשתמש בו עם עותק שאינו מורשה. "שארית ישראל לא יעשו עוולה" (צפניה ג, יג).': 'Do not use it with an unlicensed copy. "The remnant of Israel shall not do iniquity" (Zephaniah 3:13).',
     'הבנתי, בואו נתחיל': 'I understand, let\'s start',
     // ---- ניסוחים מסבב ה-QA
@@ -835,21 +867,107 @@
 
     // ---- 0.6.3: שורת החיפוש בתחביר של בר אילן, וחיפוש גם באוצריא
     'חיפוש גם באוצריא': 'Also search in Otzaria',
-    'אותן מילים נפתחות גם בחיפוש של אוצריא, בכרטיסייה משלו, כולל מה שהחיפוש שם כולל. גם חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" ירוץ אז גם באוצריא.':
-      'The same words also open in Otzaria search, in a tab of their own, including whatever that search covers. A search from the Otzaria search dialog with "Search in Bar-Ilan" will then also run in Otzaria.',
+    'אותן מילים נפתחות גם בחיפוש של אוצריא, בכרטיסייה משלו, כולל מה שהחיפוש שם כולל. חל על חיפוש מהלשונית הזו; חיפוש שמגיע מאוצריא כבר פתוח שם.':
+      'The same words also open in Otzaria search, in a tab of their own, including whatever that search covers. Applies to a search from this tab; a search that arrives from Otzaria is already open there.',
     'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".':
       'To use this, turn on the permission "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
     'חיפוש בבר אילן ובאוצריא': 'Search in Bar-Ilan and Otzaria',
 
     // ---- 0.6.4: חיפוש באוצריא קודם, ואיתור מקום
     'חיפוש באוצריא קודם': 'Search in Otzaria first',
-    'חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" רץ קודם באוצריא. אם נמצאו תוצאות הן נפתחות שם, ובבר אילן מחפשים רק כשלא נמצא דבר.':
-      'A search from the Otzaria search dialog with "Search in Bar-Ilan" runs in Otzaria first. If results are found they open there, and Bar-Ilan is searched only when nothing was found.',
+    'חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" רץ קודם באוצריא. אם נמצאו תוצאות הן נפתחות שם, ובבר אילן מחפשים רק כשלא נמצא דבר. אחרי שהתוצאות נפתחו, "להמשיך בבר אילן" בתוצאות מעביר את אותו חיפוש לבר אילן.':
+      'A search from the Otzaria search dialog with "Search in Bar-Ilan" runs in Otzaria first. If results are found they open there, and Bar-Ilan is searched only when nothing was found. Once the results have opened, "Continue in Bar-Ilan" (להמשיך בבר אילן) in them passes the same search to Bar-Ilan.',
     'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "חיפוש טקסט מלא" ו"פתיחת ספרים וניהול כרטיסיות".':
       'To use this, turn on the permissions "חיפוש טקסט מלא" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
     'בודק אם אוצריא מוצאת תוצאות…': 'Checking whether Otzaria finds results…',
     'אוצריא לא מצאה תוצאות, ולכן החיפוש הועבר לבר אילן.': 'Otzaria found no results, so the search was passed to Bar-Ilan.',
     'אוצריא מצאה תוצאות, והן נפתחו בכרטיסיית חיפוש שלה, ולכן החיפוש לא הועבר לבר אילן. כדי לחפש גם בבר אילן, לוחצים "חיפוש בבר אילן".':
       'Otzaria found results and they opened in a search tab of its own, so the search was not passed to Bar-Ilan. To search Bar-Ilan too, press "Search in Bar-Ilan".',
+    // ---- 0.8.0: הערות אישיות מבר אילן
+    'הערות': 'Notes',
+    'ההערות האישיות שכתבת בבר אילן. אפשר לעיין בהן כאן ולהעביר אותן לאוצריא.':
+      'The personal notes you wrote in Bar-Ilan. You can browse them here and move them to Otzaria.',
+    'שירות בר אילן שבמחשב ישן ואינו מכיר את ההערות. כדאי להוריד את הגרסה החדשה.':
+      'The Bar-Ilan service on this computer is old and does not know about notes. You should download the new version.',
+    'לא נמצאו הערות אישיות בבר אילן.': 'No personal notes were found in Bar-Ilan.',
+    'אם כתבת הערות, ייתכן שהן נשמרו בהתקנה אחרת של בר אילן או בחשבון משתמש אחר במחשב.':
+      'If you wrote notes, they may have been saved in another Bar-Ilan installation or in another user account on this computer.',
+    'קריאת ההערות נכשלה.': 'Reading the notes failed.',
+    'ניסיון חוזר': 'Try again',
+    'קורא את ההערות…': 'Reading the notes…',
+    'אין הערות להצגה.': 'There are no notes to show.',
+    'לא נמצאו הערות שמתאימות לחיפוש.': 'No notes match the search.',
+    'נמצאו {found} מתוך {all} הערות': 'Found {found} of {all} notes',
+    '{count} הערות': '{count} notes',
+    'הקובץ עודכן: {date}': 'File updated: {date}',
+    'ההערות שלי': 'My notes',
+    'עוד הערות': 'More notes',
+    'חיפוש בהערות': 'Search the notes',
+    'הערה בלי מראה מקום': 'Note without a source reference',
+    'איתור בבר אילן': 'Locate in Bar-Ilan',
+    'העברה לאוצריא': 'Move to Otzaria',
+    'אפשר להעביר את ההערות לאוצריא. כל הערה נכתבת בספר ובמקום שמתאימים לה, ובבר אילן היא נשארת כמו שהייתה.':
+      'You can move the notes to Otzaria. Each note is written in the matching book and place, and in Bar-Ilan it stays as it was.',
+    'כדי להעביר הערות צריך לאשר לתוסף, בהגדרות אוצריא ← כלים ← "בר אילן", את ההרשאות "צפייה בהערות", "עריכת הערות" ו"רשימת ספרים".':
+      'To move notes, allow the plugin the permissions "צפייה בהערות", "עריכת הערות" and "רשימת ספרים" in Otzaria Settings → Tools → "בר אילן".',
+    'בדיקת ההתאמה': 'Check the match',
+    'ביטול ההעברה הקודמת': 'Undo the previous move',
+    '{count} הערות הועברו בעבר.': '{count} notes were moved before.',
+    'ההעברה בוטלה: נמחקו {removed} הערות. {kept} נשארו כי שונו באוצריא או שהספר לא נמצא.':
+      'The move was undone: {removed} notes were deleted. {kept} stayed because they were edited in Otzaria or the book was not found.',
+    'ההעברה בוטלה: נמחקו {removed} הערות.': 'The move was undone: {removed} notes were deleted.',
+    'בודק איפה כל הערה שייכת באוצריא…': 'Checking where each note belongs in Otzaria…',
+    'מעביר הערות…': 'Moving notes…',
+    'מבטל את ההעברה…': 'Undoing the move…',
+    'עצירה': 'Stop',
+    'עוצר…': 'Stopping…',
+    '{done} מתוך {total}': '{done} of {total}',
+    'נקראו {count} הערות': 'Read {count} notes',
+    'נבדקו {total} הערות. {matched} אפשר להעביר לאוצריא.':
+      'Checked {total} notes. {matched} can be moved to Otzaria.',
+    '{count} מהן יוצמדו לכותרת של הפרק או הדף, כי את השורה המדויקת אוצריא לא זיהתה.':
+      '{count} of them will be attached to the chapter or page heading, because Otzaria did not recognize the exact line.',
+    '{count} הערות כבר הועברו בעבר, ולא יועברו שוב.': '{count} notes were already moved before, and will not be moved again.',
+    '{count} הערות יישארו רק בבר אילן. למה?': '{count} notes will stay only in Bar-Ilan. Why?',
+    'הערה נשארת בבר אילן כשאי אפשר לדעת בוודאות לאיזה ספר ומקום באוצריא היא שייכת. טוב יותר להשאיר אותה מאשר לכתוב אותה במקום שגוי.':
+      'A note stays in Bar-Ilan when it cannot be known for certain which book and place in Otzaria it belongs to. It is better to leave it than to write it in the wrong place.',
+    'בכל הערה שתועבר השורה הראשונה היא "{marker}". ההערות בבר אילן לא משתנות.':
+      'In every note that is moved, the first line is "{marker}". The notes in Bar-Ilan do not change.',
+    'העברת {count} הערות': 'Move {count} notes',
+    'הועברו {added} הערות. {failed} לא הועברו, אפשר לנסות שוב.':
+      '{added} notes were moved. {failed} were not moved; you can try again.',
+    'הועברו {added} הערות לאוצריא.': '{added} notes were moved to Otzaria.',
+    'ההערות מופיעות בספרים באוצריא, וכל אחת מתחילה ב"{marker}".':
+      'The notes appear in the books in Otzaria, and each one starts with "{marker}".',
+    'ביטול ההעברה': 'Undo the move',
+    'ההערות נכתבו, אך לא נשמר רישום שלהן, ולכן לא ניתן יהיה לבטל את הייבוא.':
+      'The notes were written, but no record of them was saved, so the import cannot be undone.',
+    'לתוסף אין הרשאה לקרוא או לכתוב הערות באוצריא. אפשר לאשר אותה בהגדרות התוסף באוצריא.':
+      'The plugin has no permission to read or write notes in Otzaria. You can allow it in the plugin settings in Otzaria.',
+    'אין להערה מראה מקום': 'The note has no source reference',
+    'אוצריא לא מצאה את המקום': 'Otzaria did not find the place',
+    'אוצריא לא בטוחה איזה ספר': 'Otzaria is not sure which book',
+    'הקריאה לאוצריא נכשלה': 'The call to Otzaria failed',
+    // ---- 0.8.0: ביוגרפיות מבר אילן
+    'ביוגרפיה': 'Biography',
+    'קורא את הביוגרפיה מבר אילן. בפעם הראשונה זה לוקח כדקה, כי בר אילן נפתחת ברקע.':
+      'Reading the biography from Bar-Ilan. The first time takes about a minute, because Bar-Ilan opens in the background.',
+    'קריאת הביוגרפיה נכשלה.': 'Reading the biography failed.',
+    'אין בבר אילן ביוגרפיה לספר הזה.': 'Bar-Ilan has no biography for this book.',
+    'קריאת כל הביוגרפיות מראש': 'Read all biographies in advance',
+    'נשמרו {stored} מתוך {total}': '{stored} of {total} saved',
+    'קורא ברקע, לאט ובלי להפריע.': 'Reading in the background, slowly and without getting in the way.',
+    'עכשיו: {title}': 'Now: {title}',
+    'כל הביוגרפיות שמורות במחשב.': 'All biographies are saved on this computer.',
+    'נעצר. אפשר להמשיך מאותו מקום.': 'Stopped. You can continue from where it stopped.',
+    'הקריאה נעצרה.': 'The reading stopped.',
+    'ברירת המחדל: ביוגרפיה נקראת רק כשלוחצים על "ביוגרפיה". כאן אפשר לקרוא את כולן ברקע, כדי שיופיעו מיד. זה לוקח כחצי שעה, בלי להפריע, ואפשר לעצור ולהמשיך בכל רגע.':
+      'By default a biography is read only when you press "Biography". Here you can read all of them in the background so they appear instantly. It takes about half an hour, does not get in the way, and you can stop and continue at any time.',
+    '{count} לא נקראו.': '{count} could not be read.',
+    'הבקשה נכשלה.': 'The request failed.',
+    'המשך': 'Continue',
+    'כפתורים בשדות החיפוש': 'Buttons in the search fields',
+    'הכפתורים "בבר אילן" ו"מקור הספרים" בשדות החיפוש של אוצריא מוצגים תמיד, כי אוצריא לא מאפשרת לתוסף להסתיר אותם לפי הגדרה. כדי להסיר אותם: הגדרות אוצריא ← כלים ← בר אילן ← כבו את "כפתורים בשדות החיפוש".':
+      'The "In Bar-Ilan" and "Book source" buttons in Otzaria\x27s search fields are always shown, because Otzaria does not let a plugin hide them by a setting. To remove them: Otzaria settings → Tools → Bar-Ilan → turn off "Buttons in the search fields".',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

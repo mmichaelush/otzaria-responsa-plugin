@@ -15,6 +15,8 @@ class ResponsaWin32 {
   static const int wmSetText = 0x000C;
   static const int wmMdiGetActive = 0x0229;
   static const int wmMdiDestroy = 0x0221;
+  static const int wmMdiActivate = 0x0222;
+  static const int wmMdiRestore = 0x0223;
 
   static const int bmClick = 0x00F5;
 
@@ -248,7 +250,7 @@ class ResponsaWin32 {
     return found;
   }
 
-  /// רק הילדים הישירים, בסדר ה-Z — מהוותיק לחדש.
+  /// רק הילדים הישירים, בסדר ה-Z — מהעליון (הפעיל לאחרונה) אל התחתון.
   static List<int> directChildren(int hwnd) {
     final found = <int>[];
     var child = GetWindow(
@@ -387,7 +389,9 @@ class ResponsaWin32 {
 
   /// Windows מתיר החלפת חזית רק לתהליך שקיבל את הקלט האחרון, והשירות לעולם
   /// אינו כזה: המשתמש לחץ באוצריא. לכן, כש-`SetForegroundWindow` נדחה,
-  /// מצטרפים זמנית לתור הקלט של חלון החזית ומנסים שוב.
+  /// מצטרפים זמנית לתור הקלט של חלון החזית ומנסים שוב. ואם גם זה נדחה, החלון
+  /// מועלה בכל זאת לראש סדר החלונות (topmost ואז חזרה), כדי שלפחות יראו אותו
+  /// מעל אוצריא ולא רק הבהוב בשורת המשימות. מחזיר אם החלון בחזית בפועל.
   static bool bringToFront(int hwnd) {
     final handle = HWND(Pointer.fromAddress(hwnd));
     if (IsIconic(handle)) {
@@ -410,10 +414,55 @@ class ResponsaWin32 {
         AttachThreadInput(ownThread, foregroundThread, true);
     try {
       BringWindowToTop(handle);
-      return SetForegroundWindow(handle);
+      if (SetForegroundWindow(handle)) return true;
     } finally {
       if (attached) AttachThreadInput(ownThread, foregroundThread, false);
     }
+    _raiseAboveOthers(handle);
+    return isForeground(hwnd);
+  }
+
+  /// הופך את החלון ל-topmost ומיד חוזר: הוא נשאר מעל כל מה שפתוח בלי להישאר
+  /// "תמיד למעלה". לא מעביר מיקוד, ולכן אינו תלוי בנעילת החזית.
+  static void _raiseAboveOthers(HWND handle) {
+    const flags = SET_WINDOW_POS_FLAGS(
+      0x0001 | 0x0002 | 0x0040,
+    ); // NOSIZE|NOMOVE|SHOWWINDOW
+    SetWindowPos(handle, HWND_TOPMOST, 0, 0, 0, 0, flags);
+    SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0, flags);
+  }
+
+  /// חלון ילד שמוזער בתוך בר אילן (שורה קטנה בתחתית האזור שלו) נראה למשתמש
+  /// כמו "נפתח ממוזער", גם כשחלון הראשי כבר בחזית. משחזר ומפעיל את הילד
+  /// שכותרתו [title] (העליון בסדר ה-Z, אם יש כמה). `false` כשלא נמצא.
+  static bool restoreMdiChild(int mainWindow, String title) {
+    final client = mdiClient(mainWindow);
+    if (client == null) return false;
+    int? found;
+    for (final child in directChildren(client)) {
+      if (windowText(child, timeoutMs: scanTimeoutMs) == title) {
+        found = child;
+        break;
+      }
+    }
+    if (found == null) return false;
+    if (IsIconic(HWND(Pointer.fromAddress(found)))) {
+      send(client, wmMdiRestore, wParam: found, timeoutMs: 3000);
+    }
+    send(client, wmMdiActivate, wParam: found, timeoutMs: 3000);
+    return true;
+  }
+
+  /// מפעיל את חלון ה-MDI [child] עצמו (ולא לפי כותרת: כותרות חוזרות). פקודות
+  /// התפריט פועלות על החלון הפעיל.
+  static bool activateMdiChild(int mainWindow, int child) {
+    final client = mdiClient(mainWindow);
+    if (client == null) return false;
+    if (IsIconic(HWND(Pointer.fromAddress(child)))) {
+      send(client, wmMdiRestore, wParam: child, timeoutMs: 3000);
+    }
+    send(client, wmMdiActivate, wParam: child, timeoutMs: 3000);
+    return true;
   }
 
   /// לאבחון: האם [hwnd] הוא עכשיו חלון החזית.

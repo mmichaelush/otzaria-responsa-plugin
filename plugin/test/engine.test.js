@@ -211,6 +211,8 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
         responsa_advanced_query: ['not', 'an', 'object'],
         responsa_show_forms: 'yes',
         responsa_show_summary: 1,
+        responsa_biography: 'no',
+        responsa_notes: false,
       })[key] ?? null,
   });
   const store = new Settings.SettingsStore(runtime);
@@ -220,7 +222,11 @@ test('הגדרות: נקראות מהאחסון, ערך פגום חוזר לבר
     scale: 1,
     libraryBooks: false,
     contextMenu: true,
+    contextLocate: true,
     searchDialog: true,
+    // ערך פגום חוזר לברירת המחדל (דלוק); ערך בוליאני תקין נשמר.
+    biography: true,
+    notes: false,
     autoStart: true,
     showForms: false,
     showSummary: false,
@@ -273,6 +279,27 @@ test('הגדרות: הלשונית האחרונה והמקומות האחרונ�
 
   const unknown = fakeRuntime({ 'storage.get': ({ key }) => (key === 'responsa_tab' ? 'nope' : null) });
   assert.equal((await new Settings.SettingsStore(unknown).load()).tab, 'books');
+});
+
+test('הגדרות: מי שכיבה את הלחיצה הימנית לפני הפיצול לא יראה פתאום את האיתור', async () => {
+  const runtime = fakeRuntime({
+    'storage.get': ({ key }) => (key === 'responsa_context_menu' ? false : null),
+    'storage.set': true,
+  });
+  const values = await new Settings.SettingsStore(runtime).load();
+  assert.equal(values.contextMenu, false);
+  assert.equal(values.contextLocate, false, 'ירש את הכיבוי');
+  assert.deepEqual(
+    runtime.calls.filter((c) => c.method === 'storage.set').map((c) => c.payload),
+    [{ key: 'responsa_context_locate', value: false }],
+    'נשמר, כדי שהמניפסט יסתיר את הפריט גם בלי להפעיל את התוסף',
+  );
+  // ערך שכבר נבחר במפורש לא נדרס.
+  const chosen = fakeRuntime({
+    'storage.get': ({ key }) => ({ responsa_context_menu: false, responsa_context_locate: true })[key] ?? null,
+    'storage.set': true,
+  });
+  assert.equal((await new Settings.SettingsStore(chosen).load()).contextLocate, true);
 });
 
 test('הגדרות: קריאה שנכשלה אינה "אין הגדרות", ושמירה שנכשלה זורקת', async () => {

@@ -10,6 +10,7 @@ import 'package:responsa_helper/src/server/helper_service.dart';
 import 'package:responsa_helper/src/server/http_api.dart';
 import 'package:responsa_helper/src/server/otzaria_plugin_remover.dart';
 import 'package:responsa_helper/src/server/responsa_backend.dart';
+import 'package:responsa_helper/src/server/startup_check.dart';
 
 /// קודי יציאה. המתקין ובדיקות ההפעלה נשענים עליהם.
 abstract final class ExitCodes {
@@ -39,6 +40,8 @@ responsa_helper — שירות מקומי שמחבר את אוצריא לפרו�
   --port=<n>        פורט קבוע, בלי חיפוש בטווח. לפיתוח בלבד.
   --data-dir=<dir>  תיקיית נתונים (ברירת מחדל %LOCALAPPDATA%\\OtzariaResponsa).
   --version         מדפיס גרסה ויוצא.
+  --logon           ערך ההפעלה בכניסה ל-Windows (Run) מעביר אותו; רק לתיעוד ביומן
+                    ובאבחון, כדי לדעת אם השירות עלה מעצמו.
   --check-install-user
                     יוצא ב-20 כשהתהליך רץ כמשתמש אחר מזה שמחובר בשולחן
                     העבודה (מתקין שהורץ כמנהל מחשבון רגיל), אחרת ב-0.
@@ -87,6 +90,7 @@ Future<void> _run(List<String> arguments) async {
     ports = [for (var i = 0; i < portCount; i++) firstPort + i];
   }
 
+  StartupCheck.startedAtLogon = options.containsKey('logon');
   final paths = HelperPaths.resolve(override: options['data-dir'])
     ..ensureExists();
 
@@ -102,7 +106,8 @@ Future<void> _run(List<String> arguments) async {
     '127.0.0.1:$port, data ${paths.dataDir}, pid $pid, '
     '${Platform.operatingSystemVersion}, '
     'user ${Platform.environment['USERNAME'] ?? '?'}, '
-    '${ResponsaIntegrity.describe(ResponsaIntegrity.own)}',
+    '${ResponsaIntegrity.describe(ResponsaIntegrity.own)}, '
+    '${StartupCheck.startedAtLogon ? 'started at logon' : 'started manually'}',
   );
   // היומן מסובב גם בזמן ריצה: שירות שרץ שבועות, ותוסף שבודק כל 10 שניות
   // מול שירות שנכשל, היו מגדילים אותו בלי סוף.
@@ -206,6 +211,7 @@ Map<String, String?>? _parse(List<String> arguments) {
       'port',
       'data-dir',
       'version',
+      'logon',
       'check-install-user',
       'help',
       'remove-otzaria-plugin',

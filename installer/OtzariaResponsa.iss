@@ -59,6 +59,8 @@ WizardStyle=modern
 ; השירות נסגר ב-PrepareToInstall; מנהל ההפעלה מחדש של Windows אינו נדרש.
 CloseApplications=no
 RestartApplications=no
+; יומן ההתקנה נשמר ב-%TEMP% (Setup Log ... .txt): בלעדיו אי אפשר לדעת למה התקנה נעצרה.
+SetupLogging=yes
 
 [Languages]
 Name: "he"; MessagesFile: "compiler:Languages\Hebrew.isl"
@@ -111,7 +113,14 @@ Source: "staging\bin\{#HelperExe}"; DestDir: "{tmp}"; Flags: dontcopy
 
 [Registry]
 ; הפעלה בכל כניסה למשתמש. המרכאות נדרשות בגלל רווחים אפשריים בנתיב.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#RunValue}"; ValueData: """{app}\bin\{#HelperExe}"""; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#RunValue}"; ValueData: """{app}\bin\{#HelperExe}"" --logon"; Flags: uninsdeletevalue
+; "אפליקציות הפעלה" של Windows זוכרת השבתה בנפרד מערך ההפעלה, והיא שורדת עדכון:
+; אחרי התקנה חדשה ההפעלה האוטומטית חוזרת להיות פעילה.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"; ValueName: "{#RunValue}"; Flags: deletevalue
+
+[Icons]
+; הפעלה ידנית של השירות בלי להריץ את ההתקנה מחדש (כשהוא לא עלה בכניסה ל-Windows).
+Name: "{autoprograms}\הפעלת שירות בר אילן לאוצריא"; Filename: "{app}\bin\{#HelperExe}"; Comment: "מפעיל את השירות שמחבר את אוצריא לבר אילן"
 
 [Run]
 ; מפעילים את השירות מיד, כדי שלא יהיה צורך להתנתק ולהתחבר. מתקין שהורץ כמנהל

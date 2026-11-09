@@ -500,7 +500,7 @@ class ResponsaController {
 
   /// רק מופע של ההתקנה שממנה נבנה הקטלוג, ולא חונה מחוץ למסך - שם הספר
   /// נפתח והמשתמש אינו רואה דבר. `automation == null` עם הודעה למשתמש.
-  static ({ResponsaAutomation? automation, String? message}) _attach(
+  static ({ResponsaAutomation? automation, String? message}) attach(
     String? installPath,
     List<String> openedWindows,
   ) {
@@ -536,7 +536,7 @@ class ResponsaController {
   static Future<ResponsaOpenReport> _openBookInIsolate(
     _OpenRequest request,
   ) async {
-    final (:automation, :message) = _attach(
+    final (:automation, :message) = attach(
       request.installPath,
       request.openedWindows,
     );
@@ -578,7 +578,7 @@ class ResponsaController {
   }
 
   static ResponsaOpenReport _locateInIsolate(_LocateRequest request) {
-    final (:automation, :message) = _attach(
+    final (:automation, :message) = attach(
       request.installPath,
       request.openedWindows,
     );
@@ -645,7 +645,7 @@ class ResponsaController {
   }
 
   static ResponsaShowReport _showInIsolate(String? installPath) {
-    final (:automation, :message) = _attach(installPath, const []);
+    final (:automation, :message) = attach(installPath, const []);
     if (automation == null) {
       return ResponsaShowReport(
         ok: false,
@@ -662,7 +662,7 @@ class ResponsaController {
   static Future<ResponsaSearchReport> _searchInIsolate(
     _SearchRequest request,
   ) async {
-    final (:automation, :message) = _attach(
+    final (:automation, :message) = attach(
       request.installPath,
       request.openedWindows,
     );

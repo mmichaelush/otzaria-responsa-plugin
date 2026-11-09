@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:responsa_helper/src/catalog/responsa_icon.dart';
+import 'package:responsa_helper/src/native/responsa_biography_controller.dart';
 import 'package:responsa_helper/src/native/responsa_catalog_build_service.dart';
 import 'package:responsa_helper/src/native/responsa_controller.dart';
 import 'package:responsa_helper/src/native/responsa_search_automation.dart';
@@ -54,12 +55,18 @@ abstract interface class ResponsaBackend {
     required String? installPath,
     required String cachePath,
   });
+
+  /// הביוגרפיות של בר אילן (`כלים ← ביוגרפיה`).
+  ResponsaBiographySource get biography;
 }
 
 /// המימוש האמיתי, מעל מנוע ה-Win32.
 class NativeResponsaBackend implements ResponsaBackend {
   final ResponsaController _controller = ResponsaController();
   final ResponsaCatalogBuildService _builder = ResponsaCatalogBuildService();
+
+  @override
+  final ResponsaBiographySource biography = const ResponsaBiographyController();
 
   @override
   Future<ResponsaStatus> status() => _controller.status();

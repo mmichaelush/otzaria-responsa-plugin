@@ -548,6 +548,48 @@ test('plugin.page_opened עם view פותח את הלשונית המבוקשת',
   assert.equal(app.model.tab, 'locate');
   app.suspend();
 });
+test('"הערות אישיות" כבוי: הלשונית אינה נפתחת (גם מקיצור או מהלשונית השמורה)', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  bridge.methods['storage.get'] = ({ key }) =>
+    ({ responsa_tab: 'notes', responsa_notes: false, responsa_welcome_seen: true })[key] ?? null;
+  await app.boot(windows);
+  assert.equal(app.model.settings.notes, false);
+  assert.equal(app.model.tab, 'books', 'הלשונית השמורה חוזרת ל"ספרים"');
+  app.selectTab('notes');
+  assert.equal(app.model.tab, 'books');
+  app.pageOpened({ param: { view: 'notes' } });
+  assert.equal(app.model.tab, 'books');
+  app.suspend();
+});
+
+test('"הערות אישיות" דלוק כברירת מחדל, וכיבוי מנקה את מסך ההערות', async () => {
+  const { app } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  assert.equal(app.model.settings.notes, true);
+  assert.equal(app.model.settings.biography, true);
+  app.selectTab('notes');
+  assert.equal(app.model.tab, 'notes');
+  app.selectTab('settings');
+  app.model.notes.importer.phase = 'review';
+  await app.actions.setSetting('notes', false);
+  assert.equal(app.model.settings.notes, false);
+  assert.notEqual(app.model.notes.importer.phase, 'review');
+  app.selectTab('notes');
+  assert.equal(app.model.tab, 'settings');
+  app.suspend();
+});
+
+test('"ביוגרפיות" כבוי: ההגדרה נשמרת, והמאמר הפתוח נסגר', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  app.model.biography.key = '7';
+  await app.actions.setSetting('biography', false);
+  assert.equal(app.model.settings.biography, false);
+  assert.equal(app.model.biography.key, null);
+  assert.ok(bridge.calls.some((c) => c.method === 'storage.set' && c.payload.key === 'responsa_biography' && c.payload.value === false));
+  app.suspend();
+});
+
 test('מתג שנכשל בשמירה נשאר במצבו, עם הסבר', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   bridge.methods['storage.set'] = { error: { code: 'error.internal' } };
@@ -1106,19 +1148,6 @@ test('חיפוש גם באוצריא: כבוי, או בלי ההרשאה — א�
     assert.equal(requests(bridge, '/text/search').length, 1);
     app.suspend();
   }
-});
-
-test('חיפוש גם באוצריא מדיאלוג החיפוש: הבקשה של אוצריא נפתחת שם פעם אחת', async () => {
-  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
-  const { app, bridge } = await bootAdvanced(found, { responsa_also_otzaria: true });
-  app._setPermissions(['network.localhost', 'reader.open']);
-  await app.searchRequested({ request: { query: 'נר שבת', mode: 'advanced', distance: 2 } });
-  const opened = bridge.calls.filter((c) => c.method === 'reader.openSearchTab').map((c) => c.payload);
-  assert.deepEqual(opened, [
-    { query: 'נר שבת', autoSearch: true, selectItems: [], settings: { mode: 'advanced', distance: 2 } },
-  ]);
-  assert.equal(requests(bridge, '/text/search').length, 1);
-  app.suspend();
 });
 
 /** `search.query` מזרים: הקריאה מחזירה איטרטור אסינכרוני, ולא תשובה. */
@@ -1980,5 +2009,132 @@ test('חיפוש מתקדם: שירות ישן — אין בקשה', async () =>
   app.advancedWord(0, 0, 'נר');
   await app.runAdvanced();
   assert.equal(requests(bridge, '/text/search').length, 0);
+  app.suspend();
+});
+
+test('חיפוש באוצריא קודם: אותו חיפוש שחוזר מהכפתור בתוצאות ממשיך לבר אילן, בלי לספור שוב', async () => {
+  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
+  const { app, bridge } = await bootAdvanced(found, { responsa_otzaria_first_search: true });
+  app._setPermissions(OTZARIA_FIRST);
+  const calls = streamSearch(bridge, { sequence: 0, results: [{}], total: 812 });
+  const request = { query: 'נר שבת', mode: 'advanced', distance: 2 };
+  await app.searchRequested({ request });
+  assert.equal(calls.length, 1);
+  assert.equal(requests(bridge, '/text/search').length, 0);
+  // "להמשיך בבר אילן" בתוצאות שנפתחו: אותה בקשה שוב.
+  await app.searchRequested({ request });
+  assert.equal(calls.length, 1, 'לא סופרים שוב');
+  assert.equal(requests(bridge, '/text/search').length, 1);
+  assert.equal(bridge.calls.filter((c) => c.method === 'reader.openSearchTab').length, 1, 'לא נפתחת כרטיסייה כפולה');
+  // חיפוש אחר אחרי זה חוזר להתנהגות הרגילה.
+  await app.searchRequested({ request: { query: 'שבת קודש', mode: 'advanced' } });
+  assert.equal(calls.length, 2);
+  app.suspend();
+});
+
+test('חיפוש גם באוצריא אינו חל על חיפוש שהגיע מאוצריא (הכפתור בתוצאות)', async () => {
+  const found = { '/text/search': reply(200, { ok: true, outcome: 'found', count: 3, query: 'x', advanced: true }) };
+  const { app, bridge } = await bootAdvanced(found, { responsa_also_otzaria: true });
+  app._setPermissions(['network.localhost', 'reader.open']);
+  await app.searchRequested({ request: { query: 'נר שבת', mode: 'advanced' } });
+  assert.equal(bridge.calls.some((c) => c.method === 'reader.openSearchTab'), false);
+  assert.equal(requests(bridge, '/text/search').length, 1);
+  app.suspend();
+});
+
+test('כפתור בשדה החיפוש בטקסט (0.9.98.3): הבקשה של הדיאלוג עוברת כולה', async () => {
+  const { app, bridge } = await bootAdvanced({
+    '/text/search': reply(200, { ok: true, outcome: 'found', count: 4, query: 'נר שבת', advanced: true }),
+  });
+  await app.fieldActionInvoked({
+    actionId: 'bar-ilan',
+    sessionId: 's3',
+    field: 'fullText',
+    text: 'נר שבת',
+    request: { query: 'נר שבת', mode: 'advanced', distance: 3, anyOrder: true },
+  });
+  assert.equal(app.model.tab, 'text');
+  assert.equal(requests(bridge, '/text/search').length, 1);
+  assert.match(requests(bridge, '/text/search')[0].body.q, /\[1:4\]/, 'המרווח של הדיאלוג, לא ברירת המחדל');
+  app.suspend();
+});
+
+const olderService = reply(200, {
+  ok: true,
+  service: 'otzaria-responsa',
+  apiVersion: 1,
+  serverVersion: '0.7.0',
+  capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'notify'],
+});
+
+test('הערת "השירות ישן מהתוסף" נעלמת מעצמה כשהמתקין מעדכן את השירות', async () => {
+  const { app, bridge } = setup({ '/health': olderService, '/status': reply(200, ready) });
+  await app.boot({ app: { platform: 'windows' }, plugin: { version: '0.8.0' } });
+  assert.equal(app.model.screen, Screen.ready);
+  assert.equal(app.model.health.serverVersion, '0.7.0');
+  assert.ok(Domain.serviceNotice(app.model.health, app.model.pluginVersion), 'ההערה מוצגת');
+  assert.ok(app.pollTimer, 'ההערה מתוזמנת לבדיקה חוזרת');
+
+  // אותה גרסה: ממשיכים לחכות, בלי רענון מלא.
+  const before = requests(bridge, '/status').length;
+  await app._recheckService();
+  assert.equal(requests(bridge, '/status').length, before);
+  assert.ok(app.pollTimer);
+
+  // המתקין החליף את השירות: הגרסה החדשה מוצגת, וההערה נעלמת.
+  bridge.routes['/health'] = reply(200, {
+    ok: true,
+    service: 'otzaria-responsa',
+    apiVersion: 1,
+    serverVersion: '0.8.0',
+    capabilities: ['catalog', 'open', 'searchText', 'export', 'browse', 'notify'],
+  });
+  await app._recheckService();
+  assert.equal(app.model.health.serverVersion, '0.8.0');
+  assert.equal(Domain.serviceNotice(app.model.health, app.model.pluginVersion), null);
+  app.suspend();
+});
+
+test('אוצריא עסוקה בהפעלה: טעינה ובדיקה חוזרת בשקט, ורק אחרי כמה ניסיונות "השירות חסר"', async () => {
+  const bridge = new FakeBridge({});
+  const app = new App(bridge, new FakeView());
+  app.service.connect = async () => {
+    throw Object.assign(new Error('busy'), { code: 'hostBusy' });
+  };
+  await app.boot(windows);
+  assert.equal(app.model.screen, Screen.loading);
+  assert.ok(app.pollTimer, 'ינסה שוב');
+  for (let i = 0; i < 8; i++) await app.refresh();
+  assert.equal(app.model.screen, Screen.serviceMissing);
+  app.suspend();
+});
+
+test('הגדרות: מצב הקריאה ברקע של הביוגרפיות נשאל בכניסה, רק כשהשירות מכיר אותה', async () => {
+  const status = { state: 'idle', total: null, stored: 0, failed: 0, current: null, message: null };
+  const withHarvest = reply(200, { ok: true, service: 'otzaria-responsa', apiVersion: 1, capabilities: ['biography', 'biographyHarvest'] });
+  const modern = setup({ '/health': withHarvest, '/status': reply(200, ready), '/biography/harvest': reply(200, status) });
+  await modern.app.boot(windows);
+  modern.app.selectTab('settings');
+  await until(() => modern.app.model.biography.harvest !== null);
+  assert.deepEqual(requests(modern.bridge, '/biography/harvest').map((r) => r.body.action), ['status']);
+  modern.app.suspend();
+
+  const old = setup({ '/status': reply(200, ready) });
+  await old.app.boot(windows);
+  old.app.selectTab('settings');
+  await tick();
+  assert.equal(requests(old.bridge, '/biography/harvest').length, 0, 'שירות שאינו מכיר: לא נשאל');
+  old.app.suspend();
+});
+
+test('הגדרות: כיבוי הביוגרפיות עוצר קריאה שרצה ברקע', async () => {
+  const running = { state: 'running', total: 10, stored: 2, failed: 0, current: 'א', message: null };
+  const withHarvest = reply(200, { ok: true, service: 'otzaria-responsa', apiVersion: 1, capabilities: ['biography', 'biographyHarvest'] });
+  const { app, bridge } = setup({ '/health': withHarvest, '/status': reply(200, ready), '/biography/harvest': reply(200, running) });
+  await app.boot(windows);
+  await app.actions.startBiographyHarvest();
+  assert.equal(app.model.biography.harvest.state, 'running');
+  await app.actions.setSetting('biography', false);
+  await until(() => requests(bridge, '/biography/harvest').some((r) => r.body.action === 'stop'));
   app.suspend();
 });

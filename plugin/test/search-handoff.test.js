@@ -1,5 +1,5 @@
 // העברת חיפוש בין אוצריא לתוסף (Otzaria/otzaria#3067 מאוצריא 0.9.98.1: היקף
-// ושלילה, פעיל; #3068 מאוצריא 0.9.99: כפתור בתוצאות, כבוי עד שהיא יוצאת).
+// ושלילה; #3068 מאוצריא 0.9.98.3: כפתור בתוצאות).
 'use strict';
 
 const test = require('node:test');
@@ -61,18 +61,21 @@ test('searchDialogItem: resultsAction רק כשהמתג דלוק', () => {
   assert.ok(Handoff.RESULTS_ACTION_TITLE.length <= 120);
 });
 
-test('המתג והמניפסט יחד (resultsAction, TODO(otzaria-0.9.99))', () => {
+test('המתג והמניפסט יחד: resultsAction דורש את הגרסה שהוולידטור של אוצריא מכיר', () => {
   const item = manifest.contributes.startup.searchDialogItems.find((entry) => entry.id === Handoff.SEARCH_DIALOG_ITEM_ID);
   assert.ok(item, 'שורת הדיאלוג חסרה');
-  if (!Handoff.RESULTS_ACTION_ENABLED) {
-    // הוולידטור של אוצריא דוחה resultsAction במניפסט עם minAppVersion מתחת ל-0.9.99.
-    assert.equal(item.resultsAction, undefined, 'resultsAction במניפסט לפני 0.9.99');
-    return;
-  }
+  assert.equal(Handoff.RESULTS_ACTION_ENABLED, true);
   const parts = (value) => String(value).split('.').map(Number);
-  const [a, b, c] = parts(manifest.minAppVersion);
-  const [x, y, z] = parts(Handoff.MIN_APP_VERSION);
-  assert.ok(a > x || (a === x && (b > y || (b === y && c >= z))), 'minAppVersion חייב להיות 0.9.99 לפחות');
+  const wanted = parts(Handoff.MIN_APP_VERSION);
+  const actual = parts(manifest.minAppVersion);
+  const atLeast = actual.every((n, i) => n > (wanted[i] || 0)) ||
+    (() => {
+      for (let i = 0; i < Math.max(actual.length, wanted.length); i++) {
+        if ((actual[i] || 0) !== (wanted[i] || 0)) return (actual[i] || 0) > (wanted[i] || 0);
+      }
+      return true;
+    })();
+  assert.ok(atLeast, 'minAppVersion חייב להיות ' + Handoff.MIN_APP_VERSION + ' לפחות');
   assert.equal(item.resultsAction, Handoff.RESULTS_ACTION_TITLE);
   assert.equal(item.openPluginOnSubmit, true);
 });

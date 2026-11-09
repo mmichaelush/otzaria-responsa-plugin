@@ -180,15 +180,14 @@
       steps: installSteps(),
       actions: [downloadButton(actions), retryButton(model, actions)],
       footnote: [
-        t('כבר התקנתם? ייתכן שהשירות לא פועל כרגע. הפעלה מחדש של המחשב תפעיל אותו.'),
-        model.online === false
-          ? t('אין כרגע חיבור לאינטרנט. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}', {
-              url: Domain.Links.setup,
-            })
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' '),
+        t('כבר התקנתם? אין צורך להתקין שוב. פותחים מתפריט התחל את "הפעלת שירות בר אילן לאוצריא", והמסך יתעדכן בעוד כמה שניות. השירות אמור לעלות מעצמו בכל כניסה ל-Windows.'),
+        // שגיאה בדף ההורדה היא בדרך כלל סינון אינטרנט, ולא תקלה בתוסף.
+        t('אם דף ההורדה נפתח עם שגיאה, ייתכן שסינון אינטרנט חוסם אותה. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}', {
+          url: Domain.Links.setup,
+        }),
+        // אוצריא על דיסק און קי: השירות הוא של המחשב, ולכן מתקינים אותו בכל מחשב.
+        t('גם באוצריא ניידת (על דיסק און קי) מתקינים את השירות במחשב עצמו, פעם אחת בכל מחשב שעובדים בו.'),
+      ].join(' '),
     });
   }
 
@@ -791,22 +790,26 @@
           }),
         ),
       ),
-      expanded ? bookDetailsView(book, detailsId) : null,
+      expanded ? bookDetailsView(book, detailsId, model, actions) : null,
     );
   }
 
   /** הפרטים המלאים שבקטלוג, מתחת לשורה. */
-  function bookDetailsView(book, id) {
-    return el(
-      'dl',
-      { class: 'result-details', id, 'aria-label': t('פרטי הספר') },
-      Domain.bookDetails(book).map(({ label, value }) => [
-        el('dt', {}, label),
-        // <bdi> מבודד את כיוון הערך (שם עברי בממשק באנגלית, או מספר בעברית),
-        // והשורה עצמה נשארת מיושרת לצד של התווית.
-        el('dd', {}, el('bdi', {}, value)),
-      ]),
-    );
+  function bookDetailsView(book, id, model, actions) {
+    return [
+      el(
+        'dl',
+        { class: 'result-details', id, 'aria-label': t('פרטי הספר') },
+        Domain.bookDetails(book).map(({ label, value }) => [
+          el('dt', {}, label),
+          // <bdi> מבודד את כיוון הערך (שם עברי בממשק באנגלית, או מספר בעברית),
+          // והשורה עצמה נשארת מיושרת לצד של התווית.
+          el('dd', {}, el('bdi', {}, value)),
+        ]),
+      ),
+      // מוזרק על ידי הבקר: שכבת הביוגרפיה נמצאת מעל שכבה זו.
+      actions.biographyView ? actions.biographyView(book) : null,
+    ];
   }
 
   /** המסך המלא לפי `model.screen`. */

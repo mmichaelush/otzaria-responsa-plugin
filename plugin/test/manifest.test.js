@@ -84,26 +84,30 @@ test('הפקודות של קיצורי המקלדת הן אלה שהבקר מכ�
   assert.equal(new Set(keys).size, keys.length);
 });
 
-test('"איתור המקום בבר אילן" פותח את הלשונית, באותו מתג של הלחיצה הימנית', () => {
+test('"איתור המקום בבר אילן" פותח את הלשונית, ויש לו מתג משלו', () => {
   const item = startup.contextMenuItems.find((i) => i.id === Domain.LOCATE_MENU_ITEM);
   assert.ok(item, 'פריט האיתור במניפסט');
   assert.equal(item.openPlugin, true);
   assert.equal(item.action, undefined, 'בוחרים בין המקורות בלשונית, ולכן לא פעולה ישירה');
   assert.equal(item.onClickEvent, undefined, 'האירוע הוא contextMenu.itemClicked');
   const when = conditions(item.when);
-  assert.deepEqual(when[Settings.KEYS.contextMenu], { notEquals: false });
+  assert.deepEqual(when[Settings.KEYS.contextLocate], { notEquals: false });
+  assert.equal(when[Settings.KEYS.contextMenu], undefined, 'לא תלוי במתג של החיפוש');
   assert.deepEqual(when[Settings.KEYS.welcomeSeen], { equals: true });
   // אוצריא מגבילה כל תוסף לשני פריטים עליונים בתפריט.
   assert.ok(startup.contextMenuItems.length <= 2);
 });
 
-test('שורת דיאלוג החיפוש: כבויה כברירת מחדל, ומנתבת את החיפוש לתוסף', () => {
+test('שורת דיאלוג החיפוש: מתג כבוי כברירת מחדל, ומנתב את החיפוש לתוסף', () => {
   const [item, ...rest] = startup.searchDialogItems;
   assert.equal(rest.length, 0);
-  assert.equal(item.type, 'checkbox');
-  // הסימון נשמר בין חיפושים, וכשהוא מסומן אוצריא אינה מחפשת בעצמה.
+  // מתג קבוע (0.9.98.3): נשמר בין חיפושים, וכשהוא דלוק אוצריא אינה מחפשת בעצמה.
+  assert.equal(item.type, 'switch');
+  assert.notEqual(item.persist, false);
   assert.equal(item.defaultValue, false);
   assert.equal(item.openPluginOnSubmit, true);
+  // הכפתור בתוצאות של אוצריא ("להמשיך בבר אילן") מאותה שורה.
+  assert.equal(item.resultsAction, 'להמשיך בבר אילן');
   assert.match(item.title, /במקום באוצריא/);
   assert.deepEqual(item.visibleInModes, ['exact', 'advanced'], 'אין בבר אילן חיפוש מקורב');
   const when = conditions(item.when);
@@ -133,11 +137,13 @@ function atLeast(actual, wanted) {
 
 // `minAppVersion` הוא הגרסה שבה נוסף ה-API החדש ביותר שבמניפסט: אוצריא דוחה
 // התקנה מלמעלה ואריזה מלמטה (docs/plugin-sdk/README.md).
-test('minAppVersion: 0.9.98.1, מה שהקשרי המפרשים והכפתור בשדות דורשים', () => {
-  assert.equal(manifest.minAppVersion, '0.9.98.1');
+test('minAppVersion: 0.9.98.3, מה שהמתג והכפתור בתוצאות דורשים', () => {
+  assert.equal(manifest.minAppVersion, '0.9.98.3');
   assert.ok(atLeast(manifest.minAppVersion, '0.9.98'), 'ספק הספרייה ו-$storage (0.9.98)');
   const FieldActions = require('../js/responsa-field-actions.js');
   assert.ok(atLeast(manifest.minAppVersion, FieldActions.MIN_APP_VERSION));
+  const Handoff = require('../js/responsa-search-handoff.js');
+  assert.ok(atLeast(manifest.minAppVersion, Handoff.MIN_APP_VERSION), 'resultsAction, type switch');
 });
 
 test('פריטי התפריט מופיעים גם במפרשים ובעמודי PDF, כשיש טקסט מסומן', () => {

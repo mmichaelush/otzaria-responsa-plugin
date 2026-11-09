@@ -187,6 +187,35 @@
       return this.request('POST', '/reference/open', this._launching(body), MAX_STREAM_MS);
     }
 
+    /**
+     * ההערות האישיות של המשתמש בבר אילן (קריאה בלבד). [query] מסנן לפי
+     * טקסט. `{ available, all, total, offset, empty, modified, notes }`.
+     */
+    notes(query, offset, limit) {
+      return this.request('POST', '/notes/list', {
+        ...(query ? { q: query } : {}),
+        offset: offset || 0,
+        limit,
+      });
+    }
+
+    /**
+     * הביוגרפיה של ספר, מ"כלים ← ביוגרפיה" של בר אילן: `{ found, heading, text,
+     * cached }`, או `{ found: false }`. הפעם הראשונה מפעילה את בר אילן ורצה כדקה.
+     */
+    biography(key) {
+      return this.request('POST', '/biography', this._launching({ key }), MAX_STREAM_MS);
+    }
+
+    /**
+     * "קריאת כל הביוגרפיות" (`POST /biography/harvest`): [action] הוא `start`
+     * (קורא ברקע, לאט, את כל מה שעוד לא נשמר; חוזר מיד), `stop` או `status`.
+     * מחזיר `{ state, total, stored, failed, current, message }`.
+     */
+    biographyHarvest(action) {
+      return this.request('POST', '/biography/harvest', this._launching({ action }));
+    }
+
     /** "פתיחת בר אילן": מפעיל אותו אם צריך ומביא אותו לחזית. */
     showResponsa() {
       return this.request('POST', '/responsa/show', {}, MAX_STREAM_MS);

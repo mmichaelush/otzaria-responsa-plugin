@@ -526,7 +526,9 @@ class ResponsaAutomation {
       );
     }
 
-    // מופע ממוזער או מוסתר מאחורי אוצריא נראה למשתמש כמו פתיחה שנכשלה.
+    // מופע ממוזער או מוסתר מאחורי אוצריא נראה למשתמש כמו פתיחה שנכשלה, וכך גם
+    // חלון הספר עצמו אם הוא מוזער בתוך בר אילן.
+    ResponsaWin32.restoreMdiChild(main, title);
     final broughtToFront = ResponsaWin32.bringToFront(main);
 
     final isNew = !before.contains(title);

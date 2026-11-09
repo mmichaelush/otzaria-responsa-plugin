@@ -53,6 +53,9 @@ class HttpApi {
       '/book/open': _service.open,
       '/reference/open': _service.openReference,
       '/text/search': _service.searchText,
+      '/notes/list': _service.notes.list,
+      '/biography': _service.biography.read,
+      '/biography/harvest': _service.biography.harvest,
       '/responsa/show': _service.showResponsa,
     };
   }

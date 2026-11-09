@@ -49,16 +49,16 @@ class ResponsaCatalogInfo {
     final source = installPath?.trim();
     if (source == null || source.isEmpty) return true;
     final known = installPaths
-        .map((value) => _comparablePath(value))
+        .map((value) => comparablePath(value))
         .where((value) => value.isNotEmpty)
         .toSet();
     if (known.isEmpty) return true;
-    return known.contains(_comparablePath(source));
+    return known.contains(comparablePath(source));
   }
 
   /// מערכת הקבצים של Windows אינה רגישה לרישיות, ונתיב שנקרא מהרישום יכול
   /// להסתיים בלוכסן ונתיב שנקרא מתהליך חי לא.
-  static String _comparablePath(String value) => value
+  static String comparablePath(String value) => value
       .trim()
       .replaceAll('/', r'\')
       .replaceAll(RegExp(r'\\+$'), '')

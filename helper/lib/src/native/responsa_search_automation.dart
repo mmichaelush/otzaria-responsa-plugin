@@ -407,7 +407,11 @@ class ResponsaSearchAutomation {
       _closeQueryErrors();
       return outcome;
     }
-    // המודאלים שייכים לחלון הראשי ועולים איתו.
+    // חלון התוצאות יכול להיפתח ממוזער בתוך בר אילן, והמודאלים שייכים לחלון
+    // הראשי ועולים איתו.
+    if (outcome.window case final title?) {
+      ResponsaWin32.restoreMdiChild(main, title);
+    }
     return outcome.withFront(ResponsaWin32.bringToFront(main));
   }
 

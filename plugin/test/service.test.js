@@ -310,3 +310,14 @@ test('connect: פורטים שלא עונים כלל נבדקים במקביל, 
   await assert.rejects(new ServiceClient(bridge).connect(), { code: 'serviceUnavailable' });
   assert.ok(peak >= 9, 'peak ' + peak);
 });
+
+test('biographyHarvest: POST /biography/harvest עם הפעולה, ובלי להפעיל את בר אילן כשההגדרה כבויה', async () => {
+  const status = { state: 'running', total: 1248, stored: 3, failed: 0, current: 'מגילת תענית', message: null };
+  const { bridge, service } = await connected({ '/biography/harvest': reply(200, status) });
+  assert.deepEqual(await service.biographyHarvest('start'), status);
+  assert.equal(bridge.requests[0].path, '/biography/harvest');
+  assert.deepEqual(bridge.requests[0].body, { action: 'start' });
+  service.autoStart = false;
+  await service.biographyHarvest('status');
+  assert.deepEqual(bridge.requests[1].body, { action: 'status', autoStart: false });
+});

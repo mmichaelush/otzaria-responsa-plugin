@@ -45,17 +45,24 @@
 | `js/responsa-domain.js` | כל ההחלטות, טהורות: איזה מסך, הודעות לפי קוד, פרטי ספר, רשימת ההכנה, `Links` |
 | `js/responsa-advanced.js` | החיפוש בטקסט: אופנים, בניית השאילתה, "מה יחופש", בדיקה |
 | `js/responsa-locate.js` | איתור מקום: נרמול, בדיקה, "אחרונים" |
+| `js/responsa-notes.js` | הערות אישיות: מה מועבר לאוצריא, איך ההערה נראית, יומן ההעברה |
 | `js/responsa-log.js` | יומן בזיכרון (200 רשומות) ו-`scrub()` לנתיבים |
 | `js/responsa-runtime.js` | הגבול היחיד מול `Otzaria.call` |
 | `js/responsa-settings.js` | הגדרות, כל אחת במפתח אחסון משלה (`KEYS`) |
 | `js/responsa-service.js` | הגבול היחיד מול הרשת: `network.fetchStream` אל השירות |
 | `js/responsa-engine.js` | מול אוצריא: שליחת הרשימה לחיפוש הספרייה, שמירת הפורט, כותרת התפריט, קיצורים |
+| `js/responsa-notes-flow.js` | בקר לשונית "הערות": קריאה מהשירות, בדיקה, העברה וביטול |
+| `js/responsa-biography-flow.js` | בקר "ביוגרפיה" בפרטי ספר: בקשה ארוכה אחת, ותוצאה "יש", "אין" או כשל |
 | `js/responsa-theme.js` | ערכת אוצריא ← משתני CSS; גופן וגודל תצוגה מההגדרות |
 | `js/responsa-icons.js` | אייקוני Fluent לדף (נבנה, לא נערך) |
+| `js/responsa-search-handoff.js` | העברת חיפוש בין אוצריא לתוסף: היקף ושלילה ב-`openSearchTab`, והכפתור "להמשיך בבר אילן" (`resultsAction`) |
+| `js/responsa-field-actions.js` | הכפתור "בבר אילן" בשדות החיפוש של אוצריא (`searchFieldActions`): התרומה למניפסט והאירוע שמגיע ממנו |
 | `js/responsa-ui.js` | DOM של לשונית "ספרים" ומסכי ההכנה |
 | `js/responsa-panels.js` | DOM של הלשוניות "הגדרות", "עזרה" ו"אודות ודיווח", ומסך הפתיחה |
 | `js/responsa-advanced-ui.js` | DOM של לשונית "חיפוש בטקסט" |
 | `js/responsa-locate-ui.js` | DOM של לשונית "איתור מקום" |
+| `js/responsa-notes-ui.js` | DOM של לשונית "הערות" |
+| `js/responsa-biography-ui.js` | DOM של הכפתור "ביוגרפיה" והמאמר בפרטי הספר |
 | `js/responsa-view.js` | שורת הלשוניות והלשונית הנוכחית: עדכון במקום, פוקוס, `inert` |
 | `js/responsa-app.js` | הבקר: מצב, לשוניות, טיימרים, מחזור חיים, דיווח |
 | `js/responsa-main.js` | חיבור לאירועי אוצריא. אין מנוע רקע |
@@ -66,10 +73,12 @@
 | מקום | תפקיד |
 |---|---|
 | `bin/responsa_helper.dart` | כניסה, ארגומנטים, בחירת פורט |
-| `lib/src/server/` | HTTP, אבטחה, נקודות הקצה (`helper_service.dart`), בנייה, קטלוג בזיכרון, נתיבים (`helper_paths.dart`) |
-| `lib/src/native/` | Win32 מול בר אילן: גילוי, עץ, פתיחה, חיפוש, כתיבת הקטלוג |
+| `lib/src/server/` | HTTP, אבטחה, נקודות הקצה (`helper_service.dart`), בנייה, קטלוג בזיכרון, נתיבים (`helper_paths.dart`), הערות (`notes_service.dart`) וביוגרפיה (`biography_service.dart`), בדיקת ההפעלה בכניסה (`startup_check.dart`) |
+| `lib/src/native/` | Win32 מול בר אילן: גילוי, עץ, פתיחה, חיפוש, כתיבת הקטלוג, וקריאת מאמר מחלון הביוגרפיה והלוח (`responsa_biography_*.dart`, `responsa_clipboard.dart`) |
 | `lib/src/text/` | עברית: נרמול, שמות, מחברים, ביבליוגרפיה, ניקוי שאילתה |
 | `lib/src/catalog/` | מאגר הקטלוג (SQLite) ומיפוי לקטגוריות אוצריא |
+| `lib/src/biography/` | רשימת הביוגרפיות (`biography-index.json`) והמאמרים השמורים (`biographies\`), כתיבה אטומית |
+| `lib/src/notes/` | קריאת ההערות האישיות מעותק של `DATA\annot_db` (קריאה בלבד), והמודל `ResponsaNote` |
 | `lib/src/log.dart` | `logLine`: היומן היחיד |
 | `test/` | בדיקות יחידה ו-HTTP מול `FakeBackend`; `live_*` רצות רק מול בר אילן אמיתי |
 
@@ -90,7 +99,7 @@
 
 1. **זו החלטה** (מה להציג, איזו הודעה, האם לשלוח)? ← `responsa-domain.js`. פונקציה טהורה, עם בדיקה ב-`domain.test.js`.
 2. **זה חייב לעבוד גם כשהלשונית סגורה** (לחיצה ימנית, מסך הספרייה)? ← פעולה של אוצריא במניפסט (`localService.post`), ונקודת קצה בשירות. קוד התוסף אינו רץ אז.
-3. **זה ציור של המסך?** ← הקובץ של הלשונית: `responsa-ui.js` (ספרים), `responsa-advanced-ui.js` (חיפוש בטקסט), `responsa-locate-ui.js` (איתור מקום) או `responsa-panels.js` (הגדרות, עזרה, פתיחה). DOM בלבד: מודל ופעולות נכנסים, אלמנט יוצא.
+3. **זה ציור של המסך?** ← הקובץ של הלשונית: `responsa-ui.js` (ספרים), `responsa-advanced-ui.js` (חיפוש בטקסט), `responsa-locate-ui.js` (איתור מקום), `responsa-notes-ui.js` (הערות), `responsa-biography-ui.js` (ביוגרפיה בפרטי ספר) או `responsa-panels.js` (הגדרות, עזרה, פתיחה). DOM בלבד: מודל ופעולות נכנסים, אלמנט יוצא.
 4. **זה מצב, טיימר או תגובה לפעולת משתמש?** ← `responsa-app.js`.
 5. **קריאה חדשה ל-SDK של אוצריא?** ← דרך `responsa-runtime.js`, תמיד.
 6. **בקשה חדשה לשירות?** ← `responsa-service.js`, ובצד השני נקודת קצה ב-`helper_service.dart` ועדכון של `docs/PROTOCOL.md`.
@@ -119,9 +128,9 @@
 
 ### מוצר
 - **ההבהרה על רישיון בר אילן** מוצגת ראשונה במסך הפתיחה, וגם ב"אודות". כך נקבע בפורום אוצריא ([הודעה 40010](https://otzaria.org/forum/post/40010)). לא מסירים אותה, לא מקצרים ולא מזיזים למטה.
-- **אין העתקת תוכן מבר אילן.** רק קטלוג, ופתיחה או חיפוש בתוכנה המקורית.
+- **אין העתקת תוכן מבר אילן.** רק קטלוג, ופתיחה או חיפוש בתוכנה המקורית. **שני יוצאי דופן, צרים:** ביוגרפיה שהמשתמש ביקש (מאמר אחד בכל פעם, או "קריאת כל הביוגרפיות" ברקע שהמשתמש מפעיל בעצמו; נשמר רק אצלו, בלי פענוח הארכיון), והערות אישיות שלו (`annot_db`, נקראות מעותק ומועברות לאוצריא לפי בקשתו). כל הרחבה היא החלטה של בעל הפרויקט, ומתעדכנת גם בהצהרת הרישיון ב-`README.md`. פירוט ב-`AGENTS.md`.
 - **התוסף עובד בלי אינטרנט.** כל תקשורת היא ל-`127.0.0.1`. קישור חיצוני בודק את `model.online` ומסביר כשאין חיבור.
-- **`minAppVersion` 0.9.98.1** (מ-0.7.0; החנות אינה מגישה את התוסף לאוצריא 0.9.98): הכפתור בשדות החיפוש וההקשרים במפרשים ו-PDF. עד אז 0.9.98: חיפוש הספרייה (`library.books.provide`, Otzaria#1655) והפעולות `localService` של אוצריא (Otzaria#1762). עד שגרסה רשמית של אוצריא כוללת את שניהם הגרסה ממתינה בענף שלה, ושער הפרסום מפרסם אותה ([docs/RELEASING.md](docs/RELEASING.md)). בלי ההרשאה לספרייה, הממשק מסתיר כל מה שקשור אליה.
+- **`minAppVersion` 0.9.98.3** (מ-0.8.0; החנות אינה מגישה את התוסף לאוצריא ישנה ממנה): שורת דיאלוג `switch`, `resultsAction`, והבקשה המלאה באירוע של הכפתור בשדה החיפוש. לפני כן 0.9.98.1 (הכפתור בשדות החיפוש וההקשרים במפרשים ו-PDF).
 
 ### גרסאות ופרוטוקול
 - **`plugin/manifest.json` ו-`HelperService.serverVersion` זהים תמיד.** `test/manifest.test.js` ו-`build.ps1` בודקים.
@@ -157,7 +166,17 @@
 | `scenario=` | `ready`, `serviceMissing`, `needsCatalog`, `building`, `buildFailed`, `rebuilding`, `otherInstallation`, `notInstalled`, `portTaken`, `permissionDenied`, `serviceError`, `serviceOutdated`, `unsupported` |
 | `mode=dark` | ערכה כהה |
 | `lang=en` | אנגלית |
-| `page=` | הלשונית: `books`, `text`, `locate`, `settings`, `help` (עם `tab=guide\|troubleshoot\|status`), `about` |
+| `page=` | הלשונית: `books`, `text`, `locate`, `notes`, `settings`, `help` (עם `tab=guide\|troubleshoot\|status`), `about` |
+| `notes=` | לשונית "הערות": `error` (הקריאה נכשלת) או `none` (אין קובץ הערות) |
+| `import=` | בלשונית "הערות": `check` לוחץ "בדיקת ההתאמה", `run` גם "העברה" אחריה |
+| `biography=1` | לחיצה על "ביוגרפיה" בפרטי הספר שנפתחו (`details=<key>`) |
+| `bio=` | תשובת הביוגרפיה: `error` (כשל) או `none` (אין ביוגרפיה לספר) |
+| `browse=<נתיב>` | נתיב העיון השמור (`responsa_browse_path`) |
+| `forms=<אינדקס>[,click]` | הרשימה "איך לחפש את המילה" פתוחה; עם `,click` גם מסמנת בה "התרגום לארמית" ובודקת שנשארה פתוחה |
+| `example=1` | לחיצה על הדוגמה הראשונה ב"איתור מקום", ובדיקה שמילאה את השדה |
+| `noauthors=1` / `authorsfill=1` | מהדורה בלי טבלת מחברים (CD32C) / רשימה בלי מחברים שהשירות יכול להשלים |
+| `noeasy=1` / `noeasyopts=1` | שירות שחיפוש רגיל בו הוא חיפוש מתקדם (בלי `easySearch`) / שאינו מקבל את ההגדרות שלו (בלי `easyOptions`) |
+| `noicons=1` | השירות אינו מחזיר את גופן האייקונים של אוצריא |
 | `query=` | חיפוש מוכן |
 | `adv=` | חיפוש שמור בלשונית "חיפוש בטקסט": `simple`, `words`, `scope`, `manual`, `free` |
 | `loc=` / `history=1` | מקום שהוקלד ב"איתור מקום" / מקומות אחרונים |
@@ -192,14 +211,14 @@ dart analyze --fatal-infos
 dart test
 cd ..
 
-# הוולידטור הרשמי (אותה בדיקה שהחנות מריצה)
-node build/validator/src/cli.js plugin --app-version 0.9.98.2 --fail-on-warnings --publish false
+# הוולידטור הרשמי (אותן בדיקות שהחנות מריצה). מצפה אזהרה אחת: plugin.storage.read
+node build/validator/src/cli.js plugin --app-version 0.9.98.3 --publish false
 
 git diff --check
 ```
 
 - **`smoke.mjs`** טוען כל מסך, לוח וכרטיסייה, בעברית, באנגלית ובכהה, ונכשל על שגיאה בקונסול. שורות היומן של התוסף (`[responsa] …`) אינן שגיאה, כי כשל צפוי נרשם בכוונה. רק `[responsa] event … failed` נחשב.
-- **הוולידטור** נמצא ב-`build/validator`. אם אינו שם, `installer/build.ps1` משכפל אותו (`Otzaria/otzaria-plugin-validator`, `v1`). `--app-version` שווה ל-`minAppVersion`.
+- **הוולידטור** נמצא ב-`build/validator`. אם אינו שם, `installer/build.ps1` משכפל אותו (`Otzaria/otzaria-plugin-validator`, `v1`). `--app-version` שווה ל-`minAppVersion`. **בלי `--fail-on-warnings`:** הוולידטור ממליץ להסיר את `plugin.storage.read` (הרשאת בסיס), ואוצריא דורשת אותה בכל זאת בגלל `$storage` (ראו `AGENTS.md`), ולכן אזהרה אחת היא המצב התקין. ה-CI ו-`installer/build.ps1` מריצים בלי הדגל ובודקים שהמספר מדויק עם `tools/validator-warnings.js`.
 - **אריזה ומתקין:** `powershell -File installer/build.ps1`. בונה את השירות, אורז את התוסף דרך הוולידטור ובונה את המתקין ל-`installer/output/`.
 - **חי, מול בר אילן:** `cd helper && dart test --run-skipped test/live_*`. מפעיל את בר אילן על המסך.
 

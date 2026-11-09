@@ -14,17 +14,29 @@
   const Settings = root.ResponsaSettings;
   const { SettingsStore } = Settings;
   const { Engine } = root.ResponsaEngine;
+  const { NotesFlow } = root.ResponsaNotesFlow;
+  const { BiographyFlow } = root.ResponsaBiographyFlow;
   const Panels = root.ResponsaPanels;
   const Log = root.ResponsaLog;
   const Icons = root.ResponsaIcons || {};
   const FieldActions = root.ResponsaFieldActions;
-  const Handoff = root.ResponsaSearchHandoff;
   const Screen = Domain.Screen;
   const t = (text, vars) => I18n.t(text, vars);
 
-  /** כמה זמן לחכות להקלדה לפני חיפוש. */
+  /** הפקד הראשי של כל שלב בהעברת הערות: אליו עובר הפוקוס כשהכפתור שנלחץ נעלם. */
+  const NOTES_PRIMARY_CONTROL = Object.freeze({
+    idle: 'notes-check',
+    checking: 'notes-cancel',
+    review: 'notes-import',
+    importing: 'notes-cancel',
+    done: 'notes-dismiss',
+    undoing: 'notes-cancel',
+  });
+
   /** כמה לחכות לספירת התוצאות של אוצריא ב"קודם באוצריא", לפני שמחפשים בבר אילן. */
   const OTZARIA_COUNT_MS = 25000;
+  /** כמה זמן חיפוש שחזר לאוצריא נחשב "אותו חיפוש" אם הגיע שוב מהכפתור בתוצאות. */
+  const BOUNCE_MEMORY_MS = 30 * 60 * 1000;
   const SEARCH_DEBOUNCE_MS = 250;
 
   /** החיפוש המתקדם נשמר אחרי הפסקה קצרה בהקלדה, ולא בכל אות. */
@@ -37,6 +49,16 @@
     [Screen.portTaken]: 15000,
     [Screen.notInstalled]: 30000,
   };
+
+  /** כמה פעמים ברצף אוצריא יכולה לענות "עסוקה" לפני שמציגים שהשירות חסר, ובאיזה מרווח. */
+  const HOST_BUSY_RETRIES = 8;
+  const HOST_BUSY_RETRY_MS = 3000;
+
+  /**
+   * הערת "השירות ישן מהתוסף" נשארה על המסך גם אחרי שההתקנה עדכנה אותו, כי
+   * המסך נקרא רק בפתיחה: בודקים את גרסת השירות כל כמה שניות כל עוד ההערה מוצגת.
+   */
+  const SERVICE_NOTICE_POLL_MS = 8000;
 
   /** הדיווח נחתך כאן: טקסט ארוך מזה כבר אינו תיאור של בעיה אחת. */
   const MAX_REPORT_LENGTH = 5000;
@@ -56,8 +78,27 @@
       this.service = opts.service || new ServiceClient(bridge, undefined, { log: this.log });
       this.settings = opts.settings || new SettingsStore(this.runtime);
       this.engine = opts.engine || new Engine(this.runtime, this.service, { log: this.log });
+      /** "ביוגרפיה" בפרטי ספר: מצב ולוגיקה משלה (responsa-biography-flow.js). */
+      this.biographyFlow =
+        opts.biographyFlow ||
+        new BiographyFlow({
+          service: this.service,
+          log: this.log,
+          changed: () => this._biographyChanged(),
+        });
+      /** הערות אישיות: מצב ולוגיקה משלהם (responsa-notes-flow.js). */
+      this.notesFlow =
+        opts.notesFlow ||
+        new NotesFlow({
+          runtime: this.runtime,
+          service: this.service,
+          log: this.log,
+          changed: () => this._notesChanged(),
+          progress: () => this._notesProgress(),
+          locate: (place) => this.locateFromNotes(place),
+        });
       this.model = {
-        /** הלשונית: 'books' | 'text' | 'locate' | 'settings' | 'help' | 'about'. */
+        /** הלשונית: 'books' | 'text' | 'locate' | 'notes' | 'settings' | 'help' | 'about'. */
         tab: 'books',
         screen: Screen.loading,
         platform: null,
@@ -122,6 +163,10 @@
           status: null,
           history: [],
         },
+        /** הביוגרפיה שבפרטי הספר: `{ key, loading, result, error }` של [BiographyFlow]. */
+        biography: this.biographyFlow.state,
+        /** לשונית "הערות": `{ list, importer }` של [NotesFlow]. */
+        notes: this.notesFlow.state,
         /** "פתיחת בר אילן" רצה. */
         showing: false,
         /** בנייה רצה, בכל מסך. */
@@ -215,7 +260,7 @@
       this.model.browse = { ...this.model.browse, path: this.model.settings.browsePath };
       this.model.advanced.query = Advanced.normalize(this.model.settings.advancedQuery || Advanced.emptyQuery());
       this.model.locate.history = this.model.settings.locateHistory.slice();
-      this.model.tab = this.model.settings.tab;
+      this.model.tab = this._allowedTab(this.model.settings.tab);
       this._applyLanguage({ boot: true });
       this.log.info(
         'הפעלה: תוסף ' + this.model.pluginVersion + ', אוצריא ' + this.model.appVersion +
@@ -338,7 +383,8 @@
 
     /**
      * `search.fieldAction.invoked`: הכפתור "בבר אילן" בשדה חיפוש של אוצריא
-     * (מאוצריא 0.9.98.1). מה שהוקלד עובר ללשונית של אותו שדה ורץ בה.
+     * (מאוצריא 0.9.98.1). מה שהוקלד עובר ללשונית של אותו שדה ורץ בה; בשדה
+     * החיפוש בטקסט (0.9.98.3) גם האפשרויות וההיקף שבדיאלוג.
      */
     async fieldActionInvoked(event) {
       const request = FieldActions.requestFor(event);
@@ -358,7 +404,7 @@
       if (!request.text) {
         this.selectTab(request.tab);
       } else if (request.tab === 'text') {
-        await this.searchFromOtzaria({ query: request.text });
+        await this.searchFromOtzaria(request.request || { query: request.text });
       } else if (request.tab === 'locate') {
         this.selectTab('locate');
         this._fillLocate(request.text);
@@ -373,6 +419,7 @@
     /** אוצריא מקפיאה לשונית שאינה מוצגת; הבנייה ממשיכה בשירות. */
     suspend() {
       this.suspended = true;
+      this.biographyFlow.stopPolling();
       this._stopPolling();
       this._stopWatchingBuild();
       this._stopClock();
@@ -423,6 +470,14 @@
         failure = error;
       }
       if (this.suspended || seq !== this.refreshSeq) return;
+      // "אוצריא עסוקה" אינה "השירות חסר": בטעינה של אוצריא עצמה הבקשה הראשונה
+      // נדחית, ומי שרואה "צריך להתקין" מריץ מתקין שאינו נחוץ.
+      if (failure && failure.code === 'hostBusy' && !health) {
+        this.hostBusyCount = (this.hostBusyCount || 0) + 1;
+        if (this.hostBusyCount > HOST_BUSY_RETRIES) failure = { code: 'serviceUnavailable', message: failure.message };
+      } else {
+        this.hostBusyCount = 0;
+      }
       this.model.health = health;
       this.model.status = status;
       this.model.servicePort = health ? Domain.portOf(this.service.baseUrl) : null;
@@ -454,6 +509,9 @@
       // `_show` כבר בונה או מעדכן את הלשונית; נשארו רק היומן ומסך הפתיחה.
       this.model.log = this.log.entries('info').slice(-LOG_VIEW_ENTRIES);
       this._show(screen);
+      if (screen === Screen.loading && failure && failure.code === 'hostBusy' && !this.suspended) {
+        this.pollTimer = setTimeout(() => this.refresh(), HOST_BUSY_RETRY_MS);
+      }
       if (this.model.sheet !== null) this.view.renderSheet(this.model, this.actions);
       this._ensurePicker();
       if (build.state === 'running' && !this.buildWatch) {
@@ -486,10 +544,42 @@
       this.model.screen = screen;
       if (changed) this.view.render(this.model, this.actions);
       else this.view.update(this.model, this.actions);
+      this._openNotesIfShown();
+      this._loadHarvestIfShown();
       const interval = POLL_MS[screen];
       if (interval && !this.suspended) {
         this.pollTimer = setTimeout(() => this.refresh(), interval);
+      } else if (screen === Screen.ready && Domain.serviceNotice(this.model.health, this.model.pluginVersion)) {
+        this._scheduleServiceRecheck();
       }
+    }
+
+    _scheduleServiceRecheck() {
+      if (this.suspended) return;
+      this._stopPolling();
+      this.pollTimer = setTimeout(() => this._recheckService(), SERVICE_NOTICE_POLL_MS);
+      // בדיקה אופציונלית: שלא תחזיק תהליך חי (בדיקות ב-Node; בדפדפן אין unref).
+      if (this.pollTimer && typeof this.pollTimer.unref === 'function') this.pollTimer.unref();
+    }
+
+    /**
+     * בודק רק את גרסת השירות. השתנתה (או שהשירות נעלם באמצע ההתקנה) — רענון
+     * מלא; אחרת ממשיכים לחכות. לעולם אינו זורק.
+     */
+    async _recheckService() {
+      const before = this.model.health && this.model.health.serverVersion;
+      let health = null;
+      try {
+        health = await this.service.connect();
+      } catch (error) {
+        health = null;
+      }
+      if (this.suspended) return;
+      if (!health || health.serverVersion !== before) {
+        await this.refresh({ rerunSearch: false });
+        return;
+      }
+      this._scheduleServiceRecheck();
     }
 
     _stopPolling() {
@@ -682,12 +772,19 @@
 
     // ---------------------------------------------------- לשוניות
 
+    /** [tab], או "ספרים" כשהלשונית כבויה בהגדרות ("הערות אישיות מבר אילן"). */
+    _allowedTab(tab) {
+      return tab === 'notes' && this.model.settings.notes === false ? 'books' : tab;
+    }
+
     /**
      * מעבר ללשונית. [focusTab] — מעבר בחצים: הפוקוס נשאר על הלשונית; אחרת
      * הוא עובר לשדה הראשון שבה. הלשונית נשמרת לפתיחה הבאה.
      */
     selectTab(tab, options) {
       if (!Settings.TABS.includes(tab)) return;
+      // לשונית שהמשתמש כיבה בהגדרות אינה נפתחת, גם מקיצור דרך.
+      if (this._allowedTab(tab) !== tab) return;
       const changed = this.model.tab !== tab;
       this.model.tab = tab;
       if (tab === 'help') this.model.log = this.log.entries('info').slice(-LOG_VIEW_ENTRIES);
@@ -703,6 +800,26 @@
       if (options && options.focusTab) this.view.focusTab(tab);
       else this.view.focusPage(this.model);
       if (tab === 'text') this._ensurePicker();
+      this._openNotesIfShown();
+      this._loadHarvestIfShown(true);
+    }
+
+    /**
+     * בהגדרות: מה מצב הקריאה ברקע של כל הביוגרפיות (שירות ישן אינו מכיר אותה).
+     * [force] — בכניסה ללשונית תמיד; ברענון המסך רק אם עוד לא נשאל.
+     */
+    _loadHarvestIfShown(force) {
+      const { harvest, harvestBusy } = this.model.biography;
+      if (
+        (force || !harvest) &&
+        !harvestBusy &&
+        this.model.tab === 'settings' &&
+        !Domain.SETUP_SCREENS.has(this.model.screen) &&
+        this.model.settings.biography &&
+        Domain.serviceCan(this.model.health, 'biographyHarvest')
+      ) {
+        this.biographyFlow.loadHarvest();
+      }
     }
 
     /**
@@ -1157,11 +1274,9 @@
       // "קודם באוצריא": אוצריא מצאה — החיפוש נשאר שם, ובר אילן רק בבקשה.
       const otzaria = await this._otzariaFirstSearch(request);
       if (otzaria && otzaria.found) return;
-      // "חיפוש בבר אילן" בדיאלוג מחליף את החיפוש של אוצריא; עם "חיפוש גם
-      // באוצריא" — הבקשה רצה גם שם, בהגדרות שנבחרו בדיאלוג.
-      // TODO(otzaria-0.9.99): בלחיצה על הכפתור בתוצאות (#3068) החיפוש כבר פתוח
-      // באוצריא, ו"גם באוצריא" היה פותח כרטיסייה כפולה.
-      if (!otzaria && !Handoff.RESULTS_ACTION_ENABLED) await this._alsoInOtzaria(Advanced.otzariaSearchFrom(request));
+      // "חיפוש בבר אילן" בדיאלוג מחליף את החיפוש של אוצריא, והכפתור בתוצאות
+      // שלה ("להמשיך בבר אילן") מגיע לכאן כאותו אירוע, כשהחיפוש כבר פתוח שם.
+      // לכן "חיפוש גם באוצריא" אינו חל כאן: הוא היה פותח כרטיסייה כפולה.
       await this.runAdvanced({ otzaria: false });
       if (otzaria && state.status && state.status.kind === 'success') {
         state.status = { ...state.status, text: t('אוצריא לא מצאה תוצאות, ולכן החיפוש הועבר לבר אילן.') + ' ' + state.status.text };
@@ -1189,12 +1304,18 @@
      */
     async _otzariaFirstSearch(request) {
       const model = this.model;
-      // TODO(otzaria-0.9.99): עם כפתור בתוצאות של אוצריא (#3068) המשתמש מחליט
-      // אחרי שראה אותן, ואין סיבה לחפש שם פעמיים כדי לספור.
-      if (Handoff.RESULTS_ACTION_ENABLED) return null;
       if (!model.settings.otzariaFirstSearch || !Domain.canSearchOtzariaFirst(model.permissions)) return null;
       const target = Advanced.otzariaSearchFrom(request);
       if (!target) return null;
+      // אותו חיפוש שחזר לאוצריא לפני רגע ושב ומגיע: המשתמש לחץ בתוצאות שלה
+      // "להמשיך בבר אילן" (אותו אירוע כמו הגשת הדיאלוג), ולא סופרים שוב.
+      const bounceKey = JSON.stringify([target.query, request && request.mode]);
+      const bounced = this._lastBounce;
+      this._lastBounce = null;
+      if (bounced && bounced.key === bounceKey && Date.now() - bounced.at < BOUNCE_MEMORY_MS) {
+        this.log.info('אותו חיפוש חזר מאוצריא: ממשיכים בבר אילן');
+        return null;
+      }
       const state = model.advanced;
       state.status = { kind: 'info', text: t('בודק אם אוצריא מוצאת תוצאות…') };
       this._renderPage();
@@ -1214,6 +1335,7 @@
         this._renderPage();
         return null;
       }
+      this._lastBounce = { key: bounceKey, at: Date.now() };
       this.log.info('אוצריא מצאה ' + total + ' תוצאות: החיפוש נשאר באוצריא');
       state.status = {
         kind: 'success',
@@ -1627,6 +1749,19 @@
         this.service.autoStart = this.model.settings.autoStart;
         this.service.showSummary = this.model.settings.showSummary;
         if (name === 'font' || name === 'scale') applyAppearance(this.model.settings);
+        // כיבוי "הערות": בדיקה או ייבוא שרצים ברקע נעצרים, והמסך מתנקה. ההגדרות
+        // הן לשונית אחרת, ולכן המשתמש לא עומד בלשונית שנעלמת.
+        if (name === 'notes' && value === false) {
+          this.notesFlow.cancel();
+          this.notesFlow.dismiss();
+        }
+        if (name === 'biography' && value === false) {
+          this.biographyFlow.close();
+          // כיבוי הביוגרפיות עוצר גם את הקריאה ברקע (אם רצה).
+          if (this.model.biography.harvest && this.model.biography.harvest.state === 'running') {
+            this.biographyFlow.stopHarvest();
+          }
+        }
         this.log.info('הגדרה: ' + name + ' = ' + JSON.stringify(value));
         // כבוי: הרשימה נמחקת מאוצריא; דלוק: נשלחת שוב.
         if (name === 'libraryBooks' && Domain.serviceCan(this.model.health, 'export') && !this.model.buildActive) {
@@ -1798,6 +1933,11 @@
       const opened = await this.runtime.callSoft('app.openUrl', { url });
       if (opened === null) {
         await this.runtime.notify.error(t('לא ניתן לפתוח את הדפדפן. הכתובת: {url}', { url }));
+      } else if (name === 'setup') {
+        // סינון אינטרנט חוסם הורדת קובץ הרצה ומציג דף שגיאה; ההודעה נותנת מה לעשות.
+        await this.runtime.notify.info(
+          t('אם דף ההורדה נפתח עם שגיאה, ייתכן שסינון אינטרנט חוסם אותה. אפשר להוריד את המתקין במחשב אחר ולהעביר אותו בדיסק און קי. כתובת ההורדה: {url}', { url }),
+        );
       }
     }
 
@@ -1811,6 +1951,12 @@
         openWelcome: () => this.openSheet('welcome'),
         finishWelcome: () => this.finishWelcome(),
         toggleDetails: (key) => this.toggleDetails(key),
+        // פרטי הספר מצוירים ב-responsa-ui.js, שאינו מכיר את שכבת הביוגרפיה שמעליו.
+        biographyView: (book) => root.ResponsaBiographyUi.biographyView(book, this.model, this.actions),
+        showBiography: (book) => this.biographyFlow.show(book),
+        startBiographyHarvest: () => this.biographyFlow.startHarvest(),
+        stopBiographyHarvest: () => this.biographyFlow.stopHarvest(),
+        closeBiography: () => this.biographyFlow.close(),
         startBuild: () => this.startBuild(),
         rebuild: () => this.startBuild(),
         fillAuthors: () => this.startBuild({ authors: true }),
@@ -1845,6 +1991,17 @@
         locateIn: (book) => this.locateIn(book),
         locateInBarIlan: () => this.locateInBarIlan(),
         runLocate: (text) => this.runLocate(text),
+        searchNotes: (query) => this.notesFlow.search(query),
+        moreNotes: () => this.notesFlow.more(),
+        refreshNotes: () => this.notesFlow.refresh(),
+        locateNote: (note) => this.notesFlow.locate(note),
+        checkNotes: () => this.notesFlow.check(),
+        runNotesImport: () => this.notesFlow.runImport(),
+        askNotesUndo: () => this.notesFlow.askUndo(),
+        declineNotesUndo: () => this.notesFlow.declineUndo(),
+        undoNotesImport: () => this.notesFlow.undo(),
+        cancelNotes: () => this.notesFlow.cancel(),
+        dismissNotes: () => this.notesFlow.dismiss(),
         openLocateChoice: (index) => this.openLocateChoice(index),
         open: (book) => this.open(book),
         openHelp: (tab) => this.openHelp(tab),
@@ -1860,6 +2017,52 @@
         editReport: (text) => this.editReport(text),
         sendReport: () => this.sendReport(),
       };
+    }
+
+    // ---------------------------------------------------- הערות
+
+    /** הרשימה נקראת בכניסה ללשונית, ורק כשהשירות כבר מוכן לענות. */
+    _openNotesIfShown() {
+      if (
+        this.model.tab === 'notes' &&
+        !Domain.SETUP_SCREENS.has(this.model.screen) &&
+        // שירות ישן אינו מכיר את /notes/list: אין טעם לנסות בכל כניסה.
+        Domain.serviceCan(this.model.health, 'notes')
+      ) {
+        this.notesFlow.open();
+      }
+    }
+
+    _notesChanged() {
+      if (this.model.tab !== 'notes') return;
+      this.view.refreshPage(this.model, this.actions);
+      const { importer } = this.model.notes;
+      const shown = importer.phase + (importer.confirmingUndo ? ':confirm' : '');
+      if (shown === this._notesShown) return;
+      this._notesShown = shown;
+      this.view.focusIfLost(
+        importer.confirmingUndo ? 'notes-undo-decline' : NOTES_PRIMARY_CONTROL[importer.phase],
+      );
+    }
+
+    /** הכפתור "ביוגרפיה" הוחלף בסטטוס או במאמר: הפוקוס עובר אליו. */
+    _biographyChanged() {
+      // הקריאה ברקע מוצגת בהגדרות.
+      if (this.model.tab === 'settings') this.view.refreshPage(this.model, this.actions);
+      this._renderResults();
+      const { key, loading, error, result } = this.biographyFlow.state;
+      if (key !== null && (loading || error || result)) this.view.focusIfLost('biography-body-' + key);
+    }
+
+    /** התקדמות בלבד: השורה מתעדכנת במקום, בלי לבנות את הלשונית. */
+    _notesProgress() {
+      this.view.updateNotesProgress(this.model, this.actions);
+    }
+
+    /** "איתור בבר אילן" מהערה: מראה המקום שלה נפתח בלשונית "איתור מקום". */
+    locateFromNotes(place) {
+      this.selectTab('locate');
+      return this.locateRecent(place);
     }
 
     /** מסך הפתיחה, ולשונית שאינה "ספרים" — רק כשמשהו בהן השתנה. */

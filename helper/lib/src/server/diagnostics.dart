@@ -12,6 +12,7 @@ import 'package:responsa_helper/src/native/responsa_edition_probe.dart';
 import 'package:responsa_helper/src/native/responsa_installation.dart';
 import 'package:responsa_helper/src/native/responsa_integrity.dart';
 import 'package:responsa_helper/src/native/responsa_installation_discovery.dart';
+import 'package:responsa_helper/src/server/startup_check.dart';
 
 /// `GET /diagnostics`: מה שצריך כדי למצוא את שורש התקלה ממחשב שאין לנו גישה
 /// אליו, בכמה שורות. נבנה רק כשמבקשים (העתקת פרטים, דיווח), ולכן אינו מציף
@@ -67,6 +68,7 @@ class HelperDiagnostics {
           ', ${ResponsaIntegrity.describe(ResponsaIntegrity.own)}',
       if (logFilePath != null)
         r'log: %LOCALAPPDATA%\OtzariaResponsa\helper.log',
+      StartupCheck.describe(),
       ...installations,
       ...catalogLines,
       if (runningBuild != null) 'book list: reading now, $runningBuild',

@@ -1,7 +1,7 @@
 // גשר מדומה לתצוגה מקדימה בדפדפן: מחליף את `window.Otzaria` ואת השירות
-// המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|settings|help|about&tab=...
+// המקומי, לפי `?scenario=...&mode=light|dark&query=...&page=books|text|locate|notes|settings|help|about&tab=...
 // &lang=en&browse=<נתיב>&adv=<חיפוש>&loc=<מקום>&run=1&oldservice=1&nofree=1&service=<גרסה>&waiting=1&notice=1
-// &noicons=1&scale=1.3&font=Shofar`. ערכות הצבעים הן
+// &noicons=1&scale=1.3&font=Shofar&notes=none|error&import=check|run`. ערכות הצבעים הן
 // של אוצריא (מתוך Y-PLONI/HebrewBooksPlugin tools/preview-stub.js).
 (function () {
   'use strict';
@@ -135,6 +135,34 @@
     };
   }
 
+  // ההערות האישיות של "המשתמש". `notes=none`: אין קובץ הערות; `notes=error`: קובץ פגום.
+  const NOTES = [
+    { id: 1, source: 'ברכות דף ב עמוד א', quote: 'מאימתי', title: 'זמן קריאת שמע', text: 'כדאי לעיין גם ברמב"ם הלכות קריאת שמע פרק א.', date: '2019-03-12' },
+    { id: 2, source: 'שבת דף ג', quote: 'מוציאין', text: 'ראה שם בתוספות.\nלהשוות לדף ח.', date: '2019-04-02' },
+    { id: 3, source: 'שולחן ערוך אורח חיים סימן א סעיף א', text: 'לשון הרמ"א: "הגה: ויתגבר כארי".', date: '2020-01-20' },
+    { id: 4, source: 'ספר שאינו קיים באוצריא פרק ג', text: 'הערה על ספר שאין לו מקבילה באוצריא.', date: '2020-06-01' },
+    { id: 5, text: 'הערה כללית בלי מראה מקום.', title: 'רעיון לשיעור', date: '2021-09-30' },
+    { id: 6, source: 'פסחים דף לד', quote: 'כל שעה', text: 'שאלה: מה דין שעה שחמץ ברשותו?', date: '2022-03-08' },
+    { id: 7, source: 'בראשית ב ג', text: 'ויברך אלהים את יום השביעי.', date: '2022-10-14' },
+  ];
+
+  function notes(body) {
+    if (params.get('notes') === 'error') return 'error';
+    if (params.get('notes') === 'none') return { available: false, all: 0, total: 0, notes: [] };
+    const needle = String(body.q || '').trim();
+    const matching = NOTES.filter((note) => !needle || JSON.stringify(note).includes(needle));
+    const offset = body.offset || 0;
+    return {
+      available: true,
+      all: NOTES.length,
+      total: matching.length,
+      offset,
+      empty: 0,
+      modified: '2026-10-12T09:30:00Z',
+      notes: matching.slice(offset, offset + (body.limit || 100)),
+    };
+  }
+
   function respond(path, body) {
     switch (path) {
       case '/health':
@@ -171,6 +199,9 @@
                     ...(params.get('noeasy') || params.get('noeasyopts') ? [] : ['easyOptions']),
                     'summary',
                     'authorsFill',
+                    'notes',
+                    'biography',
+                    'biographyHarvest',
                   ],
             };
       case '/status':
@@ -187,6 +218,29 @@
         return search(body);
       case '/catalog/browse':
         return browse(body);
+      case '/notes/list':
+        return notes(body);
+      // `bio=none`: אין ביוגרפיה לספר; `bio=error`: בר אילן לא פתחה את החלון.
+      case '/biography':
+        if (params.get('bio') === 'error') return 'bioError';
+        if (params.get('bio') === 'none') return { found: false, title: 'ספר' };
+        return {
+          found: true,
+          title: 'מהרש"א חידושי הלכות',
+          entry: 'מהרש"א',
+          heading: 'מהרש"א',
+          text: 'רבי שמואל אליעזר איידלש, המכונה מהרש"א, נולד בקרקוב בשנת שי"ד לערך.\nהוא כיהן כראש ישיבה באוסטרה ובלובלין, וחיבר את "חידושי הלכות" ו"חידושי אגדות" על התלמוד.\nנפטר בשנת של"א.',
+          cached: false,
+        };
+      // `harvest=running|done|failed`: מצב "קריאת כל הביוגרפיות"; ברירת המחדל idle, ו-start מריץ.
+      case '/biography/harvest': {
+        const mode = body.action === 'start' ? 'running' : params.get('harvest') || 'idle';
+        const base = { total: 1248, failed: 0, current: null, message: null };
+        if (mode === 'running') return { ...base, state: 'running', stored: 312, current: 'מגילת תענית' };
+        if (mode === 'done') return { ...base, state: 'done', stored: 1248 };
+        if (mode === 'failed') return { ...base, state: 'failed', stored: 40, failed: 2, message: 'בר אילן אינה פועלת כרגע.' };
+        return { ...base, state: 'idle', stored: 0 };
+      }
       case '/otzaria/icons':
         return window.__OTZARIA_ICON_FONT__ && !params.get('noicons') ? window.__OTZARIA_ICON_FONT__ : null;
       case '/icon':
@@ -230,6 +284,16 @@
       await new Promise(() => {});
     }
     const answer = respond(path, body);
+    if (answer === 'bioError') {
+      yield { type: 'response', status: 502, ok: false, headers: {} };
+      yield { type: 'data', body: JSON.stringify({ error: { code: 'dialogNotFound', message: 'בר אילן לא פתח את חלון "ביוגרפיה".' } }) };
+      return;
+    }
+    if (answer === 'error') {
+      yield { type: 'response', status: 500, ok: false, headers: {} };
+      yield { type: 'data', body: JSON.stringify({ error: { code: 'notesUnreadable', message: 'קובץ ההערות של בר אילן אינו קריא.' } }) };
+      return;
+    }
     if (answer === null) {
       yield { type: 'response', status: 404, ok: false, headers: {} };
       yield { type: 'data', body: JSON.stringify({ error: { code: 'notFound', message: 'לא נמצא' } }) };
@@ -243,7 +307,7 @@
   // מסך הפתיחה מוצג רק כשמבקשים (`welcome=1`), כדי שלא יכסה כל מסך אחר.
   const storage = params.get('welcome') ? {} : { responsa_welcome_seen: true };
   if (params.get('browse')) storage.responsa_browse_path = params.get('browse');
-  // `page=<tab>`: הלשונית שנפתחת (ספרים, חיפוש בטקסט, איתור מקום, הגדרות, עזרה,
+  // `page=<tab>`: הלשונית שנפתחת (ספרים, חיפוש בטקסט, איתור מקום, הערות, הגדרות, עזרה,
   // אודות ודיווח).
   if (params.get('page')) storage.responsa_tab = params.get('page');
   if (params.get('history')) storage.responsa_locate_history = ['שמות רבה פרשה א', 'ברכות דף ב עמוד א'];
@@ -305,6 +369,15 @@
       let data = true;
       if (method === 'storage.get') data = Object.hasOwn(storage, payload.key) ? storage[payload.key] : null;
       if (method === 'storage.set') storage[payload.key] = payload.value;
+      // "איתור מקורות" של אוצריא: רק מקומות שיש להם ספר באוצריא.
+      if (method === 'library.resolveRef') {
+        const books = { 'ברכות': 42, 'שבת': 43, 'פסחים': 44, 'שולחן ערוך אורח חיים': 45, 'בראשית': 46 };
+        const title = Object.keys(books).find((name) => String(payload.ref).startsWith(name));
+        data = title
+          ? [{ id: books[title], bookId: title, bookUid: 'id:' + books[title], type: 'text', title, reference: payload.ref, index: 100, isPdf: false, isSourceLine: !payload.ref.startsWith('שבת'), isUserBook: false }]
+          : [];
+      }
+      if (method === 'notes.list') data = [];
       return Promise.resolve({ success: true, data, error: null });
     },
     on(event, callback) {
@@ -337,6 +410,8 @@
               'library.books.provide',
               'library.books.read',
               'reader.open',
+              'notes.read',
+              'notes.write',
             ],
       theme: {
         mode: dark ? 'dark' : 'light',
@@ -378,6 +453,30 @@
         const run = document.querySelector('[data-focus-key="adv-run"], [data-focus-key="locate-run"]');
         if (run) run.click();
       }, 400);
+    }
+    // `import=check|run`: "בדיקת ההתאמה" בלשונית "הערות", ואחריה גם "העברה".
+    if (params.get('import')) {
+      const click = (key, then) => {
+        const target = () => document.querySelector('[data-focus-key="' + key + '"]');
+        const wait = (tries) => {
+          const node = target();
+          if (node && !node.disabled) {
+            node.click();
+            if (then) then();
+          } else if (tries) setTimeout(() => wait(tries - 1), 100);
+        };
+        wait(30);
+      };
+      setTimeout(() => click('notes-check', params.get('import') === 'run' ? () => click('notes-import') : null), 400);
+    }
+    // `biography=1`: לחיצה על "ביוגרפיה" בפרטי הספר שנפתחו (`details=<key>`).
+    if (params.get('biography')) {
+      const press = (tries) => {
+        const node = document.querySelector('[data-focus-key^="biography-"]');
+        if (node && !node.disabled) node.click();
+        else if (tries) setTimeout(() => press(tries - 1), 150);
+      };
+      setTimeout(() => press(30), 900);
     }
     // `example=1`: לחיצה על הדוגמה הראשונה, ובדיקה שהיא מילאה את השדה (נמצא
     // בבדיקה חיה: `value` אינו ב-markup, והרענון לא עדכן אותו).

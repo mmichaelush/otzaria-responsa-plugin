@@ -1,5 +1,5 @@
 // מחבר את המודל ל-DOM. התוסף בנוי מלשוניות: "ספרים", "חיפוש בטקסט", "איתור
-// מקום", "הגדרות", "עזרה" ו"אודות ודיווח". [render] בונה את הלשונית הנוכחית מחדש; [update]
+// מקום", "הערות", "הגדרות", "עזרה" ו"אודות ודיווח". [render] בונה את הלשונית הנוכחית מחדש; [update]
 // מעדכן אותה במקום (התקדמות, הערות), כדי שלחיצה, פוקוס ואנימציה לא ייקטעו
 // כמה פעמים בשנייה. מסך הפתיחה הוא הדיאלוג היחיד.
 (function (root) {
@@ -17,12 +17,14 @@
 
   /**
    * הלשוניות, לפי הסדר. `short` — השם בסרגל התחתון של חלון צר, שבו לכל
-   * לשונית שישית מהרוחב.
+   * לשונית שביעית מהרוחב.
    */
   const TABS = Object.freeze([
     { id: 'books', label: N('ספרים'), short: N('ספרים'), iconName: 'library_24_regular' },
     { id: 'text', label: N('חיפוש בטקסט'), short: N('טקסט'), iconName: 'database_search_24_regular' },
     { id: 'locate', label: N('איתור מקום'), short: N('איתור'), iconName: 'document_search_24_regular' },
+    // `setting`: ההגדרה שמכבה את הלשונית (הגדרות ← "הערות אישיות").
+    { id: 'notes', label: N('הערות'), short: N('הערות'), iconName: 'note_24_regular', setting: 'notes' },
     { id: 'settings', label: N('הגדרות'), short: N('הגדרות'), iconName: 'settings_24_regular' },
     { id: 'help', label: N('עזרה'), short: N('עזרה'), iconName: 'question_circle_24_regular' },
     { id: 'about', label: N('אודות ודיווח'), short: N('אודות'), iconName: 'info_24_regular' },
@@ -74,7 +76,7 @@
         const tab = event.target.closest && event.target.closest('[role="tab"]');
         if (!tab) return;
         const list = tab.closest('[role="tablist"]');
-        const tabs = [...list.querySelectorAll('[role="tab"]')];
+        const tabs = [...list.querySelectorAll('[role="tab"]')].filter((node) => !node.hidden);
         const index = tabs.indexOf(tab);
         const rtl = this.doc.documentElement.dir !== 'ltr';
         const step = { ArrowLeft: rtl ? 1 : -1, ArrowRight: rtl ? -1 : 1 }[event.key];
@@ -145,6 +147,8 @@
         const selected = tab.id === model.tab;
         this.tabButtons[index].setAttribute('aria-selected', selected ? 'true' : 'false');
         this.tabButtons[index].setAttribute('tabindex', selected ? '0' : '-1');
+        // לשונית שהמשתמש כיבה נעלמת מהסרגל ומהחצים.
+        this.tabButtons[index].hidden = Boolean(tab.setting) && model.settings[tab.setting] === false;
       });
       this.content.setAttribute('aria-labelledby', 'main-tab-' + model.tab);
     }
@@ -167,7 +171,7 @@
 
     /** האם בלשונית [tab] מוצג מה שחסר במקום התוכן שלה. */
     _setupShown(model, tab) {
-      return (tab === 'text' || tab === 'locate') && SETUP_SCREENS.has(model.screen);
+      return (tab === 'text' || tab === 'locate' || tab === 'notes') && SETUP_SCREENS.has(model.screen);
     }
 
     _pageFor(model, actions) {
@@ -180,6 +184,10 @@
           return this._setupShown(model, 'locate')
             ? Ui.screenView(model, actions)
             : root.ResponsaLocateUi.locatePage(model, actions);
+        case 'notes':
+          return this._setupShown(model, 'notes')
+            ? Ui.screenView(model, actions)
+            : root.ResponsaNotesUi.notesPage(model, actions);
         case 'settings':
           return Panels.settingsPage(model, actions);
         case 'help':
@@ -235,6 +243,7 @@
         books: '.search-input',
         text: '.simple-input, [data-focus-key="adv-word-0-0"], .manual-input',
         locate: '.locate-input',
+        notes: '[data-focus-key="notes-search"]',
       }[model.tab];
       const target = selector && this.content.querySelector(selector);
       if (target) target.focus();
@@ -273,6 +282,8 @@
         this.render(model, actions);
         return;
       }
+      // לשונית שהמשתמש כיבה או הדליק בהגדרות מופיעה או נעלמת מיד.
+      this._renderTabs(model);
       if (model.tab === 'books' && !this._setupShown(model, model.tab)) return;
       const next = this._pageFor(model, actions);
       const markup = next.outerHTML;
@@ -426,6 +437,24 @@
       const container = this.openSheet ? this.dialog : this.content;
       const target = container.querySelector('[data-focus-key="' + CSS.escape(key) + '"]');
       if (target && !target.disabled) target.focus();
+    }
+
+    /**
+     * פוקוס לפקד עם [key] רק כשהפוקוס אבד (הכפתור שנלחץ נעלם עם השלב החדש):
+     * מי שמקליד בשדה אחר אינו מאבד אותו בגלל התקדמות ברקע.
+     */
+    focusIfLost(key) {
+      const active = this.doc.activeElement;
+      if (active && active !== this.doc.body) return;
+      this.focusInSheet(key);
+    }
+
+    /** קפיצת התקדמות בהעברת הערות: מעדכן את השורה במקום, ומצייר הכול רק אם אין שורה. */
+    updateNotesProgress(model, actions) {
+      if (model.tab !== 'notes') return;
+      if (!root.ResponsaNotesUi.updateProgress(this.content, model.notes.importer.progress)) {
+        this.refreshPage(model, actions);
+      }
     }
 
     /** הבדיקה מצאה בעיה: הפוקוס לשדה שלה, או לשדה החיפוש. */

@@ -78,11 +78,13 @@ class ResponsaTreeReader {
   static const int tvmGetItemRect = tvFirst + 4;
   static const int tvmGetNextItem = tvFirst + 10;
   static const int tvmEnsureVisible = tvFirst + 20;
+  static const int tvmSelectItem = tvFirst + 11;
   static const int tvmGetItemW = tvFirst + 62;
 
   static const int tvgnRoot = 0x0000;
   static const int tvgnNext = 0x0001;
   static const int tvgnChild = 0x0004;
+  static const int tvgnCaret = 0x0009;
 
   static const int tveCollapse = 0x0001;
   static const int tveExpand = 0x0002;
@@ -531,6 +533,16 @@ class ResponsaTreeSession {
       }
     }
   }
+
+  /// `TVM_SELECTITEM`: [item] הופך לנבחר, כמו לחיצה עליו. `false` כשהעץ לא
+  /// ענה או שהפריט אינו קיים.
+  bool select(int item) =>
+      _read(
+        ResponsaTreeReader.tvmSelectItem,
+        wParam: ResponsaTreeReader.tvgnCaret,
+        lParam: item,
+      ) !=
+      0;
 
   /// `TVM_ENSUREVISIBLE`: גולל אל [item] ופורש את אבותיו.
   void ensureVisible(int item) =>

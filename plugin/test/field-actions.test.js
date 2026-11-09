@@ -15,7 +15,8 @@ const event = (fields) => Object.assign({ actionId: 'bar-ilan', sessionId: 's', 
 test('requestFor: כל שדה ללשונית שלו', () => {
   assert.equal(FieldActions.requestFor(event({ field: 'fullText', text: 'נר שבת' })).tab, 'text');
   assert.equal(FieldActions.requestFor(event({ field: 'findRef', text: 'בראשית ב ג' })).tab, 'locate');
-  assert.equal(FieldActions.requestFor(event({ field: 'library', text: 'אבני נזר' })).tab, 'books');
+  // שדה איתור הספר אינו שולח אירוע: הכפתור שלו הוא מסנן שאוצריא מבצעת בעצמה.
+  assert.equal(FieldActions.requestFor(event({ field: 'library', text: 'אבני נזר' })), null);
   assert.equal(FieldActions.requestFor(event({ field: 'inBook' })), null);
   assert.equal(FieldActions.requestFor(event({ actionId: 'dictate' })), null);
   assert.equal(FieldActions.requestFor(null), null);
@@ -39,10 +40,22 @@ test('register: האירוע של הלחיצה מגיע לבקר', () => {
 
 test('המניפסט מצהיר על הכפתור ועל ההרשאה שלו, ובגרסה שמכירה אותו', () => {
   const declared = manifest.contributes.startup.searchFieldActions;
-  assert.deepEqual(declared, [FieldActions.CONTRIBUTION]);
+  assert.deepEqual(declared, FieldActions.CONTRIBUTIONS);
+  assert.ok(declared.length <= 2, 'אוצריא מרשה עד שני כפתורים לתוסף');
   assert.ok(manifest.permissions.includes(FieldActions.PERMISSION), `חסרה ההרשאה ${FieldActions.PERMISSION}`);
   // אוצריא 0.9.98 קוראת את 0.9.98.1 כ-0.9.98 ואינה מכירה את הכפתור.
   assert.equal(FieldActions.MIN_APP_VERSION, '0.9.98.1');
   // אין מנוע רקע: הלחיצה פותחת את הדף ומוסרת אליו את האירוע.
   assert.ok(!manifest.permissions.includes('app.run_on_startup'));
+});
+
+test('requestFor: בקשת הדיאלוג (0.9.98.3) עוברת, אלא אם נבחר חלק מהטקסט', () => {
+  const dialog = { query: 'נר שבת', mode: 'advanced', distance: 3 };
+  assert.deepEqual(FieldActions.requestFor(event({ text: 'נר שבת', request: dialog })).request, dialog);
+  assert.equal(
+    FieldActions.requestFor(event({ text: 'נר שבת', selectionStart: 0, selectionEnd: 2, request: dialog })).request,
+    null,
+  );
+  assert.equal(FieldActions.requestFor(event({ text: 'נר שבת' })).request, null);
+  assert.equal(FieldActions.requestFor(event({ text: 'נר שבת', request: 'x' })).request, null);
 });
