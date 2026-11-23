@@ -4,8 +4,17 @@ import 'package:responsa_helper/src/native/responsa_automation.dart';
 /// ההפניה היא רק השאילתה שייצרה את הרשימה, והספר המבוקש הוא הכותרת: כשהחוליה
 /// רחבה, דירוג לפי ההפניה בוחר שורה שגויה מרשימה שיש בה את הנכונה.
 void main() {
-  int pick(List<String> results, String ref, [String? expected]) =>
-      ResponsaAutomation.bestResult(results, ref, expected);
+  int pick(
+    List<String> results,
+    String ref, [
+    String? expected,
+    bool preferResponsa = false,
+  ]) => ResponsaAutomation.bestResult(
+    results,
+    ref,
+    expected,
+    preferResponsa: preferResponsa,
+  );
 
   test('הכותרת המצופה מכריעה, לא ההפניה', () {
     // החוליה שנותחה, `על הש"ס ברכות`, מתאימה לשתי השורות.
@@ -47,5 +56,84 @@ void main() {
     // הקטלוג ואינם מופיעים בשורות של התוכנה.
     final results = ['אוצר מדרשים (אייזנשטיין) היכלות', 'מדרש אחר לגמרי'];
     expect(pick(results, 'היכלות', "היכלות (עמ' 108-126)"), 0);
+  });
+
+  // נמדד חי על CD25 (23.11.2026): ההפניה `מהר"ם חלאווה` מחזירה שני ספרים, והשו"ת
+  // שבהם נקרא בבר אילן `שו"ת מהר"ם חלאווה`. התאמת קידומת של הפירוש על מסכת
+  // פסחים גברה על התאמת תת-מחרוזת של השו"ת, ולחיצה על ספר השו"ת פתחה את הגמרא.
+  group('ספר מקטגוריית שו"ת', () {
+    const halawa = [
+      'מהר"ם חלאווה מסכת פסחים דף ב עמוד א',
+      'שו"ת מהר"ם חלאווה תוכן עניינים',
+    ];
+
+    test('חלון פתוח של הפירוש על הגמרא אינו "הספר שנפתח" של ספר השו"ת', () {
+      const chosen = 'שו"ת מהר"ם חלאווה תוכן עניינים';
+      const pesachim = 'מהר"ם חלאווה מסכת פסחים דף ב עמוד א';
+      bool fits(String window, {bool prefer = true}) =>
+          ResponsaAutomation.windowFitsKind(
+            preferResponsa: prefer,
+            chosen: chosen,
+            window: window,
+          );
+      expect(fits(pesachim), isFalse);
+      expect(fits('שו"ת מהר"ם חלאווה סימן ב'), isTrue);
+      expect(
+        fits(pesachim, prefer: false),
+        isTrue,
+        reason: 'בלי הרמז: כמו קודם',
+      );
+    });
+
+    test('בלי רמז הקטגוריה הבחירה כמו קודם (ספר שאינו שו"ת)', () {
+      expect(pick(halawa, 'מהר"ם חלאווה', 'מהר"ם חלאווה'), 0);
+    });
+
+    test('ספר שו"ת בוחר את השורה של השו"ת, לא את הפירוש על הגמרא', () {
+      expect(pick(halawa, 'מהר"ם חלאווה', 'מהר"ם חלאווה', true), 1);
+    });
+
+    test('והספר על מסכת פסחים ממשיך לבחור בגמרא', () {
+      expect(
+        pick(halawa, 'מהר"ם חלאווה פסחים', 'מהר"ם חלאווה פסחים'),
+        0,
+        reason: 'יותר מילים משותפות',
+      );
+    });
+
+    test('בית הלוי: מבין 11 שורות נבחרת שורת השו"ת הראשונה', () {
+      const results = [
+        'בית הלוי הקדמה',
+        'בית הלוי בראשית פרשת בראשית פרק א',
+        'בית הלוי שמות פרשת שמות פרק א',
+        'בית הלוי חנוכה',
+        'בית הלוי עניינים שונים',
+        "שו\"ת בית הלוי תוכן העניינים חלק א'",
+        'שו"ת בית הלוי חלק א הקדמה',
+        'שו"ת בית הלוי חלק ב סימן א',
+      ];
+      expect(pick(results, 'בית הלוי', 'בית הלוי'), 0);
+      expect(pick(results, 'בית הלוי', 'בית הלוי', true), 5);
+    });
+
+    test('כשאין בתוצאות שורת שו"ת הרמז אינו משנה דבר', () {
+      const results = ['בית הלוי הקדמה', 'בית הלוי חנוכה'];
+      expect(
+        pick(results, 'בית הלוי', 'בית הלוי', true),
+        pick(results, 'בית הלוי', 'בית הלוי'),
+      );
+    });
+
+    test('הרמז אינו גובר על כותרת שמתאימה יותר', () {
+      const results = [
+        'שו"ת בית הלוי חלק ב סימן א',
+        'שו"ת בית הלוי חלק ג סימן א',
+      ];
+      expect(
+        pick(results, 'בית הלוי', 'בית הלוי חלק ג', true),
+        1,
+        reason: 'מילים משותפות קודמות לרמז',
+      );
+    });
   });
 }

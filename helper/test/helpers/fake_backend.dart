@@ -30,6 +30,9 @@ class FakeBackend implements ResponsaBackend {
   Future<ResponsaOpenReport> Function(List<String> references)? onOpen;
   final List<List<String>> openCalls = [];
 
+  /// לכל פתיחה: האם נמסר הרמז "ספר שאלות ותשובות".
+  final List<bool> preferResponsaCalls = [];
+
   /// מה ש-[locate] מחזיר. ברירת מחדל: נפתח חלון בשם ההפניה.
   Future<ResponsaOpenReport> Function(String reference, int? index)? onLocate;
   final List<({String reference, int? index})> locateCalls = [];
@@ -111,8 +114,10 @@ class FakeBackend implements ResponsaBackend {
     String? expectedTitle,
     String? installPath,
     bool autoStart = true,
+    bool preferResponsa = false,
   }) {
     openCalls.add(references);
+    preferResponsaCalls.add(preferResponsa);
     autoStartCalls.add(autoStart);
     final handler = onOpen;
     if (handler != null) return handler(references);

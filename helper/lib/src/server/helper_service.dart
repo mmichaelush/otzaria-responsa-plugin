@@ -25,6 +25,7 @@ import 'package:responsa_helper/src/server/responsa_backend.dart';
 import 'package:responsa_helper/src/text/responsa_advanced_query.dart';
 import 'package:responsa_helper/src/text/responsa_author_table.dart';
 import 'package:responsa_helper/src/text/responsa_hebrew.dart';
+import 'package:responsa_helper/src/text/responsa_names.dart';
 import 'package:responsa_helper/src/text/responsa_query.dart';
 
 /// הלוגיקה של השירות, בלי HTTP: כל נקודת קצה ב-docs/PROTOCOL.md היא מתודה
@@ -82,7 +83,7 @@ class HelperService {
   }
 
   static const String serviceId = 'otzaria-responsa';
-  static const String serverVersion = '0.8.0';
+  static const String serverVersion = '0.8.1';
   static const int apiVersion = 1;
   static const List<String> capabilities = [
     'catalog',
@@ -419,6 +420,7 @@ class HelperService {
         expectedTitle: book.title,
         installPath: await store.repository.sourceInstallPath(),
         autoStart: autoStart,
+        preferResponsa: ResponsaNames.isResponsaPath(book.contextPath),
       );
       if (report.ok) {
         logLine(

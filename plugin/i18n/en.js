@@ -54,8 +54,8 @@
       'Bar-Ilan in the search dialog',
     'בדיאלוג החיפוש של אוצריא, תחת "אפשרויות נוספות", יופיע המתג "חיפוש בבר אילן במקום באוצריא". כשהוא דלוק, החיפוש נשלח לבר אילן במקום לאוצריא, ולשונית התוסף נפתחת. בנוסף, בתוצאות של כל חיפוש באוצריא (גם כשאין תוצאות) יופיע הכפתור "להמשיך בבר אילן", שמעביר אליו את אותו חיפוש.':
       'The Otzaria search dialog will show, under "More options" (אפשרויות נוספות), the switch "Search in Bar-Ilan instead of Otzaria" (חיפוש בבר אילן במקום באוצריא). When it is on, the search goes to Bar-Ilan instead of Otzaria, and the plugin tab opens. In addition, the results of every Otzaria search (even when there are none) show the button "Continue in Bar-Ilan" (להמשיך בבר אילן), which passes the same search to Bar-Ilan.',
-    'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "רכיבים בחלון החיפוש".':
-      'To turn it on: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → turn on "Search window components" (רכיבים בחלון החיפוש).',
+    'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← "ניהול הרשאות" ← הדליקו "רכיבים בחלון החיפוש".':
+      'To turn it on: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → Manage permissions (ניהול הרשאות) → turn on "Search window components" (רכיבים בחלון החיפוש).',
     'הפעלת בר אילן כשהוא סגור':
       'Start Bar-Ilan when it is closed',
     'לפני פתיחת ספר, חיפוש או איתור מקום, התוסף מפעיל את בר אילן אם הוא סגור. כשהמתג כבוי, פותחים את בר אילן בעצמכם קודם. חל גם על הלחיצה הימנית ועל מסך הספרייה.':
@@ -162,10 +162,10 @@
       'In an open book, select a word and right-click: "Find this place in Bar-Ilan" (איתור המקום בבר אילן) opens the place of the selected line in Bar-Ilan.',
     'קיצור מקלדת: {shortcut}. אפשר לשנות אותו בהגדרות אוצריא ← קיצורי מקשים.':
       'Keyboard shortcut: {shortcut}. You can change it in Otzaria settings → Keyboard shortcuts.',
-    'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "פריטים בתפריט הטקסט".':
-      'To turn it on: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → turn on "Items in the text menu" (פריטים בתפריט הטקסט).',
-    'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "הוספת רכיבים לתוכנה".':
-      'To turn it on: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → turn on "Add components to the app" (הוספת רכיבים לתוכנה).',
+    'כדי להפעיל: הגדרות אוצריא ← כלים ← בר אילן ← "ניהול הרשאות" ← הדליקו "פריטים בתפריט הטקסט".':
+      'To turn it on: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → Manage permissions (ניהול הרשאות) → turn on "Items in the text menu" (פריטים בתפריט הטקסט).',
+    'כדי להפעיל: הגדרות אוצריא ← כלים ← בשורה של "בר אילן" לוחצים על "ניהול הרשאות" (סמל מגן) ← מדליקים את "הוספת רכיבים לתוכנה".':
+      'To turn it on: Otzaria settings → Tools (כלים) → on the "Bar-Ilan" (בר אילן) row, click "Manage permissions" (ניהול הרשאות, a shield icon) → turn on "Add components to the app" (הוספת רכיבים לתוכנה).',
     '"חיפוש בבר אילן" בלחיצה ימנית, וספרי בר אילן בחיפוש הספרייה, דורשים הרשאה אחת שכבויה עכשיו.':
       '"Search in Bar-Ilan" on right-click, and Bar-Ilan books in library search, need one permission that is off right now.',
     '{count} ספרים ברשימה': '{count} books in the list',
@@ -325,7 +325,7 @@
     'כדי לדבר עם הרכיב שמחבר את אוצריא לבר אילן, התוסף צריך את ההרשאה "גישה לשירותים מקומיים". היא לא פותחת גישה לאינטרנט.':
       'To talk to the component that connects Otzaria to Bar-Ilan, the plugin needs the "Access to local services" (גישה לשירותים מקומיים) permission. It does not give internet access.',
     'באוצריא פתחו את ההגדרות, ואז "כלים".': 'In Otzaria, open the settings, then "Tools (כלים)".',
-    'בחרו ב"בר אילן".': 'Choose "Bar-Ilan".',
+    'בשורה של "בר אילן" לחצו על "ניהול הרשאות" (סמל מגן).': 'On the "Bar-Ilan" row, click "Manage permissions" (ניהול הרשאות, a shield icon).',
     'הדליקו את "גישה לשירותים מקומיים".': 'Turn on "Access to local services" (גישה לשירותים מקומיים).',
     'צריך להתקין רכיב קטן, פעם אחת': 'A small component needs to be installed, once',
     'כדי שאוצריא תוכל לעבוד עם תוכנת בר אילן, יש להתקין במחשב את "שירות בר אילן לאוצריא". ההתקנה לוקחת פחות מדקה ואינה דורשת הרשאות מנהל.':
@@ -405,7 +405,7 @@
     'השירות דחה את הבקשה.': 'The service rejected the request.',
     'ההוראות המלאות בלשונית "בר אילן".': 'Full instructions are in the "Bar-Ilan" tab.',
     'אין "חיפוש בבר אילן" בתפריט של לחיצה ימנית': '"Search in Bar-Ilan" is missing from the right-click menu',
-    'בר אילן מפסיק לפתוח חלונות חדשים כשפתוחים בו כ-22. סוגרים בו כמה חלונות ומנסים שוב.': 'Bar-Ilan stops opening new windows when about 22 are open. Close a few of its windows and try again.',
+    'בר אילן מפסיק לפתוח חלונות חדשים כשפתוחים בו כ-22. התוסף סוגר רק חלונות שהוא עצמו פתח, ורק כשיש 18 או יותר. סוגרים בבר אילן כמה חלונות ומנסים שוב.': 'Bar-Ilan stops opening new windows when about 22 are open. The plugin closes only windows it opened itself, and only when 18 or more are open. Close a few windows in Bar-Ilan and try again.',
     'הוספת רכיבים לתוכנה': 'Add components to the app',
     'לפחות עשרה תווים': 'At least ten characters',
     '"חיפוש בבר אילן" בלחיצה ימנית דורש הרשאה אחת שכבויה עכשיו.': '"Search in Bar-Ilan" from the right-click menu needs one permission that is currently off.',
@@ -470,14 +470,20 @@
     'הבנתי, בואו נתחיל': 'I understand, let\'s start',
     // ---- ניסוחים מסבב ה-QA
     'בר אילן לא מצא תוצאות עבור "{query}" במאגרים שנבחרו, ושואל אם לחפש בכל המאגרים. עונים על השאלה בחלון של בר אילן.': 'Bar-Ilan found no results for "{query}" in the selected databases and asks whether to search all of them. Answer the question in the Bar-Ilan window.',
+    'פתיחת ההגדרות': 'Open settings',
+    'לא הצלחתי לפתוח את ההגדרות. אפשר לפתוח אותן בסמל ההגדרות בסרגל הצד של אוצריא.': 'Could not open the settings. You can open them with the settings icon in the side bar of Otzaria.',
     'אפשר לפתוח את לשונית התוסף מאוצריא: כלים ← תוספים ← "בר אילן".': 'You can open the plugin tab in Otzaria: Tools (כלים) → Plugins (תוספים) → "בר אילן".',
-    'כדי שגם הקיצור {shortcut} יעבוד: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו "קיצורי מקלדת".': 'For the {shortcut} shortcut to work too: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → turn on "Keyboard shortcuts" (קיצורי מקלדת).',
+    'כדי שגם הקיצור {shortcut} יעבוד: הגדרות אוצריא ← כלים ← בר אילן ← "ניהול הרשאות" ← הדליקו "קיצורי מקלדת".': 'For the {shortcut} shortcut to work too: Otzaria settings → Tools (כלים) → Bar-Ilan (בר אילן) → Manage permissions (ניהול הרשאות) → turn on "Keyboard shortcuts" (קיצורי מקלדת).',
     'קריאת הרשימה מחדש': 'Read the list again',
     'חיפוש טקסט מתוך ספר פתוח': 'Searching text from an open book',
     'בזמן הקריאה בר אילן עובד לבד: אל תלחצו בו ואל תסגרו אותו. אפשר להמשיך לעבוד באוצריא.': 'While it reads, Bar-Ilan works on its own: do not click in it or close it. You can keep working in Otzaria.',
     'התוסף אינו מוצר רשמי של אוניברסיטת בר אילן ואינו קשור אליה. כל הזכויות על התוכנה ועל התוכן שבה שמורות לבעליהן.': 'The plugin is not an official product of Bar-Ilan University and is not affiliated with it. All rights to the software and its content belong to their owners.',
     'מה שחסר מוסבר בלשונית עצמה, צעד אחר צעד. אפשר לחזור למסך הזה מהלשונית "אודות ודיווח" ← "מסך הפתיחה".': 'Whatever is missing is explained step by step in the tab itself. You can return to this screen from the "About and report" tab → "Welcome screen".',
     'Windows לפעמים משאיר את חלון בר אילן מאחור, והוא מהבהב בשורת המשימות. לוחצים עליו בשורת המשימות.': 'Windows sometimes keeps the Bar-Ilan window behind, and it flashes in the taskbar. Click it in the taskbar.',
+    'לא מוצאים את ההרשאה "הוספת רכיבים לתוכנה"': 'Cannot find the "Add components to the app" permission',
+    'בהגדרות אוצריא ← כלים, בשורה של "בר אילן", לוחצים על "ניהול הרשאות" (סמל מגן) ומדליקים אותה. בהודעה שמעל שורת החיפוש יש כפתור "פתיחת ההגדרות".': 'In Otzaria settings → Tools (כלים), on the "Bar-Ilan" row, click "Manage permissions" (ניהול הרשאות, a shield icon) and turn it on. The notice above the search bar has an "Open settings" button.',
+    'קריאת הביוגרפיות מראש נעצרה': 'Reading all biographies in advance stopped',
+    'מאמר בודד שנכשל אינו עוצר אותה, ושורות הפרדה בעץ ("---- שאר הראשונים ----") מדולגות. היא נעצרת רק אחרי חמישה כשלים ברצף: אז בודקים שבר אילן לא תקועה (חלון פתוח בה שממתין לתשובה) ולוחצים שוב "התחלה".': 'A single article that fails does not stop it, and separator rows in the tree ("---- שאר הראשונים ----") are skipped. It stops only after five failures in a row: then check that Bar-Ilan is not stuck (a window open in it waiting for an answer) and click "Start" again.',
     'כתוב שבבר אילן פתוחים חלונות רבים מדי': 'It says too many windows are open in Bar-Ilan',
     '"העתקת הפרטים" מעתיקה גם את יומן הפעולות ואת יומן השירות, כדי לצרף אותם לפנייה.':
       '"Copy details" also copies the activity log and the service log, so you can attach them to a support request.',
@@ -660,7 +666,7 @@
     'כתבו שם ספר ומקום בו, למשל "בראשית ב ג".': 'Write a book name and a location in it, e.g. "בראשית ב ג".',
     'חסר המקום בספר. כותבים אחרי שם הספר את הפרק, הדף או הסימן, למשל "{example}".': 'The location in the book is missing. After the book name, write the chapter, page or section, e.g. "{example}".',
     'מתקינים את "שירות בר אילן לאוצריא": בלשונית "ספרים" יש כפתור "הורדת המתקין". המתקין מוסיף לאוצריא גם את התוסף, ואינו דורש הרשאות מנהל.': 'Install the "Bar-Ilan service for Otzaria": the "Books" tab has a "Download the installer" button. The installer also adds the plugin to Otzaria, and does not need administrator rights.',
-    'בהגדרות אוצריא ← כלים ← בר אילן מדליקים את "הוספת רכיבים לתוכנה", בשביל החיפוש בלחיצה ימנית וספרי בר אילן במסך הספרייה.': 'In Otzaria settings → Tools → Bar-Ilan, turn on "Add components to the app", for right-click search and Bar-Ilan books on the library screen.',
+    'בהגדרות אוצריא ← כלים ← בר אילן ← "ניהול הרשאות" מדליקים את "הוספת רכיבים לתוכנה", בשביל החיפוש בלחיצה ימנית וספרי בר אילן במסך הספרייה.': 'In Otzaria settings → Tools → Bar-Ilan → Manage permissions, turn on "Add components to the app", for right-click search and Bar-Ilan books on the library screen.',
     'בלשונית "ספרים" לוחצים "התחלה", והתוסף קורא את רשימת הספרים (כמה דקות).':
       'In the "Books" tab, click "Start", and the plugin reads the book list (a few minutes).',
     'ספרים: חיפוש ספר ופתיחתו': 'Books: finding a book and opening it',
@@ -676,7 +682,7 @@
     'אחרי התקנת מהדורה חדשה של בר אילן: לשונית "הגדרות" ← "קריאה מחדש".': 'After installing a new edition of Bar-Ilan: "Settings" tab → "Read again".',
     'בלשונית "הגדרות" מדליקים או מכבים את החיפוש בלחיצה ימנית ואת ספרי בר אילן במסך הספרייה, בוחרים גופן, גודל תצוגה ושפה (עברית או English), קוראים מחדש את רשימת הספרים ויוצרים קיצור דרך.': 'In the "Settings" tab you turn right-click search and Bar-Ilan books on the library screen on or off, choose a language (Hebrew or English), read the book list again and create a shortcut.',
     'ייתכן שחלון בבר אילן ממתין לתשובה — עוברים לבר אילן וסוגרים אותו. אם זה חוזר בספר מסוים, קוראים את רשימת הספרים מחדש: לשונית "הגדרות" ← "קריאה מחדש".': 'A window in Bar-Ilan may be waiting for an answer — switch to Bar-Ilan and close it. If it keeps happening with a specific book, read the book list again: "Settings" tab → "Read again".',
-    'צריך לסמן טקסט לפני הלחיצה הימנית, והמתג בלשונית "הגדרות" צריך להיות דלוק. הפריט מופיע אחרי שלשונית "בר אילן" נפתחה פעם אחת והתחברה לשירות. אם המתג לא זמין: הגדרות אוצריא ← כלים ← בר אילן ← הדליקו את ההרשאות "הוספת רכיבים לתוכנה" ו"פריטים בתפריט הטקסט".': 'Select text before right-clicking, and the switch in the "Settings" tab must be on. The item appears after the "Bar-Ilan" tab has been opened once and connected to the service. If the switch is unavailable: Otzaria settings → Tools → Bar-Ilan → turn on the permissions "Add components to the app" and "Text menu items".',
+    'צריך לסמן טקסט לפני הלחיצה הימנית, והמתג בלשונית "הגדרות" צריך להיות דלוק. הפריט מופיע אחרי שלשונית "בר אילן" נפתחה פעם אחת והתחברה לשירות. אם המתג לא זמין: הגדרות אוצריא ← כלים ← בר אילן ← "ניהול הרשאות" ← הדליקו את ההרשאות "הוספת רכיבים לתוכנה" ו"פריטים בתפריט הטקסט".': 'Select text before right-clicking, and the switch in the "Settings" tab must be on. The item appears after the "Bar-Ilan" tab has been opened once and connected to the service. If the switch is unavailable: Otzaria settings → Tools → Bar-Ilan → Manage permissions → turn on the permissions "Add components to the app" and "Text menu items".',
     'בלחיצה ימנית כתוב ש"שירות בר אילן אינו פועל"': 'Right-click says "The Bar-Ilan service is not running"',
     'השירות לא ענה במחשב. פותחים את לשונית "בר אילן": היא בודקת מה חסר ומציעה מה לעשות. אחרי התקנה חדשה של השירות, פתיחה אחת של הלשונית מחברת אותו שוב.': 'The service did not answer on this computer. Open the "Bar-Ilan" tab: it checks what is missing and suggests what to do. After a new installation of the service, opening the tab once connects it again.',
     'האם התוסף רץ ברקע?': 'Does the plugin run in the background?',
@@ -850,8 +856,8 @@
     'איתור מקום: קודם באוצריא': 'Locate: Otzaria first',
     'בלשונית "איתור מקום", מקום שקיים באוצריא נפתח באוצריא, ובר אילן נפתח רק כשהמקום חסר שם. אחרי פתיחה באוצריא אפשר ללחוץ "בבר אילן בכל זאת".':
       'In the "Locate" tab, a place that exists in Otzaria opens in Otzaria, and Bar-Ilan opens only when the place is missing there. After it opens in Otzaria you can press "Open in Bar-Ilan anyway".',
-    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "רשימת ספרים" ו"פתיחת ספרים וניהול כרטיסיות".':
-      'To use this, turn on the permissions "רשימת ספרים" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
+    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" ← "ניהול הרשאות" את ההרשאות "רשימת ספרים" ו"פתיחת ספרים וניהול כרטיסיות".':
+      'To use this, turn on the permissions "רשימת ספרים" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן" → "ניהול הרשאות".',
 
     // ---- 0.6.3: השלמת המחברים (בר אילן 29 ו-32)
     'הוספת שמות המחברים לא הושלמה: {reason}': 'Adding the author names did not finish: {reason}',
@@ -869,16 +875,16 @@
     'חיפוש גם באוצריא': 'Also search in Otzaria',
     'אותן מילים נפתחות גם בחיפוש של אוצריא, בכרטיסייה משלו, כולל מה שהחיפוש שם כולל. חל על חיפוש מהלשונית הזו; חיפוש שמגיע מאוצריא כבר פתוח שם.':
       'The same words also open in Otzaria search, in a tab of their own, including whatever that search covers. Applies to a search from this tab; a search that arrives from Otzaria is already open there.',
-    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".':
-      'To use this, turn on the permission "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
+    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" ← "ניהול הרשאות" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".':
+      'To use this, turn on the permission "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן" → "ניהול הרשאות".',
     'חיפוש בבר אילן ובאוצריא': 'Search in Bar-Ilan and Otzaria',
 
     // ---- 0.6.4: חיפוש באוצריא קודם, ואיתור מקום
     'חיפוש באוצריא קודם': 'Search in Otzaria first',
     'חיפוש מדיאלוג החיפוש של אוצריא עם "חיפוש בבר אילן" רץ קודם באוצריא. אם נמצאו תוצאות הן נפתחות שם, ובבר אילן מחפשים רק כשלא נמצא דבר. אחרי שהתוצאות נפתחו, "להמשיך בבר אילן" בתוצאות מעביר את אותו חיפוש לבר אילן.':
       'A search from the Otzaria search dialog with "Search in Bar-Ilan" runs in Otzaria first. If results are found they open there, and Bar-Ilan is searched only when nothing was found. Once the results have opened, "Continue in Bar-Ilan" (להמשיך בבר אילן) in them passes the same search to Bar-Ilan.',
-    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "חיפוש טקסט מלא" ו"פתיחת ספרים וניהול כרטיסיות".':
-      'To use this, turn on the permissions "חיפוש טקסט מלא" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן".',
+    'כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" ← "ניהול הרשאות" את ההרשאות "חיפוש טקסט מלא" ו"פתיחת ספרים וניהול כרטיסיות".':
+      'To use this, turn on the permissions "חיפוש טקסט מלא" and "פתיחת ספרים וניהול כרטיסיות" in Settings → Tools → "בר אילן" → "ניהול הרשאות".',
     'בודק אם אוצריא מוצאת תוצאות…': 'Checking whether Otzaria finds results…',
     'אוצריא לא מצאה תוצאות, ולכן החיפוש הועבר לבר אילן.': 'Otzaria found no results, so the search was passed to Bar-Ilan.',
     'אוצריא מצאה תוצאות, והן נפתחו בכרטיסיית חיפוש שלה, ולכן החיפוש לא הועבר לבר אילן. כדי לחפש גם בבר אילן, לוחצים "חיפוש בבר אילן".':
@@ -908,8 +914,8 @@
     'העברה לאוצריא': 'Move to Otzaria',
     'אפשר להעביר את ההערות לאוצריא. כל הערה נכתבת בספר ובמקום שמתאימים לה, ובבר אילן היא נשארת כמו שהייתה.':
       'You can move the notes to Otzaria. Each note is written in the matching book and place, and in Bar-Ilan it stays as it was.',
-    'כדי להעביר הערות צריך לאשר לתוסף, בהגדרות אוצריא ← כלים ← "בר אילן", את ההרשאות "צפייה בהערות", "עריכת הערות" ו"רשימת ספרים".':
-      'To move notes, allow the plugin the permissions "צפייה בהערות", "עריכת הערות" and "רשימת ספרים" in Otzaria Settings → Tools → "בר אילן".',
+    'כדי להעביר הערות צריך לאשר לתוסף, בהגדרות אוצריא ← כלים ← "בר אילן" ← "ניהול הרשאות", את ההרשאות "צפייה בהערות", "עריכת הערות" ו"רשימת ספרים".':
+      'To move notes, allow the plugin the permissions "צפייה בהערות", "עריכת הערות" and "רשימת ספרים" in Otzaria Settings → Tools → "בר אילן" → "ניהול הרשאות".',
     'בדיקת ההתאמה': 'Check the match',
     'ביטול ההעברה הקודמת': 'Undo the previous move',
     '{count} הערות הועברו בעבר.': '{count} notes were moved before.',
@@ -967,7 +973,7 @@
     'הבקשה נכשלה.': 'The request failed.',
     'המשך': 'Continue',
     'כפתורים בשדות החיפוש': 'Buttons in the search fields',
-    'הכפתורים "בבר אילן" ו"מקור הספרים" בשדות החיפוש של אוצריא מוצגים תמיד, כי אוצריא לא מאפשרת לתוסף להסתיר אותם לפי הגדרה. כדי להסיר אותם: הגדרות אוצריא ← כלים ← בר אילן ← כבו את "כפתורים בשדות החיפוש".':
-      'The "In Bar-Ilan" and "Book source" buttons in Otzaria\x27s search fields are always shown, because Otzaria does not let a plugin hide them by a setting. To remove them: Otzaria settings → Tools → Bar-Ilan → turn off "Buttons in the search fields".',
+    'הכפתורים "בבר אילן" ו"מקור הספרים" בשדות החיפוש של אוצריא מוצגים תמיד, כי אוצריא לא מאפשרת לתוסף להסתיר אותם לפי הגדרה. כדי להסיר אותם: הגדרות אוצריא ← כלים ← בר אילן ← "ניהול הרשאות" ← כבו את "כפתורים בשדות החיפוש".':
+      'The "In Bar-Ilan" and "Book source" buttons in Otzaria\x27s search fields are always shown, because Otzaria does not let a plugin hide them by a setting. To remove them: Otzaria settings → Tools → Bar-Ilan → Manage permissions → turn off "Buttons in the search fields".',
   };
 })(typeof self !== 'undefined' ? self : globalThis);

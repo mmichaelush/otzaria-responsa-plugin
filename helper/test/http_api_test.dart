@@ -304,6 +304,15 @@ void main() {
       expect(backend.openCalls.single, ['רא"ש יבמות', 'רא"ש על יבמות']);
     });
 
+    test('ספר שו"ת מקבל רמז, וספר על מסכת באותו שם לא', () async {
+      // `מהר"ם חלאווה` מתאים בבר אילן גם לשו"ת וגם לפירוש על פסחים, ולחיצה
+      // על השו"ת פתחה את הגמרא (דיווח משתמש, 23.11.2026).
+      await call('POST', '/book/open', body: {'key': '6853'});
+      await call('POST', '/book/open', body: {'key': '2638'});
+      await call('POST', '/book/open', body: {'key': '1524'});
+      expect(backend.preferResponsaCalls, [true, false, false]);
+    });
+
     test('מפתח כמספר, ו-notify מחזיר הודעה שלמה', () async {
       final result = await call(
         'POST',

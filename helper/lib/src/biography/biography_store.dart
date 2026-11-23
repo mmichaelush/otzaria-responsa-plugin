@@ -44,15 +44,33 @@ class BiographyStore {
   /// האם המאמר של [entry] כבר שמור (בלי לקרוא אותו).
   bool hasText(BiographyEntry entry) => _textFile(entry).existsSync();
 
+  /// מזהי כל המאמרים השמורים ([keyOf]), בקריאה אחת של התיקייה. בדיקת קובץ לכל
+  /// אחד מאלפי הפריטים חסמה את השירות כמה שניות בכל התחלה או בקשת מצב.
+  Set<String> storedKeys() {
+    try {
+      if (!_texts.existsSync()) return <String>{};
+      return {
+        for (final file in _texts.listSync(followLinks: false))
+          if (file is File && file.path.endsWith('.json'))
+            p.basenameWithoutExtension(file.path),
+      };
+    } on FileSystemException catch (error) {
+      logLine('BiographyStore: cannot list ${_texts.path}: ${error.message}');
+      return <String>{};
+    }
+  }
+
+  /// המזהה שבשם הקובץ של [entry].
+  String keyOf(BiographyEntry entry) =>
+      sha1.convert(utf8.encode(entry.path.join('\u0001'))).toString();
+
   void writeText(BiographyEntry entry, BiographyText text) =>
       _writeJson(_textFile(entry), {'title': text.title, 'body': text.body});
 
   /// שם הקובץ לפי הנתיב המלא, לא לפי השם: שני חיבורים באותו שם בקטגוריות
   /// שונות אינם אותו מאמר.
-  File _textFile(BiographyEntry entry) {
-    final key = sha1.convert(utf8.encode(entry.path.join('\u0001'))).toString();
-    return File(p.join(_texts.path, '$key.json'));
-  }
+  File _textFile(BiographyEntry entry) =>
+      File(p.join(_texts.path, '${keyOf(entry)}.json'));
 
   static Object? _readJson(File file) {
     try {

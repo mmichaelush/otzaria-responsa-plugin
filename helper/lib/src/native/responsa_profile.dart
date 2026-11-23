@@ -72,15 +72,19 @@ class ResponsaVersionProfile {
   /// תווית העמוד "כתיבת מקורות" בתוך ה-TabControl של דיאלוג העיון.
   final int citationTabIndex;
 
-  /// ב-22 חלונות MDI התוכנה מפסיקה בשקט ליצור חדשים; הסף שמרני.
+  /// ב-22 חלונות MDI התוכנה (CD25) מפסיקה בשקט ליצור חדשים. מהסף הזה נסגרים
+  /// חלונות שאוצריא פתחה, כמה שצריך כדי להשאיר מקום לאחד.
   final int mdiSoftLimit;
 
-  /// לכמה חלונות לרדת כשמשחררים.
-  final int mdiKeep;
-
-  /// מעליו מותר לסגור גם חלונות שאוצריא לא פתחה: שחזור הסשן יכול להעלות
-  /// מופע טרי כבר רווי, בלי אף חלון "שלנו".
+  /// התקרה עצמה: מכאן מותר לסגור גם חלונות שאוצריא לא פתחה (שחזור הסשן יכול
+  /// להעלות מופע טרי כבר רווי, בלי אף חלון "שלנו"). **מעליה לא נסגר דבר:**
+  /// מופע עם יותר חלונות מהתקרה (119 בבר אילן 34) אינו כפוף לה.
   final int mdiHardLimit;
+
+  /// האם מספר החלונות הפתוחים קרוב לתקרה, כך ש"לא נפתח חלון" הוא כנראה
+  /// סירוב שקט שלה ולא איטיות. מעל התקרה היא אינה חלה, ולכן גם לא כאן.
+  bool nearsWindowCap(int windows) =>
+      windows >= mdiSoftLimit && windows <= mdiHardLimit;
 
   const ResponsaVersionProfile({
     required this.version,
@@ -93,9 +97,8 @@ class ResponsaVersionProfile {
     this.searchSummaryHints = searchSummaryHintsDefault,
     this.searchProgressHints = searchProgressHintsDefault,
     this.citationTabIndex = 1,
-    this.mdiSoftLimit = 12,
-    this.mdiKeep = 4,
-    this.mdiHardLimit = 20,
+    this.mdiSoftLimit = 18,
+    this.mdiHardLimit = 22,
   });
 
   /// הגרסאות שאומתו מקצה לקצה מול התקנה חיה.

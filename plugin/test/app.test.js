@@ -793,6 +793,20 @@ test('מסך הפתיחה: מעבר ממנו לעזרה נחשב סגירה של
   assert.equal(app.model.tab, 'help');
   app.suspend();
 });
+test('פתיחת הגדרות אוצריא: ניווט להגדרות, והסבר כשאוצריא מסרבת', async () => {
+  const { app, bridge } = setup({ '/status': reply(200, ready) });
+  await app.boot(windows);
+  await app.actions.openOtzariaSettings();
+  const goTo = bridge.calls.find((c) => c.method === 'navigation.goTo');
+  assert.deepEqual(goTo.payload, { target: 'settings' });
+  assert.equal(bridge.notifications('ui.showMessage').length, 0);
+
+  bridge.methods['navigation.goTo'] = { error: { code: 'error.forbidden', message: 'לא מורשה' } };
+  await app.actions.openOtzariaSettings();
+  assert.match(bridge.notifications('ui.showMessage')[0], /ההגדרות/);
+  app.suspend();
+});
+
 test('קישור בלי אינטרנט: הסבר עם הכתובת, בלי לפתוח דפדפן', async () => {
   const { app, bridge } = setup({ '/status': reply(200, ready) });
   await app.boot({ ...windows, connectivity: { isOnline: false } });

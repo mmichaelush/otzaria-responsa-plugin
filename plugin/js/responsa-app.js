@@ -1916,6 +1916,19 @@
       return online === null ? this.model.online : online;
     }
 
+    /**
+     * הגדרות אוצריא (`navigation.goTo`): הוראות כמו "הגדרות אוצריא ← כלים ←
+     * ניהול הרשאות" מתחילות שם, והמשתמש שאינו טכני לא תמיד יודע איפה זה.
+     */
+    async openOtzariaSettings() {
+      const opened = await this.runtime.callSoft('navigation.goTo', { target: 'settings' });
+      if (opened === null) {
+        await this.runtime.notify.info(
+          t('לא הצלחתי לפתוח את ההגדרות. אפשר לפתוח אותן בסמל ההגדרות בסרגל הצד של אוצריא.'),
+        );
+      }
+    }
+
     /** קישור מ-`Domain.Links`. בלי אינטרנט — הסבר במקום דפדפן שייפתח לדף שגיאה. */
     async openLink(name) {
       const url = Domain.Links[name];
@@ -1948,6 +1961,7 @@
         retry: () => this.retry(),
         download: () => this.openLink('setup'),
         openLink: (name) => this.openLink(name),
+        openOtzariaSettings: () => this.openOtzariaSettings(),
         openWelcome: () => this.openSheet('welcome'),
         finishWelcome: () => this.finishWelcome(),
         toggleDetails: (key) => this.toggleDetails(key),

@@ -116,6 +116,7 @@ class BiographyService {
       await _fail(report, 'ביוגרפיה של "${entry.title}"');
     }
     store.writeText(entry, text);
+    _stored.add(store.keyOf(entry));
     logLine('biography: read "${entry.title}" (${text.body.length} chars)');
     return text;
   }
@@ -127,6 +128,16 @@ class BiographyService {
   String? _current;
   int _failed = 0;
   String? _message;
+
+  /// כמה מאמרים נכשלו ברצף. בר אילן שאינה פותחת חלון לשום מאמר אינה "מאמר
+  /// בעייתי", ושום טעם לעבור על אלף פריטים בכל פעם בעשרים שניות.
+  int _failedInRow = 0;
+  static const int _maxFailedInRow = 5;
+
+  /// מזהי המאמרים השמורים, מהתיקייה פעם אחת ואחר כך מהזיכרון.
+  Set<String>? _storedKeys;
+  Set<String> get _stored => _storedKeys ??= store.storedKeys();
+  bool _hasText(BiographyEntry entry) => _stored.contains(store.keyOf(entry));
 
   /// `POST /biography/harvest`: `{"action": "start" | "stop" | "status"}`.
   /// `start` מתחיל קריאה ברקע של כל המאמרים שעוד לא נשמרו (ואם כבר רצה, אינו
@@ -141,6 +152,7 @@ class BiographyService {
           _stopRequested = false;
           _current = null;
           _failed = 0;
+          _failedInRow = 0;
           _message = null;
           unawaited(_harvestAll(autoStart));
         }
@@ -157,12 +169,17 @@ class BiographyService {
   }
 
   Map<String, Object?> _harvestStatus() {
-    final entries = store.readIndex()?.entries;
+    final entries = [
+      for (final entry
+          in store.readIndex()?.entries ?? const <BiographyEntry>[])
+        if (!entry.isSeparator) entry,
+    ];
+    final known = store.readIndex() != null;
     return {
       'state': _state.name,
-      // null: הרשימה עוד לא נקראה מבר אילן.
-      'total': entries?.length,
-      'stored': entries == null ? 0 : entries.where(store.hasText).length,
+      // null: הרשימה עוד לא נקראה מבר אילן. שורות הפרדה אינן מאמרים.
+      'total': known ? entries.length : null,
+      'stored': entries.where(_hasText).length,
       'failed': _failed,
       'current': _state == BiographyHarvestState.running ? _current : null,
       'message': _message,
@@ -177,7 +194,7 @@ class BiographyService {
           _state = BiographyHarvestState.stopped;
           return;
         }
-        if (store.hasText(entry)) continue;
+        if (entry.isSeparator || _hasText(entry)) continue;
         _current = entry.title;
         if (!await _harvestOne(entry, autoStart)) return;
         await Future<void>.delayed(pace);
@@ -209,18 +226,29 @@ class BiographyService {
           final where = await installPath();
           await _fetch(entry, where: where, autoStart: autoStart);
         });
+        _failedInRow = 0;
         return true;
       } on ApiError catch (error) {
         switch (error.code) {
           case 'busy':
             // המשתמש פתח ספר או חיפש: הוא קודם. ממתינים ומנסים שוב.
             await Future<void>.delayed(busyRetry);
-          case 'internal' || 'dialogNotFound':
-            // מאמר אחד שנכשל אינו עוצר את השאר; יומן בלבד.
+          case 'internal' || 'dialogNotFound' || 'notResponding':
+            // מאמר אחד שנכשל (גם כשבר אילן לא פתחה לו חלון) אינו עוצר את
+            // השאר; יומן בלבד. הפעלה חוזרת מנסה אותו שוב, ממשיכה הלאה.
             _failed++;
+            _failedInRow++;
             logLine(
               'biography: harvest skipped "${entry.title}": ${error.code}',
             );
+            if (_failedInRow >= _maxFailedInRow) {
+              _failHarvest(
+                'בר אילן לא פתחה את חלון הביוגרפיה בחמישה מאמרים ברצף, ולכן '
+                'הקריאה נעצרה. כדאי לבדוק שבר אילן אינה עסוקה או תקועה, '
+                'ולהתחיל שוב.',
+              );
+              return false;
+            }
             return true;
           default:
             // בר אילן לא פועלת, מוגבהת וכו': אין טעם להמשיך.

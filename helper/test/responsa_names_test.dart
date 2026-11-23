@@ -4,6 +4,34 @@ import 'package:responsa_helper/src/text/responsa_names.dart';
 /// כל המחרוזות כאן מצוטטות מילולית מקטלוג שנבנה מהתקנה אמיתית; הן נראות
 /// שבורות מפני שכך הן מאוחסנות.
 void main() {
+  group('ספרי שאלות ותשובות', () {
+    test('isResponsaPath: לפי קטגוריה בעץ, לא לפי שם הספר', () {
+      expect(
+        ResponsaNames.isResponsaPath(
+          'ספרי שאלות ותשובות (שו"ת)/ספרי שאלות ותשובות - ראשונים',
+        ),
+        isTrue,
+      );
+      expect(ResponsaNames.isResponsaPath('שו"ת'), isTrue);
+      expect(ResponsaNames.isResponsaPath('שאלות ותשובות'), isTrue);
+      expect(
+        ResponsaNames.isResponsaPath('מפרשים ופוסקים על הבבלי/אחרונים'),
+        isFalse,
+      );
+      expect(ResponsaNames.isResponsaPath(''), isFalse);
+      // "שו"ת" כחלק ממילה אחרת אינו שאלות ותשובות.
+      expect(ResponsaNames.isResponsaPath('שוטים/שותפות'), isFalse);
+    });
+
+    test('startsWithResponsa', () {
+      expect(ResponsaNames.startsWithResponsa('שו"ת מהר"ם חלאווה'), isTrue);
+      expect(ResponsaNames.startsWithResponsa('שות הרשב"א'), isTrue);
+      expect(ResponsaNames.startsWithResponsa('מהר"ם חלאווה שו"ת'), isFalse);
+      expect(ResponsaNames.startsWithResponsa('שותפות'), isFalse);
+      expect(ResponsaNames.startsWithResponsa(''), isFalse);
+    });
+  });
+
   group('עטיפת הסוגריים', () {
     test('הסתייגות פשוטה חוזרת למקומה', () {
       // במאגר: סוגר פותח בתחילת המחרוזת, סוגר פותח נוסף, ואין סוגר סוגר.

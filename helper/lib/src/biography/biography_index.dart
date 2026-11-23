@@ -9,6 +9,15 @@ class BiographyEntry {
 
   String get title => path.last;
 
+  /// שורת הפרדה בעץ (`---- שאר הראשונים ----`): בר אילן מציגה אותה כפריט
+  /// ברשימה, אבל אין מאמר מאחוריה, והלחיצה עליה אינה פותחת חלון.
+  bool get isSeparator => _separator.hasMatch(title.trim());
+
+  static final RegExp _separator = RegExp(
+    r'^[\-–—=_*~.]{2,}|^[^\p{L}\p{N}]*$',
+    unicode: true,
+  );
+
   factory BiographyEntry.fromJson(Object? json) {
     if (json is List &&
         json.isNotEmpty &&

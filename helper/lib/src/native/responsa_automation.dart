@@ -321,37 +321,23 @@ class ResponsaAutomation {
     }
   }
 
-  /// בכ-22 חלונות התוכנה מפסיקה בשקט ליצור חלונות. עד התקרה הקשה נסגרים רק
-  /// חלונות שאוצריא פתחה; מעליה גם אחרים, במינימום ולעולם לא הפעיל.
+  /// בכ-22 חלונות התוכנה מפסיקה בשקט ליצור חלונות. סוגר כמה שצריך כדי לפנות
+  /// מקום לאחד, ורק לפי [windowsToRelease].
   int releaseMdiWindows(int main) {
     final titles = ResponsaWin32.mdiTitles(main);
-    if (titles.length < profile.mdiSoftLimit) return 0;
-
-    // כותרת ריקה אינה נסגרת לעולם: `windowText` מחזיר '' גם לחלון שלא ענה,
-    // ו-'' ברשימת היעד היה סוגר כל חלון כזה.
-    final present = titles.where((title) => title.isNotEmpty).toSet();
-    final wanted = <String>{
-      for (final title in _openedWindows)
-        if (present.contains(title)) title,
-    };
-
-    if (titles.length >= profile.mdiHardLimit) {
-      final active = ResponsaWin32.mdiActiveTitle(main);
-      final needed = titles.length - profile.mdiSoftLimit + 1;
-      for (final title in present) {
-        if (wanted.length >= needed) break;
-        if (title == active || wanted.contains(title)) continue;
-        wanted.add(title);
-      }
-      logLine(
-        'ResponsaAutomation: ${titles.length} חלונות — מעל התקרה הקשה; '
-        'נסגרים ${wanted.length}',
-      );
-    }
-
-    final surplus = titles.length - profile.mdiKeep;
-    final toClose = wanted.take(surplus < 0 ? 0 : surplus).toSet();
+    final toClose = windowsToRelease(
+      titles: titles,
+      opened: _openedWindows,
+      active: titles.length < profile.mdiSoftLimit
+          ? null
+          : ResponsaWin32.mdiActiveTitle(main),
+      profile: profile,
+    );
     if (toClose.isEmpty) return 0;
+    logLine(
+      'ResponsaAutomation: ${titles.length} חלונות פתוחים; נסגרים '
+      '${toClose.length} כדי להשאיר מקום',
+    );
 
     final client = ResponsaWin32.mdiClient(main);
     if (client == null) return 0;
@@ -368,6 +354,50 @@ class ResponsaAutomation {
     return closed;
   }
 
+  /// אילו חלונות לסגור לפני פתיחה. פונקציה טהורה, כי כל טעות כאן סוגרת
+  /// חלונות שהמשתמש קורא בהם (דיווח 23.11.2026: "דורס חלונות שכבר היו פתוחים
+  /// בלי סיבה"). הכלל: כמה שחייבים בלבד.
+  ///
+  /// - מתחת ל-[ResponsaVersionProfile.mdiSoftLimit] לא נסגר דבר.
+  /// - מעל [ResponsaVersionProfile.mdiHardLimit] גם לא: אם נפתחו יותר חלונות
+  ///   מהתקרה, התקרה אינה חלה במהדורה הזו (בר אילן 34 עבדה עם 119 חלונות).
+  /// - ביניהם נסגרים רק חלונות שאוצריא פתחה (הישן קודם), בדיוק כמה שצריך כדי
+  ///   להשאיר מקום לחלון אחד: לא ירידה לכמה חלונות קבועים.
+  /// - בתקרה עצמה, כשהתוכנה כבר לא יכולה ליצור חלון, גם חלונות אחרים, מהתחתון
+  ///   בסדר החלונות (הסביר שלא בשימוש). החלון הפעיל לעולם לא.
+  static Set<String> windowsToRelease({
+    required List<String> titles,
+    required List<String> opened,
+    required String? active,
+    required ResponsaVersionProfile profile,
+  }) {
+    final count = titles.length;
+    if (count < profile.mdiSoftLimit || count > profile.mdiHardLimit) {
+      return const {};
+    }
+    final needed = count - profile.mdiSoftLimit + 1;
+
+    // כותרת ריקה אינה נסגרת לעולם: `windowText` מחזיר '' גם לחלון שלא ענה,
+    // ו-'' ברשימת היעד היה סוגר כל חלון כזה.
+    final present = titles.where((title) => title.isNotEmpty).toSet();
+    final wanted = <String>{};
+    for (final title in opened) {
+      if (wanted.length >= needed) break;
+      if (title == active || !present.contains(title)) continue;
+      wanted.add(title);
+    }
+    if (count >= profile.mdiHardLimit) {
+      for (final title in titles.reversed) {
+        if (wanted.length >= needed) break;
+        if (title.isEmpty || title == active || wanted.contains(title)) {
+          continue;
+        }
+        wanted.add(title);
+      }
+    }
+    return wanted;
+  }
+
   // -------------------------------------------------------- פתיחת ספר
 
   /// [references] לפי סדר יורד של סיכוי. אין השמטת מילים מההתחלה בכוונה:
@@ -381,6 +411,7 @@ class ResponsaAutomation {
     String? expectedTitle,
     int? resultIndex,
     bool checkReference = true,
+    bool preferResponsa = false,
     ({DiscoveredDialog dialog, List<String> results})? parsed,
   }) {
     final ladder = [
@@ -398,7 +429,7 @@ class ResponsaAutomation {
     final main = mainWindow;
     final released = releaseMdiWindows(main);
     final before = ResponsaWin32.mdiTitles(main).toSet();
-    final atLimit = before.length >= profile.mdiSoftLimit;
+    final atLimit = profile.nearsWindowCap(before.length);
 
     final tried = <String>[];
     var usedRef = openRef;
@@ -449,7 +480,14 @@ class ResponsaAutomation {
       );
     }
 
-    final index = resultIndex ?? bestResult(results, usedRef, expectedTitle);
+    final index =
+        resultIndex ??
+        bestResult(
+          results,
+          usedRef,
+          expectedTitle,
+          preferResponsa: preferResponsa,
+        );
     if (index >= results.length) {
       throw ResponsaAutomationException(
         ResponsaFailure.referenceNotParsed,
@@ -469,6 +507,19 @@ class ResponsaAutomation {
     }
 
     ResponsaWin32.listBoxSelect(dialog.container, listBox, index);
+    // "הצג טקסט" פותח כל פריט מסומן: יותר מאחד = חלון נוסף שהמשתמש לא ביקש.
+    var selected = ResponsaWin32.listBoxSelectedCount(listBox);
+    if (selected > 1) {
+      logLine(
+        'ResponsaAutomation: $selected פריטים מסומנים ברשימה, לא אחד; '
+        'הבחירה נעשית שוב',
+      );
+      ResponsaWin32.listBoxSelect(dialog.container, listBox, index);
+      selected = ResponsaWin32.listBoxSelectedCount(listBox);
+      if (selected > 1) {
+        logLine('ResponsaAutomation: עדיין $selected פריטים מסומנים');
+      }
+    }
     pause(const Duration(milliseconds: 400), deadline);
     // `false` = התוכנה תקועה והבקשה לא התקבלה; המתנה לחלון הייתה שורפת את
     // כל התקציב ומדווחת "פג הזמן".
@@ -482,7 +533,14 @@ class ResponsaAutomation {
 
     final String title;
     try {
-      title = _awaitBookWindow(main, before, chosen, expectedTitle, deadline);
+      title = _awaitBookWindow(
+        main,
+        before,
+        chosen,
+        expectedTitle,
+        deadline,
+        preferResponsa: preferResponsa,
+      );
     } on ResponsaAutomationException catch (error) {
       // בתקרה, "אין חלון חדש" אינו איטיות אלא סירוב שקט של התוכנה.
       if (error.failure == ResponsaFailure.timeout && atLimit) {
@@ -709,16 +767,22 @@ class ResponsaAutomation {
 
   /// `result[0]` אינו אמין בשם גנרי. הכותרת המצופה קודמת להפניה: בחוליית
   /// נסיגה ההפניה מתארת שאילתה רחבה ולא את הספר.
+  ///
+  /// [preferResponsa] — הספר מקטגוריית שאלות ותשובות. שמו בבר אילן מתחיל ב"שו"ת"
+  /// והשם בקטלוג בלי המילה, ולכן ההפניה מחזירה גם ספרים אחרים של אותו שם
+  /// (`מהר"ם חלאווה מסכת פסחים`), שהתאמת הקידומת שלהם חזקה יותר. שורת "שו"ת"
+  /// קודמת להתאמת הקידומת, אבל לא למספר המילים המשותפות עם הכותרת.
   static int bestResult(
     List<String> results,
     String openRef,
-    String? expectedTitle,
-  ) {
+    String? expectedTitle, {
+    bool preferResponsa = false,
+  }) {
     final expected = expectedTitle == null
         ? null
         : ResponsaNames.withoutQualifier(expectedTitle);
     var bestIndex = 0;
-    var bestScore = (-1, -1, -1, -1);
+    var bestScore = (-1, -1, -1, -1, -1);
     for (var index = 0; index < results.length; index++) {
       // מהדורה סותרת יורדת לתחתית כבר כאן: פסילה באימות מונעת ספר שגוי אבל
       // לא פותחת את הנכון.
@@ -742,6 +806,9 @@ class ResponsaAutomation {
         expected == null
             ? 0
             : ResponsaHebrew.sharedTokenCount(expected, results[index]),
+        preferResponsa && ResponsaNames.startsWithResponsa(results[index])
+            ? 1
+            : 0,
         expected == null
             ? 0
             : ResponsaHebrew.matchLevel(expected, results[index]).rank,
@@ -755,20 +822,42 @@ class ResponsaAutomation {
     return bestIndex;
   }
 
-  static bool _outranks((int, int, int, int) a, (int, int, int, int) b) {
+  static bool _outranks(
+    (int, int, int, int, int) a,
+    (int, int, int, int, int) b,
+  ) {
     if (a.$1 != b.$1) return a.$1 > b.$1;
     if (a.$2 != b.$2) return a.$2 > b.$2;
     if (a.$3 != b.$3) return a.$3 > b.$3;
-    return a.$4 > b.$4;
+    if (a.$4 != b.$4) return a.$4 > b.$4;
+    return a.$5 > b.$5;
   }
+
+  /// חלון של ספר אחר באותו שם אינו הספר שנבחר: כשנבחרה שורת "שו"ת", חלון
+  /// פתוח של הפירוש על הגמרא (`מהר"ם חלאווה מסכת פסחים`) מתאים לכותרת
+  /// הקטלוג אבל אינו מה שהמשתמש ביקש, ואחרת הוא היה מתקבל כ"הספר שנפתח".
+  static bool windowFitsKind({
+    required bool preferResponsa,
+    required String chosen,
+    required String window,
+  }) =>
+      !preferResponsa ||
+      !ResponsaNames.startsWithResponsa(chosen) ||
+      ResponsaNames.startsWithResponsa(window);
 
   String _awaitBookWindow(
     int main,
     Set<String> before,
     String chosen,
     String? expectedTitle,
-    ResponsaDeadline deadline,
-  ) {
+    ResponsaDeadline deadline, {
+    bool preferResponsa = false,
+  }) {
+    bool fits(String title) => windowFitsKind(
+      preferResponsa: preferResponsa,
+      chosen: chosen,
+      window: title,
+    );
     final targets = [?expectedTitle, chosen];
     // חציון הפתיחה 2.8 שניות; מופע שלא יצר חלון תוך [windowBudget] תקוע.
     final own = deadline.within(windowBudget);
@@ -777,7 +866,7 @@ class ResponsaAutomation {
       final titles = ResponsaWin32.mdiTitles(main);
       final fresh = [
         for (final title in titles)
-          if (title.isNotEmpty && !before.contains(title)) title,
+          if (title.isNotEmpty && !before.contains(title) && fits(title)) title,
       ];
       for (final title in fresh) {
         if (targets.any((t) => ResponsaHebrew.titlesMatch(t, title))) {
@@ -788,6 +877,7 @@ class ResponsaAutomation {
       // שכבר פתוח לא ייצור חלון נוסף.
       for (final title in titles) {
         if (title.isNotEmpty &&
+            fits(title) &&
             targets.any((t) => ResponsaHebrew.titlesMatch(t, title))) {
           return title;
         }

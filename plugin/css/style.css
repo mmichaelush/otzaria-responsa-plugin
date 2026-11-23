@@ -91,6 +91,10 @@
      בהגדרות ובספרייה של אוצריא. */
   --page-surface: color-mix(in srgb, var(--color-surface-container-highest) 47.5%, var(--color-surface));
   --card-surface: var(--color-surface);
+  /* הפס העליון: surfaceContainerHigh, ועם אוצריא 0.9.99 המשטח וגובה הפס
+     שהיא שולחת (`theme.surfaces.topBar`, `theme.density.topBarHeight`). */
+  --topbar-surface: var(--color-surface-container-high);
+  --topbar-height: 56px;
   --hover-overlay: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
@@ -126,6 +130,9 @@ html {
 
 body {
   overflow: hidden;
+  /* בחירת טקסט רק בתוכן ולא בשלד (DESIGN_GUIDE, Otzaria/otzaria#3199): נגיעה
+     ברווח צובעת אחרת פסקאות שלמות. הטקסט עצמו נבחר ונעתק, ראו מטה. */
+  user-select: none;
   font-family: var(--font-ui);
   font-size: var(--font-size-base);
   line-height: 1.5;
@@ -134,6 +141,21 @@ body {
   -webkit-font-smoothing: antialiased;
   /* הרוחב שלפיו נקבעת הפריסה (@container shell), ביחידות של הממשק. */
   container: shell / inline-size;
+}
+
+/* תוכן שקוראים ומעתיקים: פסקאות, רשימות, קוד, ושדות הקלט. */
+p,
+li,
+pre,
+code,
+dd,
+dt,
+td,
+th,
+blockquote,
+input,
+textarea {
+  user-select: text;
 }
 
 button,
@@ -170,10 +192,10 @@ textarea {
   flex-shrink: 0;
   gap: 10px;
   align-items: center;
-  height: 56px;
+  height: var(--topbar-height);
   /* 16 בצד הכותרת, 8 בצד הכפתורים. */
   padding-inline: 16px 8px;
-  background: var(--color-surface-container-high);
+  background: var(--topbar-surface);
 }
 
 .topbar-titles {
@@ -299,7 +321,8 @@ textarea {
 /* צר (טלפון, או אוצריא בחצי מסך): סרגל ניווט תחתון, אייקון מעל שם. */
 @container shell (max-width: 40em) {
   .topbar {
-    height: 44px;
+    /* 56 ← 44, כמו AppTopBar בחלון צר. */
+    height: calc(var(--topbar-height) - 12px);
   }
 
   .show-responsa-label {

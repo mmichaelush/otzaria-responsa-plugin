@@ -24,6 +24,8 @@ class ResponsaWin32 {
   static const int lbGetText = 0x0189;
   static const int lbGetTextLen = 0x018A;
   static const int lbSetSel = 0x0185;
+  static const int lbGetSel = 0x0187;
+  static const int lbGetSelCount = 0x0190;
   static const int lbnSelChange = 1;
 
   static const int tcmSetCurFocus = 0x1330;
@@ -288,6 +290,10 @@ class ResponsaWin32 {
   static int listBoxCount(int hwnd) =>
       send(hwnd, lbGetCount, timeoutMs: 3000) ?? -1;
 
+  /// כמה פריטים מסומנים. `-1` כשהרשימה לא ענתה (או אינה Multi-Select).
+  static int listBoxSelectedCount(int hwnd) =>
+      send(hwnd, lbGetSelCount, timeoutMs: 3000) ?? -1;
+
   static String listBoxItem(int hwnd, int index) {
     final length =
         send(hwnd, lbGetTextLen, wParam: index, timeoutMs: 3000) ?? 0;
@@ -314,9 +320,13 @@ class ResponsaWin32 {
     return [for (var i = 0; i < take; i++) listBoxItem(hwnd, i)];
   }
 
-  /// הרשימה Multi-Select (`LB_SETCURSEL` תמיד `-1`), ובלי `LBN_SELCHANGE` ידני
-  /// האפליקציה לא יודעת שהבחירה השתנתה.
+  /// בוחר את [index] **בלבד**. הרשימה Multi-Select (`LB_SETCURSEL` תמיד `-1`),
+  /// ובר אילן מסמנת בה מראש את הפריט הראשון; `LB_SETSEL` לבדו מוסיף לבחירה,
+  /// ו"הצג טקסט" פותח את כל המסומנים (נפתחו יחד "מגן אברהם" סימן א וסימן מא).
+  /// לכן קודם מנקים את כל הבחירה (`LB_SETSEL` כבוי על `-1`). בלי `LBN_SELCHANGE`
+  /// ידני האפליקציה לא יודעת שהבחירה השתנתה.
   static void listBoxSelect(int parent, int listBox, int index) {
+    send(listBox, lbSetSel, wParam: 0, lParam: -1);
     send(listBox, lbSetSel, wParam: 1, lParam: index);
     final notify = (lbnSelChange << 16) | (controlId(listBox) & 0xFFFF);
     send(parent, wmCommand, wParam: notify, lParam: listBox);

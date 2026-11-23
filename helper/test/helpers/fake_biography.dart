@@ -19,6 +19,9 @@ class FakeBiographySource implements ResponsaBiographySource {
   ResponsaFailure? indexFailure;
   ResponsaFailure? textFailure;
 
+  /// כשל רק לפריטים מסוימים (כותרת ← כשל), כמו מאמר שבר אילן אינה פותחת.
+  final Map<String, ResponsaFailure> textFailures = {};
+
   int indexCalls = 0;
   final List<String> textCalls = [];
   final List<bool> autoStart = [];
@@ -44,7 +47,7 @@ class FakeBiographySource implements ResponsaBiographySource {
   }) async {
     textCalls.add(entry.title);
     autoStart.add(allowLaunch);
-    if (textFailure case final failure?) {
+    if (textFailures[entry.title] ?? textFailure case final failure?) {
       return ResponsaBiographyReport.failed(failure, 'כשל במאמר');
     }
     return ResponsaBiographyReport(ok: true, text: texts[entry.title] ?? '');

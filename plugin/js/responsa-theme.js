@@ -7,6 +7,12 @@
 
   /** גופן הממשק של אוצריא (`typography.uiFontFamily`), כשנשלח. */
   let hostFont = null;
+  /**
+   * הגופן המלא של הממשק של אוצריא (`typography.uiFont`, מ-0.9.99): גופן
+   * המערכת, ולא Rubik. כשנשלח הוא גובר על [hostFont], כדי שהלשונית תיראה כמו
+   * שאר המסכים.
+   */
+  let hostFontStack = null;
   /** הגופן שנבחר בתוסף; '' = כמו באוצריא. */
   let chosenFont = '';
 
@@ -29,11 +35,49 @@
    */
   function applyFont(doc) {
     const style = doc.documentElement.style;
-    if (hostFont) style.setProperty('--font-host', family(hostFont, false));
+    const host = hostFontStack || (hostFont ? family(hostFont, false) : '');
+    if (host) style.setProperty('--font-host', host);
     else style.removeProperty('--font-host');
     if (chosenFont) style.setProperty('--font-ui', family(chosenFont, true));
-    else if (hostFont) style.setProperty('--font-ui', family(hostFont, false));
+    else if (host) style.setProperty('--font-ui', host);
     else style.removeProperty('--font-ui');
+  }
+
+  /** ערך שמארח שלח ל-CSS: טקסט בלי תווים שמסיימים הצהרה או כלל. */
+  function safeValue(value) {
+    return typeof value === 'string' && /^[^;{}<>\\]{1,300}$/.test(value.trim())
+      ? value.trim()
+      : '';
+  }
+
+  /** מספר px סביר; כל השאר — כאילו לא נשלח, והברירת מחדל של ה-CSS נשארת. */
+  function pixels(value, max) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max
+      ? value + 'px'
+      : '';
+  }
+
+  function setOrRemove(style, name, value) {
+    if (value) style.setProperty(name, value);
+    else style.removeProperty(name);
+  }
+
+  /**
+   * השדות שנוספו באוצריא 0.9.99 (DESIGN_GUIDE): משטחי המסכים כפי שהם מצוירים
+   * באוצריא (במצב כהה רקע הלוח אינו אף תפקיד ב-`colorScheme`), הרדיוס האחיד
+   * וצפיפות הממשק. מארח ישן אינו שולח אותם, ואז נשארים החישוב וערכי ברירת
+   * המחדל ב-CSS.
+   */
+  function applyHostDesign(theme, style) {
+    const surfaces = theme.surfaces || {};
+    setOrRemove(style, '--page-surface', safeValue(surfaces.panel));
+    setOrRemove(style, '--card-surface', safeValue(surfaces.card));
+    setOrRemove(style, '--topbar-surface', safeValue(surfaces.topBar));
+    const radius = pixels(theme.radius, 24);
+    setOrRemove(style, '--radius-sm', radius);
+    setOrRemove(style, '--radius-panel', radius);
+    const density = theme.density || {};
+    setOrRemove(style, '--topbar-height', pixels(density.topBarHeight, 96));
   }
 
   /** `true` כשהערכה הוחלה. ערכה חסרה או חלקית נשארת על ברירות המחדל. */
@@ -51,6 +95,8 @@
     // גופן הקריאה אינו מתאים לממשק (DESIGN_GUIDE); משתמשים רק בגופן הממשק.
     // מארח ישן אינו שולח אותו, ואז נשאר הגופן הקודם.
     if (typography.uiFontFamily) hostFont = typography.uiFontFamily;
+    hostFontStack = safeValue(typography.uiFont) || null;
+    applyHostDesign(theme, style);
     applyFont(doc);
     return true;
   }

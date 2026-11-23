@@ -297,7 +297,7 @@ class ResponsaSearchAutomation {
     final before = client == null
         ? const <int>{}
         : ResponsaWin32.directChildren(client).toSet();
-    final atLimit = before.length >= _profile.mdiSoftLimit;
+    final atLimit = _profile.nearsWindowCap(before.length);
 
     var dialog = _ensureKind(ensureSearchDialog(deadline), setup, deadline);
     if (setup.scope case final scope?) {

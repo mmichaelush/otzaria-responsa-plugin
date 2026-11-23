@@ -256,6 +256,7 @@ class ResponsaController {
     String? expectedTitle,
     String? installPath,
     bool? allowLaunch,
+    bool preferResponsa = false,
   }) async {
     if (!Platform.isWindows) {
       return const ResponsaOpenReport(
@@ -288,6 +289,7 @@ class ResponsaController {
         _OpenRequest(
           references: references,
           expectedTitle: expectedTitle,
+          preferResponsa: preferResponsa,
           installPath: installPath,
           openedWindows: List.of(_openedWindows),
           budget: _budget(request, openBudget),
@@ -553,6 +555,7 @@ class ResponsaController {
         request.references,
         ResponsaDeadline(request.budget),
         expectedTitle: request.expectedTitle,
+        preferResponsa: request.preferResponsa,
       );
       return ResponsaOpenReport(
         ok: true,
@@ -699,6 +702,9 @@ class ResponsaController {
 class _OpenRequest {
   final List<String> references;
   final String? expectedTitle;
+
+  /// הספר מקטגוריית שאלות ותשובות ([ResponsaNames.isResponsaPath]).
+  final bool preferResponsa;
   final String? installPath;
 
   /// החלונות שאוצריא פתחה בפתיחות קודמות.
@@ -710,6 +716,7 @@ class _OpenRequest {
   const _OpenRequest({
     required this.references,
     this.expectedTitle,
+    this.preferResponsa = false,
     this.installPath,
     this.openedWindows = const [],
     this.budget = ResponsaController.openBudget,

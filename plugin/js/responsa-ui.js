@@ -147,10 +147,13 @@
       ),
       steps: [
         t('באוצריא פתחו את ההגדרות, ואז "כלים".'),
-        t('בחרו ב"בר אילן".'),
+        t('בשורה של "בר אילן" לחצו על "ניהול הרשאות" (סמל מגן).'),
         t('הדליקו את "גישה לשירותים מקומיים".'),
       ],
-      actions: [retryButton(model, actions)],
+      actions: [
+        button('text', t('פתיחת ההגדרות'), actions.openOtzariaSettings, { key: 'open-otzaria-settings' }),
+        retryButton(model, actions),
+      ],
     });
   }
 
@@ -529,6 +532,9 @@
       { class: 'notice', dataset: { kind: 'startupPermission' } },
       icon('info_24_regular'),
       el('span', { class: 'notice-text' }, text + ' ' + Domain.startupPermissionHint()),
+      button('text', t('פתיחת ההגדרות'), actions.openOtzariaSettings, {
+        key: 'open-otzaria-settings',
+      }),
       button('text', t('לא להציג שוב'), actions.dismissStartupNotice, {
         key: 'dismiss-startup-notice',
       }),

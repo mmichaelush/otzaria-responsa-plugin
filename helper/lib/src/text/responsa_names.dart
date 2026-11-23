@@ -7,6 +7,26 @@ class ResponsaNames {
 
   static final RegExp _hebrewLetter = RegExp('[א-ת]');
 
+  /// האם [contextPath] (קטגוריות הספר בעץ, מופרדות ב-`/`) הוא ספר שאלות
+  /// ותשובות. בבר אילן שם הספר שם מתחיל ב"שו"ת" (`שו"ת מהר"ם חלאווה`), אבל
+  /// בעץ ובקטלוג השם בלי המילה (`מהר"ם חלאווה`), וההפניה לבדה מתאימה גם לפירוש
+  /// על הגמרא של אותו מחבר.
+  static bool isResponsaPath(String contextPath) {
+    for (final segment in contextPath.split('/')) {
+      // `normalize` ולא `spellingKey`: האחרון מוחק את ה-ו וה-י (`שו"ת` ← `שת`).
+      final text = ResponsaHebrew.normalize(segment);
+      if (text.isEmpty) continue;
+      if (text.split(' ').contains('שות') || text.contains('שאלות ותשובות')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// האם [text] מתחיל ב"שו"ת" (כמו `שו"ת מהר"ם חלאווה תוכן עניינים`).
+  static bool startsWithResponsa(String text) =>
+      ResponsaHebrew.normalize(text).split(' ').first == 'שות';
+
   // ------------------------------------------------ עטיפת הסוגריים
 
   /// המבנה המאוחסן הוא `( PRE CORE ( POST`; ההסתייגות היא `POST` ואחריו `PRE`

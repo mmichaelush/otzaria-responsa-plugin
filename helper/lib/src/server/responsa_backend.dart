@@ -29,6 +29,7 @@ abstract interface class ResponsaBackend {
     String? expectedTitle,
     String? installPath,
     bool autoStart = true,
+    bool preferResponsa = false,
   });
 
   /// מקום מדויק (`בראשית ב ג`). בלי [index] ועם כמה תוצאות — `choices`.
@@ -86,11 +87,13 @@ class NativeResponsaBackend implements ResponsaBackend {
     String? expectedTitle,
     String? installPath,
     bool autoStart = true,
+    bool preferResponsa = false,
   }) => _controller.openBook(
     references,
     expectedTitle: expectedTitle,
     installPath: installPath,
     allowLaunch: autoStart,
+    preferResponsa: preferResponsa,
   );
 
   @override

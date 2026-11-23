@@ -78,7 +78,7 @@
 
 ```json
 { "ok": true, "service": "otzaria-responsa", "apiVersion": 1,
-  "serverVersion": "0.8.0",
+  "serverVersion": "0.8.1",
   "capabilities": ["catalog", "open", "icon", "searchText", "export", "browse", "otzariaIcons",
                    "advancedSearch", "showResponsa", "notify", "locate", "autoStart", "diagnostics",
                    "showForms", "freeFormSearch", "easySearch", "easyOptions",
@@ -421,9 +421,9 @@
 
 - **`action`:** `start` מתחיל ברקע וחוזר מיד (אם כבר רצה, אינו עושה דבר; מה שנשמר אינו נקרא שוב, ולכן אחרי עצירה ממשיכים מאותו מקום); `stop` עוצר אחרי המאמר הנוכחי; `status` רק מדווח, ואינו פונה לבר אילן. אחר: `badRequest`.
 - **`state`:** `idle` (לא הופעלה מאז שהשירות עלה), `running`, `done`, `stopped`, `failed` (`message` אומרת למה).
-- **`total`:** מספר הפריטים ברשימה, או `null` כשהרשימה עוד לא נקראה. **`stored`:** כמה מאמרים שמורים במחשב. **`failed`:** כמה נכשלו בריצה הזאת ודולגו. **`current`:** המאמר שנקרא עכשיו.
+- **`total`:** מספר הפריטים ברשימה, **בלי שורות הפרדה** (`---- שאר הראשונים ----`, שיש במהדורות מסוימות ואין מאמר מאחוריהן), או `null` כשהרשימה עוד לא נקראה. **`stored`:** כמה מאמרים שמורים במחשב (בלי הפרדות). **`failed`:** כמה נכשלו בריצה הזאת ודולגו. **`current`:** המאמר שנקרא עכשיו.
 - **קצב וחיים משותפים:** מאמר אחד כל פעם, הפסקה של 1.5 שניות ביניהם (כחצי שעה לכולם). כל מאמר הוא פעולה נפרדת: פתיחת ספר, חיפוש או `/biography` מקדימים אותה, והיא ממתינה 5 שניות ומנסה שוב כשבר אילן עסוקה (גם בבניית הרשימה). `/biography` שנתפס בדיוק באמצע מאמר מקבל `busy`, והתוסף מנסה שוב מעט.
-- **כשל כללי** (`notRunning`, `elevated`, `notInstalled`, עץ ריק) עוצר את הריצה ב-`failed`. מאמר בודד שנכשל (`internal`, `dialogNotFound`) נספר ב-`failed` ומדולג.
+- **כשל כללי** (`notRunning`, `elevated`, `notInstalled`, עץ ריק) עוצר את הריצה ב-`failed`. מאמר בודד שנכשל (`internal`, `dialogNotFound`, `notResponding` — בר אילן לא פתחה לו חלון) נספר ב-`failed` ומדולג, והריצה ממשיכה; **חמישה כאלה ברצף** עוצרים אותה ב-`failed` עם `message` (כנראה בר אילן תקועה), והצלחה מאפסת את הספירה. עד 0.8.0 `notResponding` עצר את הכול, ו-`start` נתקע שוב ושוב על אותה שורת הפרדה. **שורות הפרדה** (`BiographyEntry.isSeparator`) מדולגות ואינן נקראות כלל.
 - **הלוח** נשמר ומוחזר סביב כל מאמר, כמו ב-`/biography`.
 
 ### `GET /icon`

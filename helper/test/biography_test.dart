@@ -129,6 +129,32 @@ void main() {
     });
   });
 
+  group('BiographyEntry.isSeparator', () {
+    test('שורות הפרדה בעץ, ורק הן', () {
+      for (final title in [
+        '---- שאר הראשונים ----',
+        '--- אחרונים ---',
+        '==========',
+        '— — —',
+        '',
+        '   ',
+      ]) {
+        expect(entry(['א', title]).isSeparator, isTrue, reason: title);
+      }
+      for (final title in [
+        'רש"י',
+        'ר"ן',
+        'שאר הראשונים',
+        'שו"ת - אחרונים',
+        '(מהדורה שנייה)',
+        'א-ב',
+        '1',
+      ]) {
+        expect(entry(['א', title]).isSeparator, isFalse, reason: title);
+      }
+    });
+  });
+
   group('BiographyText.parse', () {
     test('השורה הראשונה היא הכותרת, והשאר המאמר', () {
       final text = BiographyText.parse(
@@ -192,6 +218,18 @@ void main() {
       expect(store.readText(item), isNull);
       store.writeText(item, const BiographyText(title: 'ב', body: 'גוף'));
       expect(store.readText(item)?.body, 'גוף');
+    });
+
+    test('storedKeys: כל המאמרים השמורים בקריאה אחת, ורק הם', () {
+      final store = BiographyStore(dir.path);
+      expect(store.storedKeys(), isEmpty, reason: 'אין עדיין תיקייה');
+      final first = entry(['א', 'ב']);
+      final second = entry(['ג', 'ד']);
+      store.writeText(first, const BiographyText(title: 'ב', body: 'גוף'));
+      expect(store.storedKeys(), {store.keyOf(first)});
+      store.writeText(second, const BiographyText(title: 'ד', body: 'גוף'));
+      expect(store.storedKeys(), {store.keyOf(first), store.keyOf(second)});
+      expect(store.hasText(first), isTrue);
     });
 
     test('אותו שם בקטגוריות שונות: מאמרים נפרדים', () {
@@ -492,6 +530,82 @@ void main() {
         expect(done['state'], 'done');
         expect(done['failed'], 1);
         expect(done['stored'], 1);
+      });
+
+      /// רשימת פריטים עם מאמר מוכן לכל אחד שאינו מפריד.
+      void entriesWith(List<String> titles) {
+        backend.biography
+          ..entries = [
+            for (final title in titles) entry(['ראשונים', title]),
+          ]
+          ..texts.addAll({
+            for (final title in titles)
+              title: 'ביוגרפיה - $title\nמאמר על $title.',
+          });
+      }
+
+      test(
+        'פריט הפרדה ("---- שאר הראשונים ----") מדולג, ואינו נספר ברשימה',
+        () async {
+          entriesWith(['רש"י', '---- שאר הראשונים ----', 'תוספות']);
+          // בר אילן אינה פותחת חלון לפריט כזה: זה מה שנמדד אצל משתמש.
+          backend.biography.textFailures['---- שאר הראשונים ----'] =
+              ResponsaFailure.timeout;
+          await harvest('start');
+          final done = await settled();
+          expect(done['state'], 'done', reason: done['message']?.toString());
+          expect(backend.biography.textCalls, ['רש"י', 'תוספות']);
+          expect(done['total'], 2, reason: 'הפרדה אינה מאמר');
+          expect(done['stored'], 2);
+          expect(done['failed'], 0);
+        },
+      );
+
+      test('חלון שלא נפתח למאמר אחד (timeout) אינו עוצר את השאר', () async {
+        entriesWith(['רש"י', 'רמב"ן', 'תוספות']);
+        backend.biography.textFailures['רמב"ן'] = ResponsaFailure.timeout;
+        await harvest('start');
+        final done = await settled();
+        expect(done['state'], 'done', reason: done['message']?.toString());
+        expect(done['failed'], 1);
+        expect(done['stored'], 2);
+        expect(backend.biography.textCalls, ['רש"י', 'רמב"ן', 'תוספות']);
+
+        // והפעלה חוזרת אינה נתקעת באותו מאמר: מנסה אותו פעם אחת ומסיימת.
+        backend.biography.textCalls.clear();
+        await harvest('start');
+        final again = await settled();
+        expect(again['state'], 'done');
+        expect(backend.biography.textCalls, ['רמב"ן']);
+      });
+
+      test(
+        'כמה כשלי timeout ברצף: עוצרת עם הסבר, לא סורקת הכול לריק',
+        () async {
+          final titles = [for (var i = 0; i < 12; i++) 'חיבור $i'];
+          entriesWith(titles);
+          for (final title in titles) {
+            backend.biography.textFailures[title] = ResponsaFailure.timeout;
+          }
+          await harvest('start');
+          final failed = await settled();
+          expect(failed['state'], 'failed');
+          expect(failed['message'], isNotEmpty);
+          expect(backend.biography.textCalls, hasLength(5));
+        },
+      );
+
+      test('הצלחה מאפסת את ספירת הכשלים ברצף', () async {
+        final titles = [for (var i = 0; i < 12; i++) 'חיבור $i'];
+        entriesWith(titles);
+        // ארבעה כשלים, הצלחה, ארבעה כשלים: אף פעם לא חמישה ברצף.
+        for (final i in [0, 1, 2, 3, 5, 6, 7, 8]) {
+          backend.biography.textFailures[titles[i]] = ResponsaFailure.timeout;
+        }
+        await harvest('start');
+        final done = await settled();
+        expect(done['state'], 'done', reason: done['message']?.toString());
+        expect(done['failed'], 8);
       });
 
       test('כשל כללי (בר אילן לא פועלת) עוצר את הריצה עם הסבר', () async {

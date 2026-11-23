@@ -721,7 +721,7 @@
           note:
             granted || !known
               ? null
-              : t('כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".'),
+              : t('כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" ← "ניהול הרשאות" את ההרשאה "פתיחת ספרים וניהול כרטיסיות".'),
           checked: model.settings.alsoOtzaria,
           disabled: known && !granted,
           onToggle: (value) => actions.setSetting('alsoOtzaria', value),
@@ -734,7 +734,7 @@
           note:
             first || !known
               ? null
-              : t('כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" את ההרשאות "חיפוש טקסט מלא" ו"פתיחת ספרים וניהול כרטיסיות".'),
+              : t('כדי להשתמש בזה צריך להדליק בהגדרות ← כלים ← "בר אילן" ← "ניהול הרשאות" את ההרשאות "חיפוש טקסט מלא" ו"פתיחת ספרים וניהול כרטיסיות".'),
           checked: model.settings.otzariaFirstSearch,
           disabled: known && !first,
           onToggle: (value) => actions.setSetting('otzariaFirstSearch', value),
